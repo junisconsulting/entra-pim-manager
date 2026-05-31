@@ -31,7 +31,7 @@ using Microsoft.Extensions.Options;
 /// </summary>
 public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
 {
-    private const string GitHubProjectUrl = "https://github.com/dani3lh3pe/Entra-PIM-Manager";
+    private const string GitHubProjectUrl = "https://github.com/junisconsulting/entra-pim-manager";
 
     // Cap on parallel policy prefetch requests. Microsoft Graph PIM endpoints
     // have global throttling — 6 in flight at once is enough to feel snappy
