@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "JustificationRuleViolated",
+    "message": "The request to activate the role requires a justification."
+  }
+}

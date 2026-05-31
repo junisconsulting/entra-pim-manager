@@ -1,0 +1,194 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Four button variants for the Entra PIM Manager popup.
+
+    - `primary`   accent-coloured primary CTA (one per view)
+    - `secondary` neutral surface, dezenter Border
+    - `ghost`     transparent, hovered surface — for Cancel, Validate, Refresh-Text
+    - `icon`      square 32x32, transparent, hover Surface2 — wraps a PathIcon
+
+    All variants animate Background via a 120 ms BrushTransition on the inner
+    ContentPresenter (Fluent buttons render their background there, so the
+    Button-level Background setter is not enough on its own).
+  -->
+
+  <!-- ===== Common base ===== -->
+
+  <Style Selector="Button.primary,
+                   Button.secondary,
+                   Button.ghost,
+                   Button.icon">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.primary /template/ ContentPresenter,
+                   Button.secondary /template/ ContentPresenter,
+                   Button.ghost /template/ ContentPresenter,
+                   Button.icon /template/ ContentPresenter">
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <!-- ===== Primary ===== -->
+
+  <Style Selector="Button.primary">
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+    <Setter Property="Padding" Value="14,6" />
+  </Style>
+  <Style Selector="Button.primary /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+  </Style>
+  <Style Selector="Button.primary:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+    <Setter Property="Opacity" Value="0.85" />
+  </Style>
+  <Style Selector="Button.primary:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Opacity" Value="0.4" />
+  </Style>
+
+  <!-- ===== Secondary ===== -->
+
+  <Style Selector="Button.secondary">
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="Padding" Value="12,5" />
+  </Style>
+  <Style Selector="Button.secondary /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Button.secondary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#454545" />
+  </Style>
+  <Style Selector="Button.secondary:disabled /template/ ContentPresenter">
+    <Setter Property="Opacity" Value="0.4" />
+  </Style>
+
+  <!-- ===== Ghost =====                                          -->
+  <!-- Idle uses HoverIdleSurface2Brush (same RGB as Surface2,    -->
+  <!-- alpha 0) so the BrushTransition only animates opacity.     -->
+  <!-- See Theme.axaml for the rationale.                         -->
+
+  <Style Selector="Button.ghost">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    <Setter Property="Padding" Value="10,5" />
+  </Style>
+  <Style Selector="Button.ghost /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverIdleSurface2Brush}" />
+  </Style>
+  <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}" />
+  </Style>
+  <Style Selector="Button.ghost:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+
+  <!-- ===== Icon (32x32) ===== -->
+
+  <Style Selector="Button.icon">
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Height" Value="32" />
+  </Style>
+  <Style Selector="Button.icon /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverIdleSurface2Brush}" />
+  </Style>
+  <Style Selector="Button.icon:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}" />
+  </Style>
+  <Style Selector="Button.icon:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+
+  <!-- Danger-modifier: same icon-button geometry, but the glyph is always    -->
+  <!-- danger-red (overrides the .icon TextSecondaryBrush) and hover adds a   -->
+  <!-- soft danger-tinted background. The previous "subtle until hover" idle  -->
+  <!-- treatment buried the stop button in active rows — especially on the    -->
+  <!-- lavender SurfaceAccent in light mode — so users couldn't find the only -->
+  <!-- action available on the row.                                           -->
+  <!--                                                                        -->
+  <!-- The idle ContentPresenter background is overridden to the              -->
+  <!-- danger-tinted idle brush so the BrushTransition only varies alpha —    -->
+  <!-- inheriting HoverIdleSurface2Brush from .icon would interpolate RGB     -->
+  <!-- from dark-gray to red and flash a lighter peak.                        -->
+  <Style Selector="Button.icon.danger">
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+  </Style>
+  <Style Selector="Button.icon.danger /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverIdleDangerBrush}" />
+  </Style>
+  <!-- Re-pin the foreground on hover: the .icon:pointerover rule above sets   -->
+  <!-- Foreground to TextPrimaryBrush which would otherwise win and flip the   -->
+  <!-- glyph to black/white on hover. Keeping it red lets the background tint  -->
+  <!-- carry the hover affordance on its own.                                  -->
+  <Style Selector="Button.icon.danger:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+  </Style>
+  <Style Selector="Button.icon.danger:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource DangerSoftBrush}" />
+  </Style>
+
+  <!-- ===== Inline spinner (for busy button content) =====       -->
+  <!-- A 360° rotating arc Path inside a fixed-size Border. The   -->
+  <!-- Path itself is provided by the call site so its Stroke can -->
+  <!-- match the surrounding button's Foreground.                 -->
+  <!--                                                            -->
+  <!-- Avalonia has no animator for the ITransform-typed          -->
+  <!-- RenderTransform property; instead we install a concrete    -->
+  <!-- RotateTransform on the call site and animate its Angle     -->
+  <!-- via the dotted-property selector. The Setter is hoisted    -->
+  <!-- here so every spinner instance just needs the transform.   -->
+
+  <Style Selector="Border.spinner">
+    <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+    <Style.Animations>
+      <Animation Duration="0:0:0.9" IterationCount="INFINITE" Easing="LinearEasing">
+        <KeyFrame Cue="0%">
+          <Setter Property="RotateTransform.Angle" Value="0.0" />
+        </KeyFrame>
+        <KeyFrame Cue="100%">
+          <Setter Property="RotateTransform.Angle" Value="360.0" />
+        </KeyFrame>
+      </Animation>
+    </Style.Animations>
+  </Style>
+
+  <!-- ===== Nested chromeless button =====                       -->
+  <!-- A Button that lives inside a Border.row must NOT draw any  -->
+  <!-- hover chrome of its own: the surrounding row already does. -->
+  <!-- Two overlapping BrushTransitions on the same target colour -->
+  <!-- otherwise produce visible flicker as they race each other. -->
+
+  <Style Selector="Border.row > Button">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.row > Button /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Transitions">
+      <Transitions />
+    </Setter>
+  </Style>
+  <Style Selector="Border.row > Button:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.row > Button:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+</Styles>

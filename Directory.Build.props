@@ -1,0 +1,39 @@
+<Project>
+
+  <!--
+    Solution-wide build settings for Entra PIM Manager.
+    Project-specific settings (TFM, OutputType, package refs) stay in each .csproj.
+  -->
+  <PropertyGroup>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <Deterministic>true</Deterministic>
+
+    <!--
+      Dev machines may only have the .NET 10 runtime installed while the
+      projects target .NET 8 LTS (per CLAUDE.md). LatestMajor lets the
+      net8.0 binaries run on a newer installed runtime.
+    -->
+    <RollForward>LatestMajor</RollForward>
+  </PropertyGroup>
+
+  <!--
+    Assembly metadata (appears in Windows Explorer → Properties → Details and
+    in the Velopack installer / Add-Remove Programs). Company should match the
+    CN of the code-signing certificate so audit tooling stays consistent.
+  -->
+  <PropertyGroup>
+    <Authors>junis GmbH</Authors>
+    <Company>junis GmbH</Company>
+    <Product>Entra PIM Manager</Product>
+    <Copyright>© $([System.DateTime]::UtcNow.Year) junis GmbH and contributors</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

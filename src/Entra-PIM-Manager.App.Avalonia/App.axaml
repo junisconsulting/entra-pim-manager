@@ -1,0 +1,41 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="EntraPimManager.AppAvalonia.App">
+
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://Entra-PIM-Manager/Styles/Theme.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://Entra-PIM-Manager/Styles/Buttons.axaml" />
+    <StyleInclude Source="avares://Entra-PIM-Manager/Styles/Cards.axaml" />
+  </Application.Styles>
+
+  <TrayIcon.Icons>
+    <TrayIcons>
+      <TrayIcon Icon="/Assets/tray-icon-red.ico"
+                ToolTipText="Entra PIM Manager — not signed in"
+                IsVisible="True"
+                Clicked="OnTrayIconClicked">
+        <TrayIcon.Menu>
+          <NativeMenu>
+            <NativeMenuItem Header="Open" Click="OnOpenClicked" />
+            <NativeMenuItem Header="Refresh" Click="OnRefreshClicked" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Settings…" Click="OnSettingsClicked" />
+            <NativeMenuItem Header="Start with Windows" Click="OnAutostartClicked"
+                            ToggleType="CheckBox" />
+            <NativeMenuItemSeparator />
+            <NativeMenuItem Header="Exit" Click="OnExitClicked" />
+          </NativeMenu>
+        </TrayIcon.Menu>
+      </TrayIcon>
+    </TrayIcons>
+  </TrayIcon.Icons>
+
+</Application>

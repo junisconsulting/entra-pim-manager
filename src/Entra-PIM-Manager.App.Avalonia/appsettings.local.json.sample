@@ -1,0 +1,14 @@
+// Copy this file to `appsettings.local.json` (same directory) and fill in
+// your real values. `appsettings.local.json` is gitignored — never commit it.
+//
+// See docs/app-registration-setup.md for how to obtain a ClientId.
+{
+  "EntraPimManager": {
+    // Application (client) ID from your Entra App Registration. Required.
+    "ClientId": "00000000-0000-0000-0000-000000000000",
+
+    // Optional: restrict sign-in to these tenants only. Leave as []
+    // (or omit) to allow any tenant that has granted admin consent.
+    "AllowedTenants": []
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "StartTimeInPast",
+    "message": "The schedule start time is in the past."
+  }
+}

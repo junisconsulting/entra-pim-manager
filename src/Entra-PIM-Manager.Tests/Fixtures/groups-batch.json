@@ -1,0 +1,15 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#groups(id,displayName,isAssignableToRole)",
+  "value": [
+    {
+      "id": "group-1",
+      "displayName": "grp-tier1-admins",
+      "isAssignableToRole": true
+    },
+    {
+      "id": "group-2",
+      "displayName": "grp-project-x",
+      "isAssignableToRole": false
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#roleManagement/directory/roleEligibilityScheduleInstances",
+  "value": [
+    {
+      "id": "elig-ga",
+      "principalId": "user-oid-1",
+      "roleDefinitionId": "role-def-ga",
+      "directoryScopeId": "/",
+      "memberType": "Direct",
+      "startDateTime": "2026-01-01T00:00:00Z",
+      "endDateTime": "2026-12-31T00:00:00Z",
+      "roleDefinition": {
+        "id": "role-def-ga",
+        "displayName": "Global Administrator"
+      }
+    },
+    {
+      "id": "elig-ua",
+      "principalId": "user-oid-1",
+      "roleDefinitionId": "role-def-ua",
+      "directoryScopeId": "/administrativeUnits/au-1",
+      "memberType": "Direct",
+      "startDateTime": "2026-01-01T00:00:00Z",
+      "endDateTime": null,
+      "roleDefinition": {
+        "id": "role-def-ua",
+        "displayName": "User Administrator"
+      }
+    }
+  ]
+}

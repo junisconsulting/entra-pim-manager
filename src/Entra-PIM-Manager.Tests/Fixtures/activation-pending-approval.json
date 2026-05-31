@@ -1,0 +1,9 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#roleManagement/directory/roleAssignmentScheduleRequests/$entity",
+  "id": "req-pending-1",
+  "status": "PendingApproval",
+  "action": "selfActivate",
+  "principalId": "user-oid-1",
+  "roleDefinitionId": "role-def-ga",
+  "directoryScopeId": "/"
+}

@@ -1,0 +1,23 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#identityGovernance/privilegedAccess/group/eligibilityScheduleInstances",
+  "value": [
+    {
+      "id": "gelig-member",
+      "principalId": "user-oid-1",
+      "groupId": "group-1",
+      "accessId": "member",
+      "memberType": "Direct",
+      "startDateTime": "2026-01-01T00:00:00Z",
+      "endDateTime": "2026-12-31T00:00:00Z"
+    },
+    {
+      "id": "gelig-owner",
+      "principalId": "user-oid-1",
+      "groupId": "group-2",
+      "accessId": "owner",
+      "memberType": "Direct",
+      "startDateTime": "2026-01-01T00:00:00Z",
+      "endDateTime": null
+    }
+  ]
+}

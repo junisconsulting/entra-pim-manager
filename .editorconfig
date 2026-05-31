@@ -1,0 +1,53 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+indent_style = space
+trim_trailing_whitespace = true
+
+[*.{cs,csx}]
+indent_size = 4
+
+[*.{xml,xaml,csproj,props,targets,manifest}]
+indent_size = 2
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+# --- StyleCop: rules disabled to match Entra PIM Manager conventions ---
+# SA0001: XML comment analysis disabled (we do not generate doc files).
+dotnet_diagnostic.SA0001.severity = none
+# SA1101: "this." prefix not required.
+dotnet_diagnostic.SA1101.severity = none
+# SA1200: using directives may sit outside the namespace (ImplicitUsings).
+dotnet_diagnostic.SA1200.severity = none
+# SA1309: private fields use a leading underscore by convention.
+dotnet_diagnostic.SA1309.severity = none
+# SA1413: trailing commas in multi-line initializers are optional.
+dotnet_diagnostic.SA1413.severity = none
+# SA1600/1601/1602: XML documentation is not mandatory.
+dotnet_diagnostic.SA1600.severity = none
+dotnet_diagnostic.SA1601.severity = none
+dotnet_diagnostic.SA1602.severity = none
+# SA1633: no file header required.
+dotnet_diagnostic.SA1633.severity = none
+# SA1611/SA1615: parameter and return-value docs not mandatory.
+dotnet_diagnostic.SA1611.severity = none
+dotnet_diagnostic.SA1615.severity = none
+# SA1623: documentation text rules off (docs optional).
+dotnet_diagnostic.SA1623.severity = none
+
+# Naming
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel_case
+dotnet_naming_rule.private_fields_underscore.severity = suggestion
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+dotnet_naming_style.underscore_camel_case.capitalization = camel_case

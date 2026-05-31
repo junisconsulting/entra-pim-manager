@@ -1,0 +1,19 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#roleManagement/directory/roleAssignmentScheduleInstances",
+  "value": [
+    {
+      "id": "assign-ga",
+      "principalId": "user-oid-1",
+      "roleDefinitionId": "role-def-ga",
+      "directoryScopeId": "/",
+      "assignmentType": "Activated",
+      "memberType": "Direct",
+      "startDateTime": "2026-05-22T08:00:00Z",
+      "endDateTime": "2026-05-22T16:00:00Z",
+      "roleDefinition": {
+        "id": "role-def-ga",
+        "displayName": "Global Administrator"
+      }
+    }
+  ]
+}

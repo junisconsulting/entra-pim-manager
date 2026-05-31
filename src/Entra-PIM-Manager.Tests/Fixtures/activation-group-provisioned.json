@@ -1,0 +1,9 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#identityGovernance/privilegedAccess/group/assignmentScheduleRequests/$entity",
+  "id": "greq-provisioned-1",
+  "status": "Provisioned",
+  "action": "selfActivate",
+  "accessId": "member",
+  "principalId": "user-oid-1",
+  "groupId": "group-1"
+}

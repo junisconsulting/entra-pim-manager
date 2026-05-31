@@ -1,0 +1,78 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Card surface variants. `section` is unusual: it carries NO background
+    and NO border — it's a pure spacing/grouping container with a caption.
+    `active` is the visually elevated surface for active assignments.
+  -->
+
+  <!-- ===== Section (caption + content; no chrome of its own) ===== -->
+
+  <Style Selector="Border.section">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <!-- ===== Settings card (subtle outlined container) =====           -->
+  <!-- Used in the Settings slide-in to group APP REGISTRATION,         -->
+  <!-- ACCOUNTS, APPEARANCE, BEHAVIOR and NOTIFICATIONS into discrete   -->
+  <!-- visually-delineated blocks. Background stays transparent so it   -->
+  <!-- inherits the slide-in's Surface1; a 1 px BorderSubtle stroke +   -->
+  <!-- rounded corners draws the boundary without conflicting with the  -->
+  <!-- Surface2 inner cards (account rows, favourites). -->
+
+  <Style Selector="Border.settings-card">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="14" />
+  </Style>
+
+  <!-- ===== Active role card ===== -->
+
+  <Style Selector="Border.active">
+    <Setter Property="Background" Value="{DynamicResource SurfaceAccentBrush}" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="10,8" />
+    <Setter Property="BoxShadow" Value="{DynamicResource ShadowActive}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderThickness" Value="3,0,0,0" />
+  </Style>
+
+  <!-- ===== Eligibility row (interactive list item) =====           -->
+  <!-- Idle and hover brushes share the same RGB (Surface2);         -->
+  <!-- only alpha animates. Using the default `Transparent` here     -->
+  <!-- would interpolate through transparent-white and flash a       -->
+  <!-- bright peak before settling on the dark hover colour.         -->
+
+  <Style Selector="Border.row">
+    <Setter Property="Background" Value="{DynamicResource HoverIdleSurface2Brush}" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="8,6" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Border.row:pointerover">
+    <Setter Property="Background" Value="{DynamicResource Surface2Brush}" />
+  </Style>
+
+  <!-- ===== Popup ScrollViewer ===== -->
+  <!-- AllowAutoHide=False switches the Fluent vertical ScrollBar out of
+       overlay/auto-hide mode into a permanently-visible docked column that
+       takes its own width — content then naturally stops before it instead
+       of being chopped by an overlay bar. Padding adds a small breathing
+       gap between content and bar so the ✕ remove button etc. don't sit
+       flush against the scrollbar thumb. -->
+  <Style Selector="ScrollViewer.popup">
+    <Setter Property="(ScrollViewer.AllowAutoHide)" Value="False" />
+    <Setter Property="Padding" Value="0,0,4,0" />
+  </Style>
+
+</Styles>

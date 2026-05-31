@@ -1,0 +1,8 @@
+<!-- State 3: PIM-Session aktiv — grüner Badge — Dark: fill #ffffff, opacity 1 | Light: fill #1a1a1a, opacity 1 -->
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <defs><mask id="km"><rect width="32" height="32" fill="white"/><circle cx="16" cy="12" r="5.2" fill="black"/><circle cx="16" cy="12" r="2.2" fill="white"/><rect x="14.6" y="16.8" width="2.8" height="9.2" rx="1.4" fill="black"/><rect x="17.4" y="20.5" width="3.2" height="2.2" rx="0.9" fill="black"/><rect x="17.4" y="23.8" width="2.4" height="2" rx="0.9" fill="black"/></mask></defs>
+  <path opacity="1" mask="url(#km)" fill="#ffffff" d="M16 0.5 L30 4.5 L30 19 Q30 29 16 31.5 Q2 29 2 19 L2 4.5 Z"/>
+  <!-- For light tray: change fill to #1a1a1a and dot-bg to #ebebeb -->
+  <circle fill="#1a1a1a" cx="25.5" cy="25.5" r="5.8"/>
+  <circle fill="#22c55e" cx="25.5" cy="25.5" r="4.2"/>
+</svg>

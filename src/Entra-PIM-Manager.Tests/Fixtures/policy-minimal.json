@@ -1,0 +1,16 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#policies/roleManagementPolicyAssignments",
+  "value": [
+    {
+      "id": "pa-group-x",
+      "policyId": "pol-group-x",
+      "scopeId": "group-x",
+      "scopeType": "Group",
+      "policy": {
+        "id": "pol-group-x",
+        "displayName": "Group policy",
+        "rules": []
+      }
+    }
+  ]
+}

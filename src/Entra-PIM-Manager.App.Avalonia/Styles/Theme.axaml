@@ -1,0 +1,200 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Entra PIM Manager Design Tokens.
+
+    Theme-dependent tokens (Surfaces, Text, Borders, AccentText, Shadow alphas,
+    Surface2 hover-idle) sit in <ResourceDictionary.ThemeDictionaries> with
+    Dark / Light keys; Avalonia picks the right dictionary based on the active
+    ThemeVariant. Tokens that are visually the same in both themes (Accent,
+    Status colours, Spacing, Typography, Radius) stay at the top level.
+
+    Naming pattern: every Color has a matching `*Brush` SolidColorBrush so
+    views can DynamicResource either side.
+  -->
+
+  <ResourceDictionary.ThemeDictionaries>
+
+    <!-- ============================================================ -->
+    <!-- DARK                                                          -->
+    <!-- ============================================================ -->
+    <ResourceDictionary x:Key="Dark">
+
+      <!-- Surface hierarchy (3-step elevation, Notion-style):
+           SurfaceBase = window bg (darkest),
+           Surface1   = card / panel (raised),
+           Surface2   = interactive surface on a card. -->
+      <Color x:Key="SurfaceBase">#1A1A1A</Color>
+      <Color x:Key="Surface1">#2D2D2D</Color>
+      <Color x:Key="Surface2">#383838</Color>
+      <Color x:Key="SurfaceAccent">#241F35</Color>
+
+      <SolidColorBrush x:Key="SurfaceBaseBrush" Color="{StaticResource SurfaceBase}" />
+      <SolidColorBrush x:Key="Surface1Brush" Color="{StaticResource Surface1}" />
+      <SolidColorBrush x:Key="Surface2Brush" Color="{StaticResource Surface2}" />
+      <SolidColorBrush x:Key="SurfaceAccentBrush" Color="{StaticResource SurfaceAccent}" />
+
+      <!--
+        Idle-state for Surface2 hover animations. CRITICAL: this must share the
+        same RGB as Surface2 so a BrushTransition only varies alpha. Default
+        `Transparent` is `#00FFFFFF` (transparent WHITE); animating from there
+        to a dark target produces a bright peak at half opacity.
+      -->
+      <SolidColorBrush x:Key="HoverIdleSurface2Brush" Color="#00383838" />
+
+      <!-- Text hierarchy -->
+      <Color x:Key="TextPrimary">#FAFAFA</Color>
+      <Color x:Key="TextSecondary">#B8B8B8</Color>
+      <Color x:Key="TextTertiary">#8A8A8A</Color>
+
+      <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}" />
+      <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}" />
+      <SolidColorBrush x:Key="TextTertiaryBrush" Color="{StaticResource TextTertiary}" />
+
+      <!-- Borders + dividers -->
+      <Color x:Key="BorderSubtle">#474747</Color>
+      <Color x:Key="BorderDivider">#3D3D3D</Color>
+
+      <SolidColorBrush x:Key="BorderSubtleBrush" Color="{StaticResource BorderSubtle}" />
+      <SolidColorBrush x:Key="BorderDividerBrush" Color="{StaticResource BorderDivider}" />
+
+      <!--
+        Brighter accent for body text on dark surfaces. AccentColor #7C3AED only
+        hits ~2.8:1 contrast on Surface1, failing WCAG AA; SystemAccentColorLight2
+        (#A855F7) reaches ~4.5:1 and reads cleanly. Use this for caption / link
+        text that sits directly on Surface1/Surface2, NOT for filled accent buttons.
+      -->
+      <SolidColorBrush x:Key="AccentTextBrush" Color="#A855F7" />
+
+      <!-- Status-foreground brushes for dark surfaces: the Tailwind 500-level
+           hues reach 4.5:1+ on the dark substrate and read as confidently
+           coloured without being washed out. -->
+      <SolidColorBrush x:Key="SuccessBrush" Color="#22C55E" />
+      <SolidColorBrush x:Key="WarningBrush" Color="#F59E0B" />
+      <SolidColorBrush x:Key="DangerBrush" Color="#EF4444" />
+
+      <!-- Drop shadows — full alpha on the dark substrate. -->
+      <BoxShadows x:Key="ShadowCard">0 2 8 0 #40000000</BoxShadows>
+      <BoxShadows x:Key="ShadowActive">0 4 16 0 #337C3AED</BoxShadows>
+      <BoxShadows x:Key="ShadowPopup">0 12 36 0 #73000000</BoxShadows>
+    </ResourceDictionary>
+
+    <!-- ============================================================ -->
+    <!-- LIGHT                                                         -->
+    <!-- ============================================================ -->
+    <ResourceDictionary x:Key="Light">
+
+      <!-- Surface hierarchy (Notion-style):
+           SurfaceBase = subtle off-white page so white cards pop,
+           Surface1   = pure white card / panel (raised),
+           Surface2   = light grey for interactive hover. Set far enough from
+           SurfaceBase (~5 % step, oklch ≈ 0.925 from 0.965) so a row hover
+           reads at a glance — anything subtler vanishes against the page. -->
+      <Color x:Key="SurfaceBase">#F7F7F7</Color>
+      <Color x:Key="Surface1">#FFFFFF</Color>
+      <Color x:Key="Surface2">#ECECEC</Color>
+      <Color x:Key="SurfaceAccent">#F3EFFF</Color>
+
+      <SolidColorBrush x:Key="SurfaceBaseBrush" Color="{StaticResource SurfaceBase}" />
+      <SolidColorBrush x:Key="Surface1Brush" Color="{StaticResource Surface1}" />
+      <SolidColorBrush x:Key="Surface2Brush" Color="{StaticResource Surface2}" />
+      <SolidColorBrush x:Key="SurfaceAccentBrush" Color="{StaticResource SurfaceAccent}" />
+
+      <!-- Hover idle: alpha 0, RGB matches the (light) Surface2 hover target. -->
+      <SolidColorBrush x:Key="HoverIdleSurface2Brush" Color="#00ECECEC" />
+
+      <!-- Text hierarchy — dark glyphs on light surfaces. -->
+      <Color x:Key="TextPrimary">#1A1A1A</Color>
+      <Color x:Key="TextSecondary">#555555</Color>
+      <Color x:Key="TextTertiary">#767676</Color>
+
+      <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}" />
+      <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}" />
+      <SolidColorBrush x:Key="TextTertiaryBrush" Color="{StaticResource TextTertiary}" />
+
+      <!-- Borders + dividers — Notion uses subtle zinc-tones; cards rely on
+           the border for definition rather than heavy shadows. -->
+      <Color x:Key="BorderSubtle">#E4E4E7</Color>
+      <Color x:Key="BorderDivider">#F4F4F5</Color>
+
+      <SolidColorBrush x:Key="BorderSubtleBrush" Color="{StaticResource BorderSubtle}" />
+      <SolidColorBrush x:Key="BorderDividerBrush" Color="{StaticResource BorderDivider}" />
+
+      <!--
+        Accent body-text on white surfaces: AccentColor #7C3AED reaches ~5.5:1
+        on white, but SystemAccentColorDark1 (#6D28D9) gives ~7.2:1 (AAA) and
+        feels more deliberate against the lighter palette.
+      -->
+      <SolidColorBrush x:Key="AccentTextBrush" Color="#6D28D9" />
+
+      <!-- Status-foreground brushes for light surfaces: the Tailwind 500-level
+           greens/ambers/reds (used in dark mode) only reach ~3:1 on white and
+           visually wash out against the SoftBrush wash backgrounds. The
+           700-level variants reach 4.5:1+ (clean AA) and feel deliberate
+           against the lighter palette. The *SoftBrush wash backgrounds keep
+           using the brighter base hue so the pills retain their faint tint. -->
+      <SolidColorBrush x:Key="SuccessBrush" Color="#15803D" />
+      <SolidColorBrush x:Key="WarningBrush" Color="#B45309" />
+      <SolidColorBrush x:Key="DangerBrush" Color="#DC2626" />
+
+      <!-- Shadows: ~50 % reduced alpha — light substrate already creates strong contrast. -->
+      <BoxShadows x:Key="ShadowCard">0 2 8 0 #1F000000</BoxShadows>
+      <BoxShadows x:Key="ShadowActive">0 4 16 0 #1A7C3AED</BoxShadows>
+      <BoxShadows x:Key="ShadowPopup">0 12 36 0 #33000000</BoxShadows>
+    </ResourceDictionary>
+
+  </ResourceDictionary.ThemeDictionaries>
+
+  <!-- ============================================================ -->
+  <!-- Theme-independent tokens (identical in Dark + Light)          -->
+  <!-- ============================================================ -->
+
+  <!-- Fluent accent override — read by FluentTheme to swap the accent across
+       every default control (focus rings, toggle switches, ComboBox highlight). -->
+  <Color x:Key="SystemAccentColor">#7C3AED</Color>
+  <Color x:Key="SystemAccentColorDark1">#6D28D9</Color>
+  <Color x:Key="SystemAccentColorDark2">#5B21B6</Color>
+  <Color x:Key="SystemAccentColorDark3">#4C1D95</Color>
+  <Color x:Key="SystemAccentColorLight1">#9333EA</Color>
+  <Color x:Key="SystemAccentColorLight2">#A855F7</Color>
+  <Color x:Key="SystemAccentColorLight3">#C084FC</Color>
+
+  <!-- Filled accent (buttons, avatar tiles). Same hue in both themes — white
+       glyphs on accent fill reach 5+:1 contrast on either side. -->
+  <Color x:Key="AccentColor">#7C3AED</Color>
+  <Color x:Key="AccentHoverColor">#6D28D9</Color>
+  <Color x:Key="AccentForeground">#FFFFFF</Color>
+
+  <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
+  <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHoverColor}" />
+  <SolidColorBrush x:Key="AccentForegroundBrush" Color="{StaticResource AccentForeground}" />
+  <!-- 12 % accent tint — works on both light and dark surfaces. -->
+  <SolidColorBrush x:Key="AccentSoftBrush" Color="{StaticResource AccentColor}" Opacity="0.12" />
+
+  <!-- Hover idle for Danger: same RGB in both themes since the hover target
+       is theme-independent. -->
+  <SolidColorBrush x:Key="HoverIdleDangerBrush" Color="#00EF4444" />
+
+  <!-- Status: only the *Color tokens and the wash-background *SoftBrush
+       variants are theme-independent. The strong *Brush foreground variants
+       live in each theme dictionary so light-mode text gets a darker shade
+       that actually clears WCAG AA against white surfaces. -->
+  <Color x:Key="SuccessColor">#22C55E</Color>
+  <SolidColorBrush x:Key="SuccessSoftBrush" Color="{StaticResource SuccessColor}" Opacity="0.14" />
+
+  <Color x:Key="WarningColor">#F59E0B</Color>
+  <SolidColorBrush x:Key="WarningSoftBrush" Color="{StaticResource WarningColor}" Opacity="0.14" />
+
+  <Color x:Key="DangerColor">#EF4444</Color>
+  <SolidColorBrush x:Key="DangerSoftBrush" Color="{StaticResource DangerColor}" Opacity="0.12" />
+
+  <!-- Typography — only the sizes actually referenced from XAML. Margins,
+       paddings, and radii are inlined in the views rather than tokenised. -->
+  <x:Double x:Key="FontCaption">10</x:Double>
+  <x:Double x:Key="FontSmall">11</x:Double>
+  <x:Double x:Key="FontBody">13</x:Double>
+  <x:Double x:Key="FontSubtitle">15</x:Double>
+  <x:Double x:Key="FontTitleSmall">18</x:Double>
+
+</ResourceDictionary>

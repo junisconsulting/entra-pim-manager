@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
+    <RootNamespace>EntraPimManager.Core</RootNamespace>
+    <AssemblyName>EntraPimManager.Core</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The test project exercises internal helpers (e.g. ActivationStatusParser) directly. -->
+    <InternalsVisibleTo Include="EntraPimManager.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Graph" Version="5.56.0" />
+    <PackageReference Include="Microsoft.Identity.Client" Version="4.66.0" />
+    <PackageReference Include="Microsoft.Identity.Client.Broker" Version="4.66.0" />
+    <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.66.0" />
+  </ItemGroup>
+
+  <!--
+    Architecture boundary: Entra-PIM-Manager.Core must stay free of UI dependencies.
+    This guard fails the build if WPF / WinForms are ever enabled here.
+  -->
+  <Target Name="GuardCoreHasNoUi" BeforeTargets="CoreCompile">
+    <Error Condition="'$(UseWPF)' == 'true' Or '$(UseWindowsForms)' == 'true'"
+           Text="Entra-PIM-Manager.Core must not enable WPF or WinForms — keep UI code in Entra-PIM-Manager.App." />
+  </Target>
+
+</Project>

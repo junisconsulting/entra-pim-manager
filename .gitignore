@@ -1,0 +1,29 @@
+# Build output
+bin/
+obj/
+[Rr]eleases/
+*.user
+*.suo
+
+# Local config — never commit real tenant/client IDs
+appsettings.local.json
+
+# IDE
+.vs/
+.idea/
+*.DotSettings.user
+
+# Claude Code — AI tooling stays out of the public repo
+.claude/*
+CLAUDE.md
+
+# Velopack / packaging output
+packaging/**/output/
+packaging/velopack/publish/
+packaging/velopack/releases/
+*.nupkg
+
+# Test / coverage
+[Tt]est[Rr]esults/
+coverage*.xml
+*.coverage

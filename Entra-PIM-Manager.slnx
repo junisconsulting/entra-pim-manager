@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Entra-PIM-Manager.App.Avalonia/Entra-PIM-Manager.App.Avalonia.csproj" />
+    <Project Path="src/Entra-PIM-Manager.Core/Entra-PIM-Manager.Core.csproj" />
+    <Project Path="src/Entra-PIM-Manager.Tests/Entra-PIM-Manager.Tests.csproj" />
+  </Folder>
+</Solution>
