@@ -1,67 +1,67 @@
-# Entra App Registration — Setup für Entra PIM Manager
+# Entra App Registration — Setup for Entra PIM Manager
 
-> Diese Anleitung beschreibt das einmalige Setup einer Entra App Registration,
-> die Entra PIM Manager benötigt, um sich gegen Microsoft Graph zu authentifizieren.
-> Benötigt einen Entra-Administrator für den Admin-Consent **im Home-Tenant**
-> und in jedem zusätzlichen Tenant, in dem Entra PIM Manager genutzt werden soll.
+> This guide describes the one-time setup of an Entra App Registration
+> that Entra PIM Manager needs in order to authenticate against Microsoft Graph.
+> Requires an Entra administrator for the admin consent **in the home tenant**
+> and in every additional tenant in which Entra PIM Manager will be used.
 >
-> Entra PIM Manager ist multi-tenant: **eine** App Registration deckt beliebig viele
-> Tenants ab. Account-Wahl passiert interaktiv im WAM-Picker. Eine optionale
-> `AllowedTenants`-Whitelist in der lokalen Konfiguration sperrt die App auf
-> eine bekannte Menge von Tenant-GUIDs (z. B. Konzern-Tochterunternehmen);
-> ohne Whitelist sind alle Tenants erlaubt, in denen Admin-Consent erteilt wurde.
+> Entra PIM Manager is multi-tenant: **one** App Registration covers any number of
+> tenants. Account selection happens interactively in the WAM picker. An optional
+> `AllowedTenants` whitelist in the local configuration locks the app down to
+> a known set of tenant GUIDs (e.g. group subsidiaries); without a whitelist,
+> all tenants in which admin consent was granted are allowed.
 
-## 1. App Registration im Home-Tenant anlegen
+## 1. Create the App Registration in the home tenant
 
-1. [Entra-Portal](https://entra.microsoft.com) → **Identity → Applications →
+1. [Entra portal](https://entra.microsoft.com) → **Identity → Applications →
    App registrations → New registration**.
 2. **Name**: `Entra PIM Manager`.
 3. **Supported account types**: **Accounts in any organizational directory
    (Any Microsoft Entra ID tenant — Multitenant)**.
-   - Wichtig: nicht „Single tenant", nicht „... and personal Microsoft accounts".
-4. **Redirect URI**: zunächst leer — wird in Schritt 2 als Plattform gesetzt.
+   - Important: not "Single tenant", not "... and personal Microsoft accounts".
+4. **Redirect URI**: leave empty for now — it is set as a platform in step 2.
 5. **Register**.
 
-Aus der Übersicht notieren:
+Note from the overview:
 
 - **Application (client) ID** → `ClientId`
 
-(Eine `TenantId` wird nicht mehr in die App-Konfiguration eingetragen — der Tenant
-jedes enrolled Accounts wird beim Sign-in aus dem WAM-Result ermittelt.)
+(A `TenantId` is no longer entered into the app configuration — the tenant
+of each enrolled account is determined from the WAM result at sign-in.)
 
-## 2. Plattform & Redirect-URI (WAM-Broker)
+## 2. Platform & redirect URI (WAM broker)
 
 1. App Registration → **Authentication → Add a platform → Mobile and desktop
    applications**.
-2. Custom Redirect URI hinzufügen:
+2. Add a custom redirect URI:
 
    ```
    ms-appx-web://microsoft.aad.brokerplugin/{client-id}
    ```
 
-   `{client-id}` durch die echte Application (client) ID ersetzen.
-3. **Allow public client flows**: auf **Yes** stellen (Desktop-/Broker-Flow).
+   Replace `{client-id}` with the real Application (client) ID.
+3. **Allow public client flows**: set to **Yes** (desktop/broker flow).
 
-## 3. API-Berechtigungen (Delegated)
+## 3. API permissions (delegated)
 
 **API permissions → Add a permission → Microsoft Graph → Delegated permissions** —
-folgende Scopes hinzufügen:
+add the following scopes:
 
-| Scope | Zweck |
+| Scope | Purpose |
 |---|---|
-| `User.Read` | Profil des angemeldeten Users |
-| `RoleEligibilitySchedule.Read.Directory` | Eligible Directory-Roles lesen |
-| `RoleAssignmentSchedule.ReadWrite.Directory` | Directory-Roles aktivieren/deaktivieren |
-| `RoleManagementPolicy.Read.Directory` | PIM-Policies für Directory-Roles lesen |
-| `PrivilegedAccess.ReadWrite.AzureADGroup` | PIM-for-Groups aktivieren/deaktivieren |
-| `Group.Read.All` | Gruppennamen auflösen |
+| `User.Read` | Profile of the signed-in user |
+| `RoleEligibilitySchedule.Read.Directory` | Read eligible directory roles |
+| `RoleAssignmentSchedule.ReadWrite.Directory` | Activate/deactivate directory roles |
+| `RoleManagementPolicy.Read.Directory` | Read PIM policies for directory roles |
+| `PrivilegedAccess.ReadWrite.AzureADGroup` | Activate/deactivate PIM for Groups |
+| `Group.Read.All` | Resolve group names |
 
-## 4. Admin-Consent — pro Tenant
+## 4. Admin consent — per tenant
 
-**API permissions → Grant admin consent for \<Home-Tenant\>**.
+**API permissions → Grant admin consent for \<home tenant\>**.
 
-Für **jeden weiteren Tenant**, in dem Entra PIM Manager genutzt werden soll, muss ein
-dortiger Admin separat Consent erteilen:
+For **every additional tenant** in which Entra PIM Manager will be used, an
+admin in that tenant must grant consent separately:
 
 ```
 https://login.microsoftonline.com/{external-tenant-id}/adminconsent
@@ -69,21 +69,21 @@ https://login.microsoftonline.com/{external-tenant-id}/adminconsent
     &redirect_uri=ms-appx-web://microsoft.aad.brokerplugin/{pim-manager-client-id}
 ```
 
-`{external-tenant-id}` und `{pim-manager-client-id}` ersetzen. Der dortige Admin
-folgt dem Link, meldet sich an und bestätigt die Berechtigungen einmalig.
+Replace `{external-tenant-id}` and `{pim-manager-client-id}`. The admin in that
+tenant follows the link, signs in, and confirms the permissions once.
 
-Ohne Admin-Consent im jeweiligen Tenant schlägt der erste Graph-Call beim
-Hinzufügen dieses Accounts fehl.
+Without admin consent in the respective tenant, the first Graph call fails when
+that account is added.
 
-## 5. Konfiguration eintragen
+## 5. Enter the configuration
 
-`ClientId` (und optional `AllowedTenants`) in eine lokale Konfigurationsdatei
-eintragen — **nie committen**:
+Enter `ClientId` (and optionally `AllowedTenants`) into a local configuration
+file — **never commit it**:
 
-1. `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` nach
-   `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json` kopieren.
-2. `ClientId` mit dem echten Wert aus Schritt 1 füllen.
-3. **Optional** in `AllowedTenants` die GUIDs der erlaubten Tenants eintragen:
+1. Copy `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` to
+   `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json`.
+2. Fill in `ClientId` with the real value from step 1.
+3. **Optionally** enter the GUIDs of the allowed tenants in `AllowedTenants`:
 
    ```json
    {
@@ -97,19 +97,19 @@ eintragen — **nie committen**:
    }
    ```
 
-   Leeres Array oder Eintrag weglassen = unbeschränkt (jeder Tenant mit
-   Admin-Consent darf enrollt werden).
+   Empty array or omitted entry = unrestricted (any tenant with admin consent
+   may be enrolled).
 
-`appsettings.local.json` ist in `.gitignore`.
+`appsettings.local.json` is in `.gitignore`.
 
-## 6. Verifikation
+## 6. Verification
 
-1. **App starten** → WAM-Picker erscheint, da kein Account enrollt ist.
-2. **Anmelden mit Konto in Home-Tenant** → Account erscheint in
-   `%LocalAppData%\Entra-PIM-Manager\accounts.json` und ist in der UI sichtbar.
-3. **Zweites Konto in anderem Tenant hinzufügen** → setzt Admin-Consent im
-   zweiten Tenant voraus (Schritt 4 dieser Anleitung).
+1. **Start the app** → the WAM picker appears, since no account is enrolled.
+2. **Sign in with an account in the home tenant** → the account appears in
+   `%LocalAppData%\Entra-PIM-Manager\accounts.json` and is visible in the UI.
+3. **Add a second account in another tenant** → requires admin consent in the
+   second tenant (step 4 of this guide).
 
-Für jeden enrolled Account wird ein eigener `GraphServiceClient` instanziiert
-(siehe [IGraphClientFactory.CreateFor(account)](src/Entra-PIM-Manager.Core/Graph/IGraphClientFactory.cs)),
-damit Token-Acquisition, Retry und Claims-Challenges sauber pro Tenant laufen.
+For every enrolled account a dedicated `GraphServiceClient` is instantiated
+(see [IGraphClientFactory.CreateFor(account)](../src/Entra-PIM-Manager.Core/Graph/IGraphClientFactory.cs)),
+so that token acquisition, retry, and claims challenges run cleanly per tenant.

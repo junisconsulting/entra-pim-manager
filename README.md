@@ -37,7 +37,7 @@ Future updates are downloaded automatically and applied on the next launch.
 
 Before first use, an Entra App Registration must be created and configured. The committed `appsettings.json` only contains a placeholder ClientId; the real value goes into a local, gitignored `appsettings.local.json`.
 
-Setup steps (German): [docs/app-registration-setup.md](docs/app-registration-setup.md).
+Setup steps: [docs/app-registration-setup.md](docs/app-registration-setup.md).
 
 In short:
 
