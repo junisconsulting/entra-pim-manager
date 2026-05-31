@@ -88,4 +88,3 @@ Pull requests in these areas need discussion first — they are tracked as backl
 - Azure Resource Roles (separate API under `/roleManagement/azureResources`)
 - Renewal or extension of expiring assignments (`action: "selfExtend"`)
 - Bulk activation of multiple roles in a single step
-- Settings UI for tenant/client ID configuration (currently `appsettings.local.json` is edited directly)

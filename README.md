@@ -35,7 +35,7 @@ Future updates are downloaded automatically and applied on the next launch.
 
 ## Configure
 
-Before first use, an Entra App Registration must be created and configured. The committed `appsettings.json` only contains a placeholder ClientId; the real value goes into a local, gitignored `appsettings.local.json`.
+Before first use, an Entra App Registration must be created once (an admin task). Its ClientId is then entered into the app — no file editing required.
 
 Setup steps: [docs/app-registration-setup.md](docs/app-registration-setup.md).
 
@@ -45,7 +45,9 @@ In short:
 2. Add the WAM redirect URI `ms-appx-web://microsoft.aad.brokerplugin/{client-id}` and enable public client flows.
 3. Grant delegated Graph permissions: `User.Read`, `RoleEligibilitySchedule.Read.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`, `RoleManagementPolicy.Read.Directory`, `PrivilegedAccess.ReadWrite.AzureADGroup`, `Group.Read.All`.
 4. Grant admin consent in every tenant where Entra PIM Manager will be used.
-5. Copy `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` to `appsettings.local.json` and fill in your `ClientId`.
+5. Launch the app, open **Settings**, and paste the ClientId. It is saved to your per-user config at `%LocalAppData%\Entra-PIM-Manager\appsettings.local.json` and applied on the next restart — the shipped `appsettings.json` only carries a placeholder.
+
+> Running from source instead of an installer? Copy `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` to `appsettings.local.json` and put your `ClientId` there — a developer convenience that avoids retyping it in the UI on every run.
 
 ## Build from source
 

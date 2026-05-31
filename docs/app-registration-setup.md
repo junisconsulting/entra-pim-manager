@@ -75,32 +75,43 @@ tenant follows the link, signs in, and confirms the permissions once.
 Without admin consent in the respective tenant, the first Graph call fails when
 that account is added.
 
-## 5. Enter the configuration
+## 5. Enter the ClientId
 
-Enter `ClientId` (and optionally `AllowedTenants`) into a local configuration
-file — **never commit it**:
+The normal path requires no file editing: start the app, open **Settings**, and
+paste the `ClientId` from step 1 into the App Registration field. The app saves
+it to your per-user config at
+`%LocalAppData%\Entra-PIM-Manager\appsettings.local.json` and applies it on the
+next restart. The shipped `appsettings.json` carries only a placeholder.
 
-1. Copy `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` to
-   `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json`.
-2. Fill in `ClientId` with the real value from step 1.
-3. **Optionally** enter the GUIDs of the allowed tenants in `AllowedTenants`:
+### Optional: restrict the allowed tenants
 
-   ```json
-   {
-     "EntraPimManager": {
-       "ClientId": "00000000-0000-0000-0000-000000000000",
-       "AllowedTenants": [
-         "11111111-1111-1111-1111-111111111111",
-         "22222222-2222-2222-2222-222222222222"
-       ]
-     }
-   }
-   ```
+`AllowedTenants` is not exposed in the UI — to lock the app down to a known set
+of tenant GUIDs, edit the per-user config file directly and add the array
+alongside the `ClientId` the UI already wrote:
 
-   Empty array or omitted entry = unrestricted (any tenant with admin consent
-   may be enrolled).
+```json
+{
+  "EntraPimManager": {
+    "ClientId": "00000000-0000-0000-0000-000000000000",
+    "AllowedTenants": [
+      "11111111-1111-1111-1111-111111111111",
+      "22222222-2222-2222-2222-222222222222"
+    ]
+  }
+}
+```
 
-`appsettings.local.json` is in `.gitignore`.
+Empty array or omitted entry = unrestricted (any tenant with admin consent may
+be enrolled).
+
+### Running from source
+
+When launching from a source build instead of an installer, you can skip the UI
+and provide the value directly: copy
+`src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` to
+`src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json` and fill in
+`ClientId`. Both this file and the per-user one are in `.gitignore` — **never
+commit either**.
 
 ## 6. Verification
 
