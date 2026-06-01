@@ -3,6 +3,7 @@ namespace EntraPimManager.Tests.ErrorHandling;
 using EntraPimManager.Core.ErrorHandling;
 using EntraPimManager.Core.Models;
 using Microsoft.Graph.Models.ODataErrors;
+using Microsoft.Identity.Client;
 
 public sealed class PimErrorMapperTests
 {
@@ -108,5 +109,43 @@ public sealed class PimErrorMapperTests
         var mapped = PimErrorMapper.MapException(new InvalidOperationException("boom"));
 
         Assert.Equal(ErrorSeverity.Fatal, mapped.Severity);
+    }
+
+    [Fact]
+    public void MapException_MsalInvalidClient_ExplainsPublicClientFlowFix()
+    {
+        // AADSTS7000218: app registration missing "Allow public client flows".
+        var msal = new MsalServiceException(
+            MsalError.InvalidClient,
+            "AADSTS7000218: The request body must contain the following parameter: 'client_assertion' or 'client_secret'.");
+
+        var mapped = PimErrorMapper.MapException(msal);
+
+        Assert.Equal(ErrorSeverity.Fatal, mapped.Severity);
+        Assert.Contains("public client flows", mapped.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void MapException_MsalInvalidClientByMessageOnly_ExplainsPublicClientFlowFix()
+    {
+        // Same fix path when the AADSTS code is only in the message, not the ErrorCode.
+        var msal = new MsalServiceException(
+            "some_other_code",
+            "Original exception: AADSTS7000218: ...");
+
+        var mapped = PimErrorMapper.MapException(msal);
+
+        Assert.Contains("public client flows", mapped.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void MapException_MsalOtherServiceError_ReturnsGenericSignInFailure()
+    {
+        var msal = new MsalServiceException("some_error", "AADSTS50000: something else");
+
+        var mapped = PimErrorMapper.MapException(msal);
+
+        Assert.Equal(ErrorSeverity.Fatal, mapped.Severity);
+        Assert.Contains("Sign-in failed", mapped.Message, StringComparison.OrdinalIgnoreCase);
     }
 }

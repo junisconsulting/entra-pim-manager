@@ -1,6 +1,7 @@
 namespace EntraPimManager.Core.Auth;
 
 using System.Diagnostics.CodeAnalysis;
+using EntraPimManager.Core.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Identity.Client;
 using Microsoft.Identity.Client.Extensions.Msal;
@@ -26,9 +27,7 @@ public sealed class TokenCacheFactory
     public TokenCacheFactory(ILogger<TokenCacheFactory> logger)
     {
         _logger = logger;
-        CacheDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Entra-PIM-Manager");
+        CacheDirectory = AppPaths.DataDirectory;
     }
 
     /// <summary>Directory holding the encrypted token cache files (non-roaming).</summary>

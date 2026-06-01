@@ -202,11 +202,7 @@ public partial class App : Application
             .AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: false)
             .AddJsonFile(LocalConfigStore.ConfigFilePath, optional: true, reloadOnChange: false);
 
-        var logDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Entra-PIM-Manager",
-            "logs");
-        Directory.CreateDirectory(logDirectory);
+        Directory.CreateDirectory(AppPaths.LogDirectory);
 
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
@@ -214,7 +210,7 @@ public partial class App : Application
             .WriteTo.Console()
             .WriteTo.File(
                 new CompactJsonFormatter(),
-                Path.Combine(logDirectory, "entra-pim-manager-.log"),
+                Path.Combine(AppPaths.LogDirectory, "entra-pim-manager-.log"),
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: 14)
             .CreateLogger();
@@ -231,22 +227,13 @@ public partial class App : Application
         builder.Services.AddSingleton<IWindowTracker, AvaloniaWindowTracker>();
         builder.Services.AddSingleton<TokenCacheFactory>();
         builder.Services.AddSingleton<IAccountStore>(sp => new AccountStore(
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Entra-PIM-Manager",
-                "accounts.json"),
+            AppPaths.AccountsFile,
             sp.GetRequiredService<ILogger<AccountStore>>()));
         builder.Services.AddSingleton<IJustificationFavoritesStore>(sp => new JustificationFavoritesStore(
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Entra-PIM-Manager",
-                "favorites.json"),
+            AppPaths.FavoritesFile,
             sp.GetRequiredService<ILogger<JustificationFavoritesStore>>()));
         builder.Services.AddSingleton<IUserSettingsService>(sp => new UserSettingsService(
-            Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "Entra-PIM-Manager",
-                "settings.json"),
+            AppPaths.SettingsFile,
             sp.GetRequiredService<ILogger<UserSettingsService>>()));
         builder.Services.AddSingleton<IAuthService, MsalAuthService>();
         builder.Services.AddSingleton<IGraphClientFactory, GraphClientFactory>();

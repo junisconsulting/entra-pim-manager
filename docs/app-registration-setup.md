@@ -115,11 +115,19 @@ commit either**.
 
 ## 6. Verification
 
-1. **Start the app** → the WAM picker appears, since no account is enrolled.
-2. **Sign in with an account in the home tenant** → the account appears in
-   `%LocalAppData%\Entra-PIM-Manager\accounts.json` and is visible in the UI.
-3. **Add a second account in another tenant** → requires admin consent in the
+1. **Start the app and open Settings → ACCOUNTS → "Add account…".** A slide-in
+   opens with an optional tenant field and a primary **Sign in** button.
+2. **Leave the tenant field blank and click Sign in** → the WAM picker appears;
+   pick your admin account in the home tenant. It then appears in
+   `%LocalAppData%\Entra-PIM-Manager\accounts.json` and in the UI.
+3. **Add a second account in another tenant** → open "Add account…" again, enter
+   that tenant's id or domain, and sign in. This requires admin consent in the
    second tenant (step 4 of this guide).
+4. **Federated IdP signs you in as the wrong account?** Use **Advanced → Sign in
+   with device code** in the same panel and complete sign-in on another device
+   (e.g. your phone). Note: device-code flow runs broker-less, so a Conditional
+   Access policy requiring a managed device — or blocking device-code flow — will
+   reject it.
 
 For every enrolled account a dedicated `GraphServiceClient` is instantiated
 (see [IGraphClientFactory.CreateFor(account)](../src/Entra-PIM-Manager.Core/Graph/IGraphClientFactory.cs)),

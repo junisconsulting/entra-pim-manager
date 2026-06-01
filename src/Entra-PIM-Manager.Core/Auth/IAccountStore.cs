@@ -18,6 +18,14 @@ public interface IAccountStore
     Task<IReadOnlyList<SignedInAccount>> GetAllAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// Returns the enrollment matching the (oid, tenantId) pair, or <c>null</c>
+    /// if none is stored. Used to recover per-enrollment metadata (e.g.
+    /// <see cref="SignedInAccount.AuthMethod"/>) when only the identity tuple is
+    /// known.
+    /// </summary>
+    Task<SignedInAccount?> GetByIdAsync(string objectId, string tenantId, CancellationToken ct = default);
+
+    /// <summary>
     /// Adds or updates <paramref name="account"/>. Matching is by the composite
     /// (oid, tenantId); an existing entry's <see cref="SignedInAccount.AddedAt"/>
     /// is preserved.

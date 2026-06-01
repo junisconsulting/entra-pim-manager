@@ -12,7 +12,7 @@ A Windows tray application for activating Microsoft Entra Privileged Identity Ma
 
 - One-click activation of Entra PIM eligibilities from the system tray
 - Multi-tenant: sign in with multiple admin accounts; eligibilities and active assignments are grouped per tenant
-- WAM-broker authentication (no embedded WebView, no in-app password prompts)
+- WAM-broker authentication (no embedded WebView, no in-app password prompts), with a device-code fallback for tenants whose federated IdP forces seamless SSO onto the wrong account
 - Activation form with justification, ticket reference, and a duration slider in 0.5 h steps (bounded by the per-role policy maximum)
 - Live watchdog — the list refreshes automatically when assignments are activated, deactivated, or expire
 - Favorites for recurring justifications

@@ -3,6 +3,7 @@ namespace EntraPimManager.AppAvalonia.Services;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using EntraPimManager.Core.Configuration;
 
 /// <summary>
 /// Reads and writes the user-entered configuration at
@@ -12,10 +13,7 @@ using System.Text.Json.Nodes;
 public static class LocalConfigStore
 {
     /// <summary>Full path of the user-entered configuration file.</summary>
-    public static string ConfigFilePath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Entra-PIM-Manager",
-        "appsettings.local.json");
+    public static string ConfigFilePath { get; } = AppPaths.LocalConfigFile;
 
     /// <summary>
     /// Writes the user-configured ClientId into the local configuration file.
