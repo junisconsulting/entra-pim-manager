@@ -40,7 +40,16 @@ of each enrolled account is determined from the WAM result at sign-in.)
    ```
 
    Replace `{client-id}` with the real Application (client) ID.
-3. **Allow public client flows**: set to **Yes** (desktop/broker flow).
+3. **Allow public client flows**: set to **Yes**.
+
+   > **Why and when:** Entra decides whether an app is a public or confidential
+   > client differently per flow. The **WAM broker** sign-in identifies itself as
+   > a public client via the redirect URI above, so it works **even without** this
+   > setting. The **device-code** flow (Advanced → "Sign in with device code")
+   > uses **no** redirect URI, so Entra can only recognise it as a public client
+   > through this flag — without it the token endpoint demands a client secret and
+   > device-code sign-in fails with `AADSTS7000218`. Leave it on so both flows
+   > work; for a desktop app with no secret this is the correct, intended state.
 
 ## 3. API permissions (delegated)
 
