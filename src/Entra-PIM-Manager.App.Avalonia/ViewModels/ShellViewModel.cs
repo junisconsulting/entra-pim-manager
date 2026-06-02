@@ -166,13 +166,10 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     public SettingsPanelViewModel SettingsPanel => _settingsPanel;
 
     /// <inheritdoc />
-    IAsyncRelayCommand IAccountsHost.AddAccountCommand => AddAccountCommand;
-
-    /// <inheritdoc />
     IAsyncRelayCommand<SignedInAccount?> IAccountsHost.RemoveAccountCommand => RemoveAccountCommand;
 
     /// <inheritdoc />
-    IRelayCommand IAccountsHost.OpenAddTenantPanelCommand => OpenAddTenantPanelCommand;
+    IRelayCommand IAccountsHost.OpenAddAccountPanelCommand => OpenAddAccountPanelCommand;
 
     /// <inheritdoc />
     IRelayCommand<SignedInAccount?> IAccountsHost.SelectAccountCommand => SelectAccountCommand;
@@ -352,41 +349,6 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     }
 
     [RelayCommand]
-    private async Task AddAccountAsync()
-    {
-        if (IsBusy)
-        {
-            return;
-        }
-
-        IsBusy = true;
-        try
-        {
-            var added = await _authService.AddAccountAsync();
-            EnrollAccountItem(added);
-            ActiveAccount ??= added;
-            IsSignedIn = true;
-
-            // Hand IsBusy off to RefreshAsync so its own guard
-            // (Accounts.Count == 0 || IsBusy → no-op) lets the call through.
-            // The two assignments are synchronous so the refresh timer cannot
-            // interleave and double-trigger before RefreshAsync re-claims the
-            // flag for itself.
-            IsBusy = false;
-            await RefreshAsync();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Add account failed");
-            _toastService.ShowError("Add account", PimErrorMapper.MapException(ex).Message);
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    [RelayCommand]
     private async Task RemoveAccountAsync(SignedInAccount? account)
     {
         if (account is null || IsBusy)
@@ -446,10 +408,16 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         }
     }
 
-    /// <summary>Opens the "connect to another tenant" slide-in. Leaves the
-    /// Settings panel open if it's the entry point — the user is mid-flow there.</summary>
+    /// <summary>Opens the single "Add account" slide-in (broker sign-in primary,
+    /// device code under Advanced). Closes Settings first: the slide-in panels
+    /// are overlapping siblings and Settings renders on top, so otherwise this
+    /// panel opens invisibly behind it.</summary>
     [RelayCommand]
-    private void OpenAddTenantPanel() => _addTenantPanel.Open();
+    private void OpenAddAccountPanel()
+    {
+        _settingsPanel.IsOpen = false;
+        _addTenantPanel.Open();
+    }
 
     /// <summary>Opens the Settings slide-in. Closes any other open slide-in first
     /// so the panel slots stay mutually exclusive. Sets <c>IsOpen=false</c>

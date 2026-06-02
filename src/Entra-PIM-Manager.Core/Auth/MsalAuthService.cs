@@ -38,6 +38,12 @@ public sealed class MsalAuthService : IAuthService, IDisposable
     // different clouds don't collide.
     private readonly Dictionary<EntraCloud, IPublicClientApplication> _pcas = [];
 
+    // Separate broker-LESS PCAs for the device-code escape hatch. Device-code
+    // flow is incompatible with WAM, so these omit .WithBroker and keep their
+    // refresh tokens in their own cache files (the broker PCAs above store no RTs
+    // — WAM owns those). Routing between the two sets is by SignedInAccount.AuthMethod.
+    private readonly Dictionary<EntraCloud, IPublicClientApplication> _deviceCodePcas = [];
+
     public MsalAuthService(
         IOptions<EntraPimManagerOptions> options,
         IWindowTracker windowTracker,
@@ -68,6 +74,21 @@ public sealed class MsalAuthService : IAuthService, IDisposable
     }
 
     /// <inheritdoc />
+    public Task<SignedInAccount> AddAccountViaDeviceCodeAsync(
+        string? tenantIdOrDomain,
+        EntraCloud cloud,
+        Func<DeviceCodeChallenge, Task> onChallenge,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(onChallenge);
+        return AddAccountViaDeviceCodeCoreAsync(
+            string.IsNullOrWhiteSpace(tenantIdOrDomain) ? null : tenantIdOrDomain.Trim(),
+            cloud,
+            onChallenge,
+            ct);
+    }
+
+    /// <inheritdoc />
     public async Task RemoveAccountAsync(
         string objectId,
         string tenantId,
@@ -80,20 +101,28 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         await _authLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            // Capture how this enrollment authenticated BEFORE removing it, so we
+            // clean up the matching cache (broker vs. device-code — separate caches).
+            var removed = await _accountStore.GetByIdAsync(objectId, tenantId, ct).ConfigureAwait(false);
+            var authMethod = removed?.AuthMethod ?? AuthMethod.Broker;
+
             await _accountStore.RemoveAsync(objectId, tenantId, ct).ConfigureAwait(false);
 
             // Only purge the MSAL cache entry when no other tenant enrollment in
-            // the same cloud still uses the same home identity — otherwise we'd
-            // kill the token bundle the remaining enrollment needs for silent
-            // re-acquisition. Cross-cloud the cache is separate, so a remaining
-            // enrollment in the other cloud doesn't count.
+            // the same cloud AND with the same auth method still uses the same
+            // home identity — otherwise we'd kill the token bundle the remaining
+            // enrollment needs for silent re-acquisition. Cross-cloud and
+            // cross-auth-method the caches are separate, so those don't count.
             var remaining = await _accountStore.GetAllAsync(ct).ConfigureAwait(false);
             var stillInUse = remaining.Any(a =>
                 a.Cloud == cloud
+                && a.AuthMethod == authMethod
                 && string.Equals(a.ObjectId, objectId, StringComparison.OrdinalIgnoreCase));
             if (!stillInUse)
             {
-                var pca = await EnsurePcaAsync(cloud, ct).ConfigureAwait(false);
+                var pca = authMethod == AuthMethod.DeviceCode
+                    ? await EnsureDeviceCodePcaAsync(cloud, ct).ConfigureAwait(false)
+                    : await EnsurePcaAsync(cloud, ct).ConfigureAwait(false);
                 var msalAccount = await FindMsalAccountAsync(pca, objectId).ConfigureAwait(false);
                 if (msalAccount is not null)
                 {
@@ -137,7 +166,17 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         await _authLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var pca = await EnsurePcaAsync(cloud, ct).ConfigureAwait(false);
+            // Route to the PCA matching how this account was enrolled. A
+            // device-code account's refresh token lives in the broker-less PCA's
+            // cache; renewing it via the broker PCA would miss the token and, on
+            // interactive fallback, reintroduce the federated-SSO wrong-account
+            // bug the device-code path exists to avoid.
+            var enrollment = await _accountStore.GetByIdAsync(objectId, tenantId, ct).ConfigureAwait(false);
+            var authMethod = enrollment?.AuthMethod ?? AuthMethod.Broker;
+
+            var pca = authMethod == AuthMethod.DeviceCode
+                ? await EnsureDeviceCodePcaAsync(cloud, ct).ConfigureAwait(false)
+                : await EnsurePcaAsync(cloud, ct).ConfigureAwait(false);
             var account = await FindMsalAccountAsync(pca, objectId).ConfigureAwait(false);
 
             if (account is null)
@@ -147,8 +186,9 @@ public sealed class MsalAuthService : IAuthService, IDisposable
                     $"No MSAL account for oid '{objectId}' in cloud '{cloud}'. The account must be re-enrolled.");
             }
 
-            return await AcquireForAccountAsync(pca, account, tenantId, scopes, claimsChallenge, ct)
-                .ConfigureAwait(false);
+            return authMethod == AuthMethod.DeviceCode
+                ? await AcquireForDeviceCodeAccountAsync(pca, account, tenantId, scopes, ct).ConfigureAwait(false)
+                : await AcquireForAccountAsync(pca, account, tenantId, scopes, claimsChallenge, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -174,6 +214,15 @@ public sealed class MsalAuthService : IAuthService, IDisposable
     {
         EntraCloud.China => "msal-china.cache",
         _ => TokenCacheFactory.DefaultCacheFileName,
+    };
+
+    // Dedicated cache files for the broker-less device-code PCAs. These store
+    // refresh tokens (the broker caches do not), so they must never share a file
+    // with CacheFileFor.
+    private static string DeviceCodeCacheFileFor(EntraCloud cloud) => cloud switch
+    {
+        EntraCloud.China => "msal-devicecode-china.cache",
+        _ => "msal-devicecode.cache",
     };
 
     private async Task<SignedInAccount> AddAccountCoreAsync(
@@ -211,7 +260,7 @@ public sealed class MsalAuthService : IAuthService, IDisposable
                 ?? string.Empty;
             var objectId = result.Account.HomeAccountId?.ObjectId ?? string.Empty;
 
-            EnforceTenantWhitelist(tenantId, result.Account, cloud);
+            EnforceTenantWhitelist(tenantId, result.Account, cloud, pca);
 
             var account = new SignedInAccount(
                 ObjectId: objectId,
@@ -234,6 +283,94 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         {
             _authLock.Release();
         }
+    }
+
+    private async Task<SignedInAccount> AddAccountViaDeviceCodeCoreAsync(
+        string? tenantIdOrDomain,
+        EntraCloud cloud,
+        Func<DeviceCodeChallenge, Task> onChallenge,
+        CancellationToken ct)
+    {
+        await _authLock.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var pca = await EnsureDeviceCodePcaAsync(cloud, ct).ConfigureAwait(false);
+
+            var builder = pca.AcquireTokenWithDeviceCode(
+                _options.Scopes,
+                deviceCodeResult =>
+                {
+                    // MSAL invokes this once, before it starts polling. Hand the
+                    // user-facing instructions to the UI. The user code is
+                    // single-use and short-lived — never log it.
+                    var challenge = new DeviceCodeChallenge(
+                        UserCode: deviceCodeResult.UserCode,
+                        VerificationUri: deviceCodeResult.VerificationUrl,
+                        Message: deviceCodeResult.Message,
+                        ExpiresOn: deviceCodeResult.ExpiresOn);
+                    return onChallenge(challenge);
+                });
+
+            // Same tenant-targeting semantics as the broker path.
+            if (tenantIdOrDomain is not null)
+            {
+                builder = builder.WithTenantId(tenantIdOrDomain);
+            }
+
+            var result = await builder.ExecuteAsync(ct).ConfigureAwait(false);
+
+            var tenantId = result.TenantId
+                ?? result.Account.HomeAccountId?.TenantId
+                ?? string.Empty;
+            var objectId = result.Account.HomeAccountId?.ObjectId ?? string.Empty;
+
+            EnforceTenantWhitelist(tenantId, result.Account, cloud, pca);
+
+            var account = new SignedInAccount(
+                ObjectId: objectId,
+                TenantId: tenantId,
+                Username: result.Account.Username,
+                DisplayName: result.ClaimsPrincipal?.FindFirst("name")?.Value,
+                AddedAt: DateTimeOffset.UtcNow,
+                Cloud: cloud,
+                AuthMethod: AuthMethod.DeviceCode);
+
+            await _accountStore.UpsertAsync(account, ct).ConfigureAwait(false);
+            _logger.LogInformation(
+                "Account enrolled via device code (oid {ObjectId}, tenant {TenantId}, cloud {Cloud}{TenantOverride})",
+                account.ObjectId,
+                account.TenantId,
+                cloud,
+                tenantIdOrDomain is null ? string.Empty : $", override {tenantIdOrDomain}");
+            return account;
+        }
+        finally
+        {
+            _authLock.Release();
+        }
+    }
+
+    private async Task<AuthenticationResult> AcquireForDeviceCodeAccountAsync(
+        IPublicClientApplication pca,
+        IAccount account,
+        string tenantId,
+        string[] scopes,
+        CancellationToken ct)
+    {
+        // Device-code accounts renew silently from the broker-less PCA's own
+        // refresh token. There is deliberately NO interactive fallback here: if
+        // the RT is gone (MsalUiRequiredException), surface it so the caller can
+        // prompt the user to re-run the explicit device-code enrollment. A silent
+        // broker/interactive fallback would defeat the whole reason this account
+        // uses device code. Claims challenges likewise require a fresh device-code
+        // run, so they are not handled inline.
+        var silent = pca.AcquireTokenSilent(scopes, account).WithTenantId(tenantId);
+        var result = await silent.ExecuteAsync(ct).ConfigureAwait(false);
+        _logger.LogDebug(
+            "Device-code token acquired silently for tenant {TenantId} via {TokenSource}",
+            tenantId,
+            result.AuthenticationResultMetadata.TokenSource);
+        return result;
     }
 
     private async Task<AuthenticationResult> AcquireForAccountAsync(
@@ -284,7 +421,11 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         }
     }
 
-    private void EnforceTenantWhitelist(string tenantId, IAccount account, EntraCloud cloud)
+    private void EnforceTenantWhitelist(
+        string tenantId,
+        IAccount account,
+        EntraCloud cloud,
+        IPublicClientApplication pca)
     {
         if (_options.AllowedTenants is not { Length: > 0 } whitelist)
         {
@@ -302,11 +443,9 @@ public sealed class MsalAuthService : IAuthService, IDisposable
             cloud,
             account.HomeAccountId?.ObjectId);
 
-        // Remove the just-cached account so it doesn't linger.
-        if (_pcas.TryGetValue(cloud, out var pca))
-        {
-            _ = pca.RemoveAsync(account);
-        }
+        // Remove the just-cached account so it doesn't linger. Use the PCA that
+        // actually cached it (broker vs. device-code) — they hold separate caches.
+        _ = pca.RemoveAsync(account);
 
         throw new MsalServiceException(
             "tenant_not_allowed",
@@ -351,6 +490,34 @@ public sealed class MsalAuthService : IAuthService, IDisposable
             .RegisterAsync(pca.UserTokenCache, CacheFileFor(cloud), ct)
             .ConfigureAwait(false);
         _pcas[cloud] = pca;
+        return pca;
+    }
+
+    private async Task<IPublicClientApplication> EnsureDeviceCodePcaAsync(EntraCloud cloud, CancellationToken ct)
+    {
+        if (_deviceCodePcas.TryGetValue(cloud, out var existing))
+        {
+            return existing;
+        }
+
+        ct.ThrowIfCancellationRequested();
+
+        // Broker-LESS public client for the device-code escape hatch. No
+        // .WithBroker (device code is incompatible with WAM) and no redirect URI
+        // (device code doesn't use one). Unlike the broker PCA — where WAM owns
+        // the refresh tokens — this PCA persists its own RTs, so it MUST have a
+        // dedicated cache file that never collides with the broker caches.
+        var pca = PublicClientApplicationBuilder
+            .Create(_options.ClientId)
+            .WithAuthority(EntraCloudInfo.MsalCloudInstance(cloud), AadAuthorityAudience.AzureAdMultipleOrgs)
+            .WithClientName("Entra-PIM-Manager")
+            .WithLogging(OnMsalLog, MsalLogLevel.Info, enablePiiLogging: false)
+            .Build();
+
+        await _cacheFactory
+            .RegisterAsync(pca.UserTokenCache, DeviceCodeCacheFileFor(cloud), ct)
+            .ConfigureAwait(false);
+        _deviceCodePcas[cloud] = pca;
         return pca;
     }
 

@@ -847,11 +847,11 @@
               <PathIcon Data="M15 6l-6 6 6 6" Width="14" Height="14" />
             </Button>
             <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
-              <TextBlock Text="Connect to another tenant"
+              <TextBlock Text="Add account"
                          FontSize="{DynamicResource FontTitleSmall}"
                          FontWeight="SemiBold"
                          Foreground="{DynamicResource TextPrimaryBrush}" />
-              <TextBlock Text="Same identity, different tenant context"
+              <TextBlock Text="Sign in with an admin account"
                          FontSize="{DynamicResource FontSmall}"
                          Foreground="{DynamicResource TextSecondaryBrush}" />
             </StackPanel>
@@ -884,14 +884,14 @@
               </StackPanel>
 
               <StackPanel>
-                <TextBlock Text="Tenant ID or domain"
+                <TextBlock Text="Tenant ID or domain (optional)"
                            FontSize="{DynamicResource FontCaption}"
                            FontWeight="Medium"
                            Foreground="{DynamicResource TextTertiaryBrush}"
                            Margin="0,0,0,4" />
                 <TextBox Text="{Binding TenantInput}"
-                         PlaceholderText="e.g. contoso.com or 11111111-2222-3333-4444-555555555555" />
-                <TextBlock Text="The Windows account picker opens after submit — pick the same identity used here, MSAL will request a token for the entered tenant."
+                         PlaceholderText="leave blank for your home tenant" />
+                <TextBlock Text="Leave blank to sign in to your home tenant. Enter a tenant id or domain to enroll the same identity in a specific guest/secondary tenant. The Windows account picker opens after submit."
                            TextWrapping="Wrap"
                            FontSize="{DynamicResource FontSmall}"
                            Foreground="{DynamicResource TextTertiaryBrush}"
@@ -909,6 +909,59 @@
                            FontSize="{DynamicResource FontSmall}"
                            Foreground="{DynamicResource DangerBrush}" />
               </Border>
+
+              <!-- Advanced: device-code escape hatch -->
+              <StackPanel Spacing="10">
+                <Button Classes="ghost"
+                        Command="{Binding ToggleAdvancedCommand}"
+                        HorizontalAlignment="Left"
+                        Padding="4,2">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="M9 6l6 6-6 6" Width="11" Height="11"
+                              Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <TextBlock Text="Advanced"
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                  </StackPanel>
+                </Button>
+
+                <StackPanel Spacing="10" IsVisible="{Binding IsAdvancedExpanded}">
+                  <TextBlock TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSmall}"
+                             Foreground="{DynamicResource TextTertiaryBrush}"
+                             Text="Sign in with a device code on another device (e.g. your phone). Use this when your organization's federated sign-in (e.g. Okta) keeps signing you in as the wrong account. Note: this may be blocked by Conditional Access policies that require a managed device." />
+
+                  <!-- Device-code instructions, shown once the code arrives -->
+                  <Border Background="{DynamicResource Surface2Brush}"
+                          CornerRadius="6"
+                          Padding="12,10"
+                          IsVisible="{Binding IsDeviceCodeInProgress}">
+                    <StackPanel Spacing="6">
+                      <TextBlock Text="On your phone, open:"
+                                 FontSize="{DynamicResource FontSmall}"
+                                 Foreground="{DynamicResource TextSecondaryBrush}" />
+                      <SelectableTextBlock Text="{Binding DeviceCodeVerificationUri}"
+                                           FontSize="{DynamicResource FontSmall}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}" />
+                      <TextBlock Text="and enter this code:"
+                                 FontSize="{DynamicResource FontSmall}"
+                                 Foreground="{DynamicResource TextSecondaryBrush}"
+                                 Margin="0,4,0,0" />
+                      <SelectableTextBlock Text="{Binding DeviceCodeUserCode}"
+                                           FontSize="{DynamicResource FontTitleSmall}"
+                                           FontWeight="Bold"
+                                           Foreground="{DynamicResource AccentForegroundBrush}" />
+                    </StackPanel>
+                  </Border>
+
+                  <Button Classes="secondary"
+                          HorizontalAlignment="Left"
+                          Command="{Binding ConnectViaDeviceCodeCommand}"
+                          IsEnabled="{Binding !IsConnecting}"
+                          Content="Sign in with device code" />
+                </StackPanel>
+              </StackPanel>
             </StackPanel>
           </ScrollViewer>
 
@@ -925,7 +978,7 @@
                     Command="{Binding ConnectCommand}"
                     IsEnabled="{Binding !IsConnecting}">
               <Panel>
-                <TextBlock Text="Connect"
+                <TextBlock Text="Sign in"
                            VerticalAlignment="Center"
                            IsVisible="{Binding !IsConnecting}" />
                 <StackPanel Orientation="Horizontal" Spacing="8"
@@ -940,7 +993,7 @@
                           StrokeThickness="1.6"
                           StrokeLineCap="Round" />
                   </Border>
-                  <TextBlock Text="Connecting…" VerticalAlignment="Center" />
+                  <TextBlock Text="Signing in…" VerticalAlignment="Center" />
                 </StackPanel>
               </Panel>
             </Button>
@@ -1210,31 +1263,18 @@
                            Foreground="{DynamicResource TextTertiaryBrush}"
                            IsVisible="{Binding !HasAccounts}" />
 
-                <!-- Add / connect-tenant entry points. -->
+                <!-- Single add-account entry point. The slide-in offers the
+                     optional tenant field and the device-code option (Advanced). -->
                 <StackPanel Spacing="2" Margin="0,4,0,0">
                   <Button Classes="ghost"
                           HorizontalAlignment="Stretch"
                           HorizontalContentAlignment="Left"
                           Padding="10,8"
-                          Command="{Binding AddAccountCommand}">
+                          Command="{Binding OpenAddAccountPanelCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="10">
                       <PathIcon Data="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
                                 Width="14" Height="14" />
-                      <TextBlock Text="Add account"
-                                 FontSize="{DynamicResource FontBody}"
-                                 VerticalAlignment="Center" />
-                    </StackPanel>
-                  </Button>
-
-                  <Button Classes="ghost"
-                          HorizontalAlignment="Stretch"
-                          HorizontalContentAlignment="Left"
-                          Padding="10,8"
-                          Command="{Binding OpenAddTenantPanelCommand}">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                      <PathIcon Data="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"
-                                Width="14" Height="14" />
-                      <TextBlock Text="Connect to another tenant…"
+                      <TextBlock Text="Add account…"
                                  FontSize="{DynamicResource FontBody}"
                                  VerticalAlignment="Center" />
                     </StackPanel>
@@ -1364,6 +1404,38 @@
                       </DataTemplate>
                     </ComboBox.ItemTemplate>
                   </ComboBox>
+                </Grid>
+              </StackPanel>
+              </Border>
+
+              <!-- =========== DIAGNOSTICS =========== -->
+              <Border Classes="settings-card">
+              <StackPanel Spacing="8">
+                <TextBlock Text="DIAGNOSTICS"
+                           FontSize="{DynamicResource FontCaption}"
+                           FontWeight="Medium"
+                           Foreground="{DynamicResource TextTertiaryBrush}" />
+
+                <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                  <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="Log files"
+                               FontSize="{DynamicResource FontBody}"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <TextBlock Text="Open the folder with the rolling log files — useful when reporting a problem."
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="1"
+                          Classes="secondary"
+                          Command="{Binding OpenLogCommand}"
+                          VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <PathIcon Data="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"
+                                Width="14" Height="14" />
+                      <TextBlock Text="Open log folder" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
                 </Grid>
               </StackPanel>
               </Border>

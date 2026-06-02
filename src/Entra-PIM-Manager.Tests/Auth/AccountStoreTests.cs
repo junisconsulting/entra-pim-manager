@@ -237,6 +237,47 @@ public sealed class AccountStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task UpsertAsync_DeviceCodeAuthMethod_RoundTripsThroughJson()
+    {
+        var account = MakeAccount("oid-dc") with { AuthMethod = AuthMethod.DeviceCode };
+        var first = CreateStore();
+        await first.UpsertAsync(account);
+
+        var second = CreateStore();
+        var loaded = Assert.Single(await second.GetAllAsync());
+
+        Assert.Equal(AuthMethod.DeviceCode, loaded.AuthMethod);
+        Assert.Equal(account.ObjectId, loaded.ObjectId);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_LegacyFileWithoutAuthMethod_DefaultsToBroker()
+    {
+        // Simulate a file written before AuthMethod existed: no "AuthMethod"
+        // property. It must deserialize as Broker so existing enrollments keep
+        // renewing via WAM.
+        const string legacyJson = """
+        [
+          {
+            "ObjectId": "oid-legacy",
+            "TenantId": "11111111-1111-1111-1111-111111111111",
+            "Username": "legacy@example.com",
+            "DisplayName": "Legacy",
+            "AddedAt": "2024-01-01T00:00:00+00:00",
+            "Cloud": 0
+          }
+        ]
+        """;
+        await File.WriteAllTextAsync(_filePath, legacyJson);
+
+        var store = CreateStore();
+        var loaded = Assert.Single(await store.GetAllAsync());
+
+        Assert.Equal(AuthMethod.Broker, loaded.AuthMethod);
+        Assert.Equal("oid-legacy", loaded.ObjectId);
+    }
+
+    [Fact]
     public async Task ReorderAsync_PersistsNewOrder()
     {
         var store = CreateStore();

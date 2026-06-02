@@ -2,6 +2,7 @@ namespace EntraPimManager.AppAvalonia.ViewModels;
 
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Styling;
@@ -148,6 +149,12 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         string.IsNullOrWhiteSpace(_options.ClientId)
         || !Guid.TryParse(_options.ClientId, out _);
 
+    /// <summary>
+    /// Folder holding the rolling Serilog files — the same location
+    /// <c>App.BuildHost</c> configures the file sink to write to.
+    /// </summary>
+    public string LogDirectory => AppPaths.LogDirectory;
+
     /// <summary>Enrolled accounts surfaced into the ACCOUNTS section. Empty
     /// when the host isn't attached yet (test scenarios) — the binding
     /// degrades gracefully to an empty list.</summary>
@@ -158,14 +165,11 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     /// caption inside the ACCOUNTS section.</summary>
     public bool HasAccounts => Accounts.Count > 0;
 
-    /// <summary>Add-account command surfaced from the host.</summary>
-    public IAsyncRelayCommand? AddAccountCommand => _accountsHost?.AddAccountCommand;
-
     /// <summary>Remove-account command surfaced from the host.</summary>
     public IAsyncRelayCommand<SignedInAccount?>? RemoveAccountCommand => _accountsHost?.RemoveAccountCommand;
 
-    /// <summary>Connect-to-another-tenant command surfaced from the host.</summary>
-    public IRelayCommand? OpenAddTenantPanelCommand => _accountsHost?.OpenAddTenantPanelCommand;
+    /// <summary>Add-account command surfaced from the host (opens the slide-in).</summary>
+    public IRelayCommand? OpenAddAccountPanelCommand => _accountsHost?.OpenAddAccountPanelCommand;
 
     /// <summary>Select-account command surfaced from the host.</summary>
     public IRelayCommand<SignedInAccount?>? SelectAccountCommand => _accountsHost?.SelectAccountCommand;
@@ -187,9 +191,8 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
         OnPropertyChanged(nameof(Accounts));
         OnPropertyChanged(nameof(HasAccounts));
-        OnPropertyChanged(nameof(AddAccountCommand));
         OnPropertyChanged(nameof(RemoveAccountCommand));
-        OnPropertyChanged(nameof(OpenAddTenantPanelCommand));
+        OnPropertyChanged(nameof(OpenAddAccountPanelCommand));
         OnPropertyChanged(nameof(SelectAccountCommand));
     }
 
@@ -271,6 +274,27 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.Shutdown();
+        }
+    }
+
+    /// <summary>
+    /// Opens the folder holding the rolling Serilog files in the OS file manager.
+    /// Path must match the sink configured in <c>App.BuildHost</c>:
+    /// <c>%LocalAppData%\Entra-PIM-Manager\logs</c>. The directory is created at
+    /// startup, so it normally exists; we create it defensively in case logging
+    /// failed to initialize.
+    /// </summary>
+    [RelayCommand]
+    private void OpenLog()
+    {
+        try
+        {
+            Directory.CreateDirectory(LogDirectory);
+            Process.Start(new ProcessStartInfo(LogDirectory) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to open the log folder at {LogDirectory}", LogDirectory);
         }
     }
 

@@ -2,6 +2,7 @@ namespace EntraPimManager.Core.ErrorHandling;
 
 using EntraPimManager.Core.Models;
 using Microsoft.Graph.Models.ODataErrors;
+using Microsoft.Identity.Client;
 
 /// <summary>
 /// Translates Graph <see cref="ODataError"/> responses into <see cref="UserFacingError"/>
@@ -77,6 +78,8 @@ public static class PimErrorMapper
         {
             ODataError odataError => Map(odataError),
 
+            MsalServiceException msal => MapMsal(msal),
+
             OperationCanceledException =>
                 Error(ErrorSeverity.Timeout, "The request timed out. Please try again."),
 
@@ -115,6 +118,34 @@ public static class PimErrorMapper
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Maps an MSAL sign-in/token error (e.g. from the device-code or broker flow)
+    /// into a user-facing message. Keyed on the Entra <c>AADSTS</c> code where a
+    /// specific, actionable hint helps the admin fix their own configuration.
+    /// </summary>
+    private static UserFacingError MapMsal(MsalServiceException msal)
+    {
+        // AADSTS7000218: the token endpoint demanded a client secret/assertion,
+        // i.e. the app registration is treated as a confidential client. A desktop
+        // app is a PUBLIC client and cannot ship a secret — the registration is
+        // missing "Allow public client flows". This is the federated-IdP /
+        // device-code escape-hatch failure mode (see federated-idp-sso-wrong-account).
+        if (msal.ErrorCode == MsalError.InvalidClient
+            || msal.Message.Contains("AADSTS7000218", StringComparison.Ordinal))
+        {
+            return Error(
+                ErrorSeverity.Fatal,
+                "This app registration is not configured for desktop sign-in. In Entra, open the app registration → Authentication → enable \"Allow public client flows\", then try again.");
+        }
+
+        // AADSTS70016 is the normal "user hasn't entered the code yet" poll
+        // response; MSAL handles it internally and it should never surface here.
+        // Any other service error: keep it generic, the detail is in the log.
+        return Error(
+            ErrorSeverity.Fatal,
+            "Sign-in failed. See the log file for details.");
     }
 
     private static UserFacingError Error(ErrorSeverity severity, string message, string? fieldHint = null) =>

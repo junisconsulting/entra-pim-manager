@@ -11,8 +11,9 @@ namespace EntraPimManager.Core.Auth;
 /// never be written to logs in clear text. Only <see cref="ObjectId"/>,
 /// <see cref="TenantId"/> and <see cref="Cloud"/> are safe for log output.
 /// <para/>
-/// <see cref="Cloud"/> defaults to <see cref="EntraCloud.Global"/> so persisted
-/// enrollments written before this field existed deserialize correctly.
+/// <see cref="Cloud"/> defaults to <see cref="EntraCloud.Global"/> and
+/// <see cref="AuthMethod"/> to <see cref="Auth.AuthMethod.Broker"/> so persisted
+/// enrollments written before those fields existed deserialize correctly.
 /// </remarks>
 public sealed record SignedInAccount(
     string ObjectId,
@@ -20,4 +21,5 @@ public sealed record SignedInAccount(
     string Username,
     string? DisplayName,
     DateTimeOffset AddedAt,
-    EntraCloud Cloud = EntraCloud.Global);
+    EntraCloud Cloud = EntraCloud.Global,
+    AuthMethod AuthMethod = AuthMethod.Broker);

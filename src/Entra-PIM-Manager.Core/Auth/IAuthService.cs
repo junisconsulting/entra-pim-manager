@@ -34,6 +34,28 @@ public interface IAuthService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Enrolls an account via the OAuth 2.0 device-code flow instead of the WAM
+    /// broker. <paramref name="onChallenge"/> is invoked once with the user code
+    /// and verification URL to display; the returned task completes after the
+    /// user finishes sign-in on a second device (or faults/cancels).
+    /// </summary>
+    /// <remarks>
+    /// This is the escape hatch for tenants whose external IdP (e.g. Okta) does
+    /// aggressive seamless SSO and would otherwise bind the app to the Windows
+    /// session's Office identity. Completing sign-in on a phone decouples the
+    /// federated leg from this machine's browser session. Note: device-code flow
+    /// runs broker-less, so Conditional Access policies that require a compliant
+    /// device — or that block device-code flow outright — will reject it. The
+    /// resulting account is persisted with <see cref="Auth.AuthMethod.DeviceCode"/>
+    /// so token renewal stays on the broker-less path.
+    /// </remarks>
+    Task<SignedInAccount> AddAccountViaDeviceCodeAsync(
+        string? tenantIdOrDomain,
+        EntraCloud cloud,
+        Func<DeviceCodeChallenge, Task> onChallenge,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Removes the enrollment matching (<paramref name="objectId"/>, <paramref name="tenantId"/>)
     /// from the <see cref="IAccountStore"/>. The MSAL cache entry for the underlying
     /// home identity is only purged when no other tenant enrollment within the same

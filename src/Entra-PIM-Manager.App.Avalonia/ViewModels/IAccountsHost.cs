@@ -22,14 +22,12 @@ public interface IAccountsHost
     /// <summary>Enrolled accounts in stable order, wrapped for the row template.</summary>
     ObservableCollection<AccountListItemViewModel> Accounts { get; }
 
-    /// <summary>Adds a new account via the WAM picker.</summary>
-    IAsyncRelayCommand AddAccountCommand { get; }
-
     /// <summary>Removes the passed account.</summary>
     IAsyncRelayCommand<SignedInAccount?> RemoveAccountCommand { get; }
 
-    /// <summary>Opens the "connect to another tenant" slide-in.</summary>
-    IRelayCommand OpenAddTenantPanelCommand { get; }
+    /// <summary>Opens the single "Add account" slide-in (broker primary, device
+    /// code under Advanced; tenant field optional).</summary>
+    IRelayCommand OpenAddAccountPanelCommand { get; }
 
     /// <summary>Selects the passed account as the active context.</summary>
     IRelayCommand<SignedInAccount?> SelectAccountCommand { get; }
