@@ -1,6 +1,7 @@
 namespace EntraPimManager.AppAvalonia;
 
 using System.IO;
+using System.Threading;
 using Avalonia;
 using EntraPimManager.AppAvalonia.Services;
 using EntraPimManager.Core.Configuration;
@@ -9,16 +10,47 @@ using Velopack;
 /// <summary>
 /// Entry point for the Avalonia tray app. Velopack's install/update/uninstall
 /// hooks run first so a non-launch invocation (e.g. silent installer) exits
-/// before Avalonia spins up the UI thread.
+/// before Avalonia spins up the UI thread. A second normal launch is rejected by
+/// a single-instance gate so only one tray icon ever exists per user session.
 /// </summary>
 public static class Program
 {
+    // Session-scoped (Local namespace) names: one tray instance per interactive
+    // login, while a second Windows user on the same machine stays independent.
+    private const string SingleInstanceMutexName = "EntraPimManager.SingleInstance";
+    private const string ShowWindowSignalName = "EntraPimManager.ShowWindow";
+
+    // Held for the whole process lifetime (static so it isn't garbage-collected,
+    // which would release the mutex). The OS releases it when the process exits.
+    private static Mutex? _singleInstanceMutex;
+
+    /// <summary>
+    /// Auto-reset event the primary instance waits on. A second launch sets it to
+    /// ask the already-running instance to surface its tray popup. Null when it
+    /// couldn't be created — single-instance still holds, we just can't wake the
+    /// window. Read by <see cref="App"/> to start its listener.
+    /// </summary>
+    public static EventWaitHandle? ShowWindowSignal { get; private set; }
+
     [STAThread]
     public static int Main(string[] args)
     {
+        // Velopack hooks must run first; hook invocations exit inside Run() before
+        // reaching the gate below, so an install/update launch never contends here.
         VelopackApp.Build()
             .OnFirstRun(_ => EnableAutostartOnFirstRun())
             .Run();
+
+        // If we can't take the mutex, another instance owns it: wake its window
+        // and bow out without starting a second tray icon.
+        _singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out var isPrimaryInstance);
+        if (!isPrimaryInstance)
+        {
+            SignalExistingInstance();
+            return 0;
+        }
+
+        CreateShowWindowSignal();
 
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
@@ -29,6 +61,47 @@ public static class Program
             .UsePlatformDetect()
             .WithInterFont()
             .LogToTrace();
+
+    /// <summary>
+    /// Creates the named auto-reset event the running instance listens on. Done
+    /// here (before Avalonia starts) so the handle exists by the time any second
+    /// launch tries to signal it.
+    /// </summary>
+    private static void CreateShowWindowSignal()
+    {
+        try
+        {
+            ShowWindowSignal = new EventWaitHandle(initialState: false, EventResetMode.AutoReset, ShowWindowSignalName);
+        }
+        catch
+        {
+            // Non-fatal: the mutex still enforces single-instance; we just can't
+            // surface the existing window when a second launch is attempted.
+            ShowWindowSignal = null;
+        }
+    }
+
+    /// <summary>
+    /// Best-effort nudge to the already-running instance to show its tray popup.
+    /// Called from a second launch right before it exits.
+    /// </summary>
+    private static void SignalExistingInstance()
+    {
+        try
+        {
+            if (EventWaitHandle.TryOpenExisting(ShowWindowSignalName, out var handle))
+            {
+                using (handle)
+                {
+                    handle.Set();
+                }
+            }
+        }
+        catch
+        {
+            // Best effort — the user can still open the running instance from the tray.
+        }
+    }
 
     /// <summary>
     /// On the very first launch after a Velopack install, default the

@@ -1,11 +1,13 @@
 namespace EntraPimManager.AppAvalonia;
 
 using System.IO;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using EntraPimManager.AppAvalonia.Services;
 using EntraPimManager.AppAvalonia.Tray;
 using EntraPimManager.AppAvalonia.ViewModels;
@@ -81,6 +83,9 @@ public partial class App : Application
 
         Services = _host.Services;
         _popupController = Services.GetRequiredService<TrayPopupController>();
+
+        // Surface the popup when a second launch signals us (single-instance).
+        StartSingleInstanceListener();
 
         // Resolve the expiry-alert controller so it subscribes to the shell's
         // IsExpiryAlertVisible before the countdown timer starts ticking. It owns
@@ -286,5 +291,44 @@ public partial class App : Application
         builder.Services.AddSingleton<FirstRunSetupController>();
 
         return builder.Build();
+    }
+
+    /// <summary>
+    /// Watches the cross-process "show window" event (set by a second launch) on a
+    /// background thread and surfaces the tray popup on the UI thread each time it
+    /// fires. No-ops when the signal couldn't be created. The thread is a background
+    /// thread, so it never holds up shutdown.
+    /// </summary>
+    private void StartSingleInstanceListener()
+    {
+        var signal = Program.ShowWindowSignal;
+        if (signal is null)
+        {
+            return;
+        }
+
+        var listener = new Thread(() =>
+        {
+            while (true)
+            {
+                try
+                {
+                    signal.WaitOne();
+                }
+                catch
+                {
+                    // Handle disposed / abandoned on shutdown — stop listening.
+                    return;
+                }
+
+                Dispatcher.UIThread.Post(() => _popupController?.Show());
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "single-instance-listener",
+        };
+
+        listener.Start();
     }
 }
