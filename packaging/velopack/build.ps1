@@ -52,10 +52,9 @@ $installedVpkVersion = if ($vpkLine) { ($vpkLine.Trim() -split "\s+")[1] } else 
 
 if ($installedVpkVersion -ne $velopackVersion) {
     if ($installedVpkVersion) {
-        # `dotnet tool update` refuses to DOWNGRADE, and the referenced library can
-        # legitimately be older than a previously-installed vpk (Velopack has a
-        # 0.0.x preview line that predates 1.x). Uninstall + install the exact
-        # version so alignment works in either direction.
+        # `dotnet tool update` refuses to DOWNGRADE, and a previously-installed vpk
+        # can legitimately be newer than the version this app is built against.
+        # Uninstall + install the exact version so alignment works in either direction.
         Write-Host "Aligning vpk $installedVpkVersion -> $velopackVersion (matching the Velopack library)..." -ForegroundColor Yellow
         dotnet tool uninstall -g vpk | Out-Null
     }
