@@ -88,7 +88,13 @@ $vpkArgs = @(
     # Suppress the Desktop shortcut — Entra PIM Manager lives in the system tray
     # only, so a Desktop icon is noise. Start Menu shortcut stays so the
     # user can still find / pin the app the first time they launch it.
-    "--shortcuts", "StartMenu",
+    #
+    # StartMenuRoot (not StartMenu): StartMenu would nest the .lnk in a
+    # "{packAuthors}" subfolder (…\Programs\junis GmbH\). The runtime
+    # ShortcutService manages the .lnk at the Programs root, so installer and
+    # app must agree on the root location — otherwise the first-run opt-out and
+    # the Settings toggle delete/check the wrong path and the entry lingers.
+    "--shortcuts", "StartMenuRoot",
     "--outputDir", $releaseDir
 )
 

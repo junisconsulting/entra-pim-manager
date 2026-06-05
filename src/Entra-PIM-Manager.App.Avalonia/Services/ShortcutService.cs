@@ -28,6 +28,10 @@ public sealed class ShortcutService : IShortcutService
     // Product) so removal targets exactly the file the installer created.
     private const string FallbackTitle = "Entra PIM Manager";
 
+    // Must match vpk --packAuthors — the subfolder name legacy `--shortcuts
+    // StartMenu` builds nested the .lnk under. Used only to clean that up.
+    private const string PackAuthors = "junis GmbH";
+
     private readonly ILogger<ShortcutService> _logger;
     private readonly bool _isInstalled;
 
@@ -47,7 +51,10 @@ public sealed class ShortcutService : IShortcutService
         {
             try
             {
-                return File.Exists(StartMenuShortcutPath);
+                // A legacy author-subfolder entry counts too, so the Settings
+                // toggle shows "on" for installs that predate the root move.
+                return File.Exists(StartMenuShortcutPath)
+                    || File.Exists(LegacyAuthorSubfolderShortcutPath);
             }
             catch (Exception ex)
             {
@@ -58,11 +65,23 @@ public sealed class ShortcutService : IShortcutService
     }
 
     // …\Microsoft\Windows\Start Menu\Programs\{title}.lnk — the StartMenuRoot
-    // location Velopack uses for a per-user install.
+    // location the installer (vpk --shortcuts StartMenuRoot) uses for a per-user
+    // install, and the canonical path this service creates/removes.
     private static string StartMenuShortcutPath =>
         Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
             "Programs",
+            ShortcutTitle + ".lnk");
+
+    // Legacy location from builds that packed with `--shortcuts StartMenu`, which
+    // nests the .lnk in a "{packAuthors}" subfolder. Existing installs upgraded
+    // from those builds still have the entry here; we clean it up on disable and
+    // count it as "present" so the Settings toggle reflects reality.
+    private static string LegacyAuthorSubfolderShortcutPath =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
+            "Programs",
+            PackAuthors,
             ShortcutTitle + ".lnk");
 
     // The exe's ProductName (what Velopack derives the shortcut title from);
@@ -106,6 +125,11 @@ public sealed class ShortcutService : IShortcutService
             var path = StartMenuShortcutPath;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             WriteShortcut(path, target);
+
+            // Consolidate to the root location: if an upgraded install still has
+            // the legacy author-subfolder entry, drop it so the user isn't left
+            // with two identical Start menu shortcuts.
+            RemoveLegacyAuthorSubfolderShortcut();
         }
         catch (Exception ex)
         {
@@ -123,15 +147,36 @@ public sealed class ShortcutService : IShortcutService
 
         try
         {
-            var path = StartMenuShortcutPath;
-            if (File.Exists(path))
+            if (File.Exists(StartMenuShortcutPath))
             {
-                File.Delete(path);
+                File.Delete(StartMenuShortcutPath);
             }
+
+            RemoveLegacyAuthorSubfolderShortcut();
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to remove the Start menu shortcut");
+        }
+    }
+
+    /// <summary>
+    /// Deletes the legacy author-subfolder <c>.lnk</c> (from builds packed with
+    /// <c>--shortcuts StartMenu</c>) and the now-empty subfolder, if present.
+    /// No-op when there is nothing to clean up.
+    /// </summary>
+    private static void RemoveLegacyAuthorSubfolderShortcut()
+    {
+        if (!File.Exists(LegacyAuthorSubfolderShortcutPath))
+        {
+            return;
+        }
+
+        File.Delete(LegacyAuthorSubfolderShortcutPath);
+        var legacyDir = Path.GetDirectoryName(LegacyAuthorSubfolderShortcutPath)!;
+        if (Directory.Exists(legacyDir) && Directory.GetFileSystemEntries(legacyDir).Length == 0)
+        {
+            Directory.Delete(legacyDir);
         }
     }
 
