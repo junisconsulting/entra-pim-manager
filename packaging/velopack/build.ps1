@@ -34,10 +34,38 @@ $releaseDir = Join-Path $PSScriptRoot "releases"
 
 Write-Host "Building Entra PIM Manager $Version" -ForegroundColor Cyan
 
-# 1. Ensure the Velopack CLI (vpk) is installed.
-if (-not (Get-Command vpk -ErrorAction SilentlyContinue)) {
-    Write-Host "Installing the Velopack CLI (vpk)..." -ForegroundColor Yellow
-    dotnet tool install -g vpk
+# 1. Ensure the Velopack CLI (vpk) is installed AND matches the Velopack library
+#    version referenced by the app. A mismatch between vpk and the runtime library
+#    can produce an installer / package format the installed app can't handle, so
+#    we pin vpk to whatever the .csproj references rather than grabbing "latest".
+[xml]$projectXml = Get-Content $project
+$velopackVersion = ($projectXml.Project.ItemGroup.PackageReference |
+    Where-Object { $_.Include -eq "Velopack" } |
+    Select-Object -First 1).Version
+
+if (-not $velopackVersion) {
+    throw "Could not read the Velopack package version from $project — cannot pin vpk."
+}
+
+$vpkLine = (dotnet tool list -g 2>$null) | Where-Object { $_.Trim() -match "^vpk\s" }
+$installedVpkVersion = if ($vpkLine) { ($vpkLine.Trim() -split "\s+")[1] } else { $null }
+
+if ($installedVpkVersion -ne $velopackVersion) {
+    if ($installedVpkVersion) {
+        # `dotnet tool update` refuses to DOWNGRADE, and a previously-installed vpk
+        # can legitimately be newer than the version this app is built against.
+        # Uninstall + install the exact version so alignment works in either direction.
+        Write-Host "Aligning vpk $installedVpkVersion -> $velopackVersion (matching the Velopack library)..." -ForegroundColor Yellow
+        dotnet tool uninstall -g vpk | Out-Null
+    }
+    else {
+        Write-Host "Installing the Velopack CLI (vpk) $velopackVersion..." -ForegroundColor Yellow
+    }
+
+    dotnet tool install -g vpk --version $velopackVersion
+}
+else {
+    Write-Host "vpk $installedVpkVersion already matches the Velopack library." -ForegroundColor DarkGray
 }
 
 # 2. Publish self-contained so the endpoint needs no .NET runtime
@@ -60,7 +88,13 @@ $vpkArgs = @(
     # Suppress the Desktop shortcut — Entra PIM Manager lives in the system tray
     # only, so a Desktop icon is noise. Start Menu shortcut stays so the
     # user can still find / pin the app the first time they launch it.
-    "--shortcuts", "StartMenu",
+    #
+    # StartMenuRoot (not StartMenu): StartMenu would nest the .lnk in a
+    # "{packAuthors}" subfolder (…\Programs\junis GmbH\). The runtime
+    # ShortcutService manages the .lnk at the Programs root, so installer and
+    # app must agree on the root location — otherwise the first-run opt-out and
+    # the Settings toggle delete/check the wrong path and the entry lingers.
+    "--shortcuts", "StartMenuRoot",
     "--outputDir", $releaseDir
 )
 

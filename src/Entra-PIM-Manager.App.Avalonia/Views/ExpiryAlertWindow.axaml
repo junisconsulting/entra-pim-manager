@@ -1,0 +1,75 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EntraPimManager.AppAvalonia.ViewModels"
+        x:Class="EntraPimManager.AppAvalonia.Views.ExpiryAlertWindow"
+        x:DataType="vm:ExpiryAlertViewModel"
+        Title="Entra PIM Manager — expiring soon"
+        Width="340"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="Manual"
+        WindowDecorations="BorderOnly"
+        TransparencyLevelHint="Mica,AcrylicBlur,None"
+        Background="Transparent"
+        Topmost="True">
+
+  <!-- Rounded shell with drop shadow — matches the tray popup's lifted look. -->
+  <Border CornerRadius="12"
+          Background="{DynamicResource SurfaceBaseBrush}"
+          BoxShadow="{DynamicResource ShadowPopup}"
+          Margin="8">
+    <StackPanel Margin="16,14" Spacing="9">
+
+      <!-- Header: warning glyph + title -->
+      <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <PathIcon Data="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"
+                  Width="16" Height="16"
+                  Foreground="{DynamicResource WarningBrush}" />
+        <TextBlock Text="Activation expiring soon"
+                   FontSize="{DynamicResource FontSubtitle}"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextPrimaryBrush}" />
+      </StackPanel>
+
+      <!-- The role / group at risk -->
+      <TextBlock Text="{Binding ResourceName}"
+                 FontSize="{DynamicResource FontBody}"
+                 FontWeight="Bold"
+                 TextTrimming="CharacterEllipsis"
+                 Foreground="{DynamicResource TextPrimaryBrush}" />
+
+      <!-- Which enrollment it belongs to -->
+      <TextBlock Text="{Binding ContextLabel}"
+                 FontSize="{DynamicResource FontSmall}"
+                 TextTrimming="CharacterEllipsis"
+                 Foreground="{DynamicResource TextSecondaryBrush}" />
+
+      <!-- Live countdown, coloured by urgency via the shared converter -->
+      <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,2,0,0">
+        <TextBlock Text="Expires in"
+                   FontSize="{DynamicResource FontSmall}"
+                   VerticalAlignment="Center"
+                   Foreground="{DynamicResource TextSecondaryBrush}" />
+        <TextBlock Text="{Binding RemainingText}"
+                   FontSize="{DynamicResource FontTitleSmall}"
+                   FontWeight="Bold"
+                   VerticalAlignment="Center"
+                   Foreground="{Binding RemainingTime,
+                                        Converter={x:Static vm:RemainingTimeToBrushConverter.Instance}}" />
+      </StackPanel>
+
+      <!-- Only shown when several assignments are inside the window at once -->
+      <TextBlock Text="{Binding AdditionalText}"
+                 IsVisible="{Binding HasAdditional}"
+                 FontSize="{DynamicResource FontSmall}"
+                 Foreground="{DynamicResource TextTertiaryBrush}" />
+
+      <!-- Actions -->
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,4,0,0">
+        <Button Classes="ghost" Content="Dismiss" Click="OnDismissClick" />
+        <Button Classes="secondary" Content="Open" Click="OnOpenClick" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</Window>

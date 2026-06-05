@@ -1,0 +1,83 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EntraPimManager.AppAvalonia.ViewModels"
+        x:Class="EntraPimManager.AppAvalonia.Views.FirstRunSetupWindow"
+        x:DataType="vm:FirstRunSetupViewModel"
+        Title="Welcome to Entra PIM Manager"
+        Width="380"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="True"
+        WindowStartupLocation="CenterScreen"
+        WindowDecorations="BorderOnly"
+        TransparencyLevelHint="Mica,AcrylicBlur,None"
+        Background="Transparent"
+        Topmost="True">
+
+  <!-- Rounded shell with drop shadow — matches the tray popup / update prompt. -->
+  <Border CornerRadius="12"
+          Background="{DynamicResource SurfaceBaseBrush}"
+          BoxShadow="{DynamicResource ShadowPopup}"
+          Margin="8">
+    <StackPanel Margin="18,16" Spacing="14">
+
+      <!-- Header -->
+      <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <PathIcon Data="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"
+                  Width="16" Height="16"
+                  Foreground="{DynamicResource AccentBrush}" />
+        <TextBlock Text="You're all set up"
+                   FontSize="{DynamicResource FontSubtitle}"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextPrimaryBrush}" />
+      </StackPanel>
+
+      <TextBlock Text="Entra PIM Manager runs from the system tray. Choose how it integrates with Windows — you can change both later in Settings."
+                 FontSize="{DynamicResource FontSmall}"
+                 TextWrapping="Wrap"
+                 Foreground="{DynamicResource TextSecondaryBrush}" />
+
+      <!-- Autostart -->
+      <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+          <TextBlock Text="Start with Windows"
+                     FontSize="{DynamicResource FontBody}"
+                     Foreground="{DynamicResource TextPrimaryBrush}" />
+          <TextBlock Text="Launch the tray app automatically when you sign in."
+                     FontSize="{DynamicResource FontSmall}"
+                     Foreground="{DynamicResource TextTertiaryBrush}"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+        <ToggleSwitch Grid.Column="1"
+                      IsChecked="{Binding StartWithWindows}"
+                      OnContent=""
+                      OffContent="" />
+      </Grid>
+
+      <!-- Start menu entry -->
+      <Grid ColumnDefinitions="*,Auto"
+            VerticalAlignment="Center"
+            IsVisible="{Binding CanManageStartMenuShortcut}">
+        <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,12,0">
+          <TextBlock Text="Add a Start menu entry"
+                     FontSize="{DynamicResource FontBody}"
+                     Foreground="{DynamicResource TextPrimaryBrush}" />
+          <TextBlock Text="Keep a shortcut in the Start menu so you can find and pin the app."
+                     FontSize="{DynamicResource FontSmall}"
+                     Foreground="{DynamicResource TextTertiaryBrush}"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+        <ToggleSwitch Grid.Column="1"
+                      IsChecked="{Binding CreateStartMenuShortcut}"
+                      OnContent=""
+                      OffContent="" />
+      </Grid>
+
+      <!-- Action -->
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,2,0,0">
+        <Button Classes="secondary" Content="Get started" Click="OnContinueClick" />
+      </StackPanel>
+
+    </StackPanel>
+  </Border>
+</Window>

@@ -31,7 +31,9 @@ using Microsoft.Extensions.Options;
 /// </summary>
 public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
 {
-    private const string GitHubProjectUrl = "https://github.com/junisconsulting/entra-pim-manager";
+    // Single source of truth for the project URL — used by the "View on GitHub"
+    // command and the auto-updater's GitHub release source (see UpdateService).
+    internal const string GitHubProjectUrl = "https://github.com/junisconsulting/entra-pim-manager";
 
     // Cap on parallel policy prefetch requests. Microsoft Graph PIM endpoints
     // have global throttling — 6 in flight at once is enough to feel snappy
@@ -63,6 +65,12 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     // accounts in the same tenant share one entry. Negative results are cached too.
     private readonly Dictionary<string, string?> _tenantNameCache = new(StringComparer.OrdinalIgnoreCase);
 
+    // Expiry-warning "already dismissed" set, keyed by assignment identity. Lives
+    // here (not on the row VMs, which are rebuilt on every 60s refresh) so a
+    // warning the user dismissed stays dismissed across refreshes and re-arms only
+    // when that assignment leaves and re-enters the warning window.
+    private readonly HashSet<string> _expiryDismissed = new(StringComparer.Ordinal);
+
     // Snapshot of per-group IsExpanded state taken at the moment a filter
     // becomes active, restored when the user clears the filter. Without this
     // the auto-expand-on-match behaviour would overwrite the layout the user
@@ -73,6 +81,14 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     // RefreshAsync cancels the previous prefetch (which is likely working
     // on stale data anyway) before starting a fresh one.
     private CancellationTokenSource? _prefetchCts;
+
+    // Identity of the assignment currently shown in the alert window, so a
+    // Dismiss/Open click knows which key to suppress.
+    private string? _currentAlertKey;
+
+    // Last surfaced "expiring" signature, so ExpiringChanged only fires when the
+    // tray-visible state actually changes instead of on every 1s tick.
+    private string _lastExpiringSignature = string.Empty;
 
     [ObservableProperty]
     private bool _isSignedIn;
@@ -91,6 +107,14 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
 
     [ObservableProperty]
     private int _eligibleCount;
+
+    /// <summary>
+    /// True while the standalone expiry-alert window should be on screen — i.e. an
+    /// active assignment is inside the warning window and hasn't been dismissed.
+    /// <see cref="Tray.ExpiryAlertController"/> observes this to show / hide.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isExpiryAlertVisible;
 
     public ShellViewModel(
         IAuthService authService,
@@ -143,6 +167,29 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
 
     /// <summary>Raised when <see cref="ActiveCount"/> changes — the tray icon listens.</summary>
     public event EventHandler? ActiveCountChanged;
+
+    /// <summary>
+    /// Raised when the "expiring soon" tray state changes — the soonest expiring
+    /// assignment, its remaining-time label, or the count. The tray controller
+    /// listens to refresh its icon + tooltip without polling every tick.
+    /// </summary>
+    public event EventHandler? ExpiringChanged;
+
+    /// <summary>
+    /// Live model bound by the standalone expiry-alert window. Mutated in place
+    /// every countdown tick so the surfaced countdown ticks without rebinding.
+    /// </summary>
+    public ExpiryAlertViewModel ExpiryAlert { get; } = new();
+
+    /// <summary>
+    /// Soonest active assignment currently inside the warning window, regardless
+    /// of dismissal (the tray keeps reflecting it even after the alert is
+    /// dismissed). <c>null</c> when nothing is expiring.
+    /// </summary>
+    public ActiveAssignmentItemViewModel? MostUrgentExpiring { get; private set; }
+
+    /// <summary>How many active assignments are inside the warning window right now.</summary>
+    public int ExpiringCount { get; private set; }
 
     /// <summary>
     /// Enrolled accounts in stable order, wrapped so the row can carry a
@@ -302,6 +349,21 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         {
             _logger.LogError(ex, "Failed to persist account reorder");
         }
+    }
+
+    /// <summary>
+    /// Marks the assignment currently shown in the alert as dismissed and hides
+    /// the window. Called from the alert's "Dismiss" / "Open" buttons via
+    /// <see cref="Tray.ExpiryAlertController"/>.
+    /// </summary>
+    public void DismissCurrentExpiryAlert()
+    {
+        if (_currentAlertKey is { } key)
+        {
+            _expiryDismissed.Add(key);
+        }
+
+        IsExpiryAlertVisible = false;
     }
 
     /// <summary>Refreshes eligibilities and active assignments across all enrolled accounts.</summary>
@@ -858,25 +920,101 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     private void UpdateCountdowns()
     {
         var settings = _userSettings.Current;
-        var toastThreshold = TimeSpan.FromMinutes(settings.ExpiryWarningMinutes);
 
         foreach (var item in ActiveAssignments)
         {
             item.UpdateCountdown();
-
-            if (!settings.ExpiryWarningEnabled || item.ExpiryWarningSent)
-            {
-                continue;
-            }
-
-            var remaining = item.RemainingTime;
-            if (remaining > TimeSpan.Zero && remaining <= toastThreshold)
-            {
-                item.ExpiryWarningSent = true;
-                _toastService.ShowExpiringSoon($"{item.AccountLabel} · {item.DisplayName}");
-            }
         }
+
+        EvaluateExpiryWarnings(
+            settings.ExpiryWarningEnabled,
+            TimeSpan.FromMinutes(settings.ExpiryWarningMinutes));
     }
+
+    /// <summary>
+    /// Recomputes which active assignments sit inside the user-configured warning
+    /// window and drives the two visible channels:
+    /// <list type="bullet">
+    /// <item>the standalone alert window — <see cref="IsExpiryAlertVisible"/> +
+    /// <see cref="ExpiryAlert"/>, showing the soonest <em>non-dismissed</em>
+    /// assignment;</item>
+    /// <item>the tray indicator — <see cref="MostUrgentExpiring"/> +
+    /// <see cref="ExpiringChanged"/>, reflecting the soonest assignment
+    /// regardless of dismissal.</item>
+    /// </list>
+    /// Runs every countdown tick so the surfaced countdown ticks live.
+    /// </summary>
+    private void EvaluateExpiryWarnings(bool enabled, TimeSpan threshold)
+    {
+        if (!enabled)
+        {
+            MostUrgentExpiring = null;
+            ExpiringCount = 0;
+            _currentAlertKey = null;
+            IsExpiryAlertVisible = false;
+            RaiseExpiringChangedIfChanged();
+            return;
+        }
+
+        // Settled rows only — a pending (Activating…) or deactivating row has no
+        // meaningful "expires in" yet.
+        var expiring = ActiveAssignments
+            .Where(a => !a.IsPending && !a.IsDeactivating)
+            .Where(a => a.RemainingTime > TimeSpan.Zero && a.RemainingTime <= threshold)
+            .OrderBy(a => a.RemainingTime)
+            .ToList();
+
+        // Forget dismissals for assignments that have left the window (expired or
+        // deactivated) so a later re-activation warns afresh.
+        var liveKeys = expiring.Select(ExpiryKey).ToHashSet(StringComparer.Ordinal);
+        _expiryDismissed.IntersectWith(liveKeys);
+
+        MostUrgentExpiring = expiring.FirstOrDefault();
+        ExpiringCount = expiring.Count;
+        RaiseExpiringChangedIfChanged();
+
+        var alertTarget = expiring.FirstOrDefault(a => !_expiryDismissed.Contains(ExpiryKey(a)));
+        if (alertTarget is null)
+        {
+            _currentAlertKey = null;
+            IsExpiryAlertVisible = false;
+            return;
+        }
+
+        _currentAlertKey = ExpiryKey(alertTarget);
+        ExpiryAlert.UpdateFrom(alertTarget, expiring.Count - 1);
+        IsExpiryAlertVisible = true;
+    }
+
+    /// <summary>
+    /// Raises <see cref="ExpiringChanged"/> only when the surfaced state actually
+    /// changes (most-urgent assignment, its minute/second label, or the count) so
+    /// the tray isn't rewritten every single tick.
+    /// </summary>
+    private void RaiseExpiringChangedIfChanged()
+    {
+        var signature = MostUrgentExpiring is { } urgent
+            ? $"{ExpiryKey(urgent)}|{urgent.RemainingText}|{ExpiringCount}"
+            : "none";
+        if (signature == _lastExpiringSignature)
+        {
+            return;
+        }
+
+        _lastExpiringSignature = signature;
+        ExpiringChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Stable identity for an active assignment across refreshes. Prefers the
+    /// PIM assignment-schedule id; falls back to (account, kind, resource, scope)
+    /// for synthesized/pending rows that don't carry one yet. Instance method to
+    /// match the existing key-builder convention (see <see cref="EnrollmentKey"/>).
+    /// </summary>
+    private string ExpiryKey(ActiveAssignmentItemViewModel item)
+        => string.IsNullOrEmpty(item.Assignment.AssignmentScheduleId)
+            ? $"{item.Account.ObjectId}|{(int)item.Assignment.Kind}|{item.Assignment.ResourceId}|{item.Assignment.ScopeId}"
+            : item.Assignment.AssignmentScheduleId;
 
     private void ReplaceAccounts(IReadOnlyList<SignedInAccount> accounts)
     {

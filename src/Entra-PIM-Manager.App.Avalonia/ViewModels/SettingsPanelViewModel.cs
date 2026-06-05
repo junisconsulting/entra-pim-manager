@@ -25,6 +25,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 {
     private readonly IUserSettingsService _userSettings;
     private readonly IAutostartService _autostart;
+    private readonly IShortcutService _shortcuts;
     private readonly EntraPimManagerOptions _options;
     private readonly ILogger<SettingsPanelViewModel> _logger;
 
@@ -52,6 +53,16 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     [ObservableProperty]
     private bool _startWithWindows;
 
+    /// <summary>
+    /// Bound to the "Start menu entry" toggle. Like <see cref="StartWithWindows"/>
+    /// the artifact itself (the shortcut file) is the source of truth, not the
+    /// persisted settings — so toggling create/removes it directly and never calls
+    /// <c>SaveAsync</c>. The row is hidden when <see cref="CanManageStartMenuShortcut"/>
+    /// is false (dev / portable, where there is no install to anchor a shortcut to).
+    /// </summary>
+    [ObservableProperty]
+    private bool _createStartMenuShortcut;
+
     [ObservableProperty]
     private DurationOption _selectedDuration;
 
@@ -60,6 +71,9 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
     [ObservableProperty]
     private ExpiryThresholdOption _selectedExpiryThreshold;
+
+    [ObservableProperty]
+    private bool _automaticUpdatesEnabled;
 
     /// <summary>
     /// Whether the ACCOUNTS section is expanded. Persisted in
@@ -88,12 +102,14 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     public SettingsPanelViewModel(
         IUserSettingsService userSettings,
         IAutostartService autostart,
+        IShortcutService shortcuts,
         IOptions<EntraPimManagerOptions> options,
         ILogger<SettingsPanelViewModel> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _userSettings = userSettings;
         _autostart = autostart;
+        _shortcuts = shortcuts;
         _options = options.Value;
         _logger = logger;
 
@@ -104,6 +120,12 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
     /// <summary>Raised when the panel closes — payload-less; the shell uses it to drop the exclusive-toggle.</summary>
     public event Action? Closed;
+
+    /// <summary>
+    /// Raised by the "Check for updates" button. <see cref="Tray.UpdateController"/>
+    /// subscribes to it; the VM has no direct dependency on the updater.
+    /// </summary>
+    public event Func<Task>? CheckForUpdatesRequested;
 
     /// <summary>Theme choices presented in the ComboBox.</summary>
     public IReadOnlyList<ThemeOption> ThemeOptions { get; } = new[]
@@ -132,6 +154,13 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
     /// <summary>X-offset for the slide-in transform — mirrors the other panels.</summary>
     public double PanelOffsetX => IsOpen ? 0 : 420;
+
+    /// <summary>
+    /// Whether the "Start menu entry" row is shown. False outside a real Velopack
+    /// install (dev / portable), where there is no shortcut to manage — the row
+    /// then hides rather than presenting a toggle that does nothing.
+    /// </summary>
+    public bool CanManageStartMenuShortcut => _shortcuts.IsSupported;
 
     /// <summary>
     /// True when <see cref="ClientIdInput"/> contains a syntactically valid
@@ -209,6 +238,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             SelectedExpiryThreshold = ExpiryThresholdOptions.FirstOrDefault(o => o.Minutes == current.ExpiryWarningMinutes)
                 ?? ExpiryThresholdOptions[0];
             ExpiryWarningEnabled = current.ExpiryWarningEnabled;
+            AutomaticUpdatesEnabled = current.AutomaticUpdatesEnabled;
             IsAccountsSectionExpanded = current.SettingsAccountsExpanded;
 
             // Pre-fill the ClientId input with the current effective value
@@ -220,6 +250,10 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             // Pulled live from the registry so a parallel toggle in the tray
             // menu is reflected even mid-session.
             StartWithWindows = _autostart.IsEnabled;
+
+            // Likewise read live from disk so the shortcut's actual presence
+            // (it may have been removed in the first-run dialog) drives the toggle.
+            CreateStartMenuShortcut = _shortcuts.IsStartMenuShortcutPresent;
         }
         finally
         {
@@ -298,6 +332,21 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Asks the updater to check GitHub for a newer release right now and surface
+    /// the prompt if one is found. Backs the "Check for updates" button; the
+    /// actual work happens in <see cref="Tray.UpdateController"/> via
+    /// <see cref="CheckForUpdatesRequested"/>.
+    /// </summary>
+    [RelayCommand]
+    private async Task CheckForUpdatesNow()
+    {
+        if (CheckForUpdatesRequested is { } handler)
+        {
+            await handler.Invoke();
+        }
+    }
+
     partial void OnClientIdInputChanged(string value)
     {
         SaveClientIdCommand.NotifyCanExecuteChanged();
@@ -348,6 +397,26 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         // the source of truth) — no SaveAsync call needed here.
     }
 
+    partial void OnCreateStartMenuShortcutChanged(bool value)
+    {
+        if (_suppressPersist)
+        {
+            return;
+        }
+
+        if (value)
+        {
+            _shortcuts.EnableStartMenuShortcut();
+        }
+        else
+        {
+            _shortcuts.DisableStartMenuShortcut();
+        }
+
+        // Like autostart, the shortcut file itself is the source of truth — it is
+        // not mirrored into the persisted UserSettings record, so no SaveAsync here.
+    }
+
     partial void OnSelectedDurationChanged(DurationOption value)
     {
         if (_suppressPersist)
@@ -359,6 +428,16 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     }
 
     partial void OnExpiryWarningEnabledChanged(bool value)
+    {
+        if (_suppressPersist)
+        {
+            return;
+        }
+
+        SchedulePersist();
+    }
+
+    partial void OnAutomaticUpdatesEnabledChanged(bool value)
     {
         if (_suppressPersist)
         {
@@ -418,6 +497,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             ExpiryWarningEnabled = ExpiryWarningEnabled,
             ExpiryWarningMinutes = SelectedExpiryThreshold.Minutes,
             SettingsAccountsExpanded = IsAccountsSectionExpanded,
+            AutomaticUpdatesEnabled = AutomaticUpdatesEnabled,
         };
 
         try

@@ -1,0 +1,80 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EntraPimManager.AppAvalonia.ViewModels"
+        x:Class="EntraPimManager.AppAvalonia.Views.UpdatePromptWindow"
+        x:DataType="vm:UpdatePromptViewModel"
+        Title="Entra PIM Manager — update available"
+        Width="340"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="Manual"
+        WindowDecorations="BorderOnly"
+        TransparencyLevelHint="Mica,AcrylicBlur,None"
+        Background="Transparent"
+        Topmost="True">
+
+  <!-- Rounded shell with drop shadow — matches the tray popup / expiry alert. -->
+  <Border CornerRadius="12"
+          Background="{DynamicResource SurfaceBaseBrush}"
+          BoxShadow="{DynamicResource ShadowPopup}"
+          Margin="8">
+    <StackPanel Margin="16,14" Spacing="9">
+
+      <!-- Header: update glyph + title -->
+      <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <PathIcon Data="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"
+                  Width="16" Height="16"
+                  Foreground="{DynamicResource AccentBrush}" />
+        <TextBlock Text="{Binding HeaderText}"
+                   FontSize="{DynamicResource FontSubtitle}"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextPrimaryBrush}" />
+      </StackPanel>
+
+      <!-- AVAILABLE -->
+      <StackPanel IsVisible="{Binding IsAvailable}" Spacing="9">
+        <TextBlock Text="A new version is ready to install. Download it now?"
+                   FontSize="{DynamicResource FontSmall}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextSecondaryBrush}" />
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+          <Button Classes="ghost" Content="Later" Click="OnLaterClick" />
+          <Button Classes="secondary" Content="Install" Click="OnInstallClick" />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- DOWNLOADING -->
+      <StackPanel IsVisible="{Binding IsDownloading}" Spacing="9">
+        <TextBlock Text="Downloading update…"
+                   FontSize="{DynamicResource FontSmall}"
+                   Foreground="{DynamicResource TextSecondaryBrush}" />
+        <ProgressBar Minimum="0" Maximum="100" Value="{Binding Progress}" Height="6" />
+      </StackPanel>
+
+      <!-- READY -->
+      <StackPanel IsVisible="{Binding IsReady}" Spacing="9">
+        <TextBlock Text="Update downloaded. Restart now to apply it, or it will be applied the next time you start the app."
+                   FontSize="{DynamicResource FontSmall}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextSecondaryBrush}" />
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+          <Button Classes="ghost" Content="Later" Click="OnLaterClick" />
+          <Button Classes="secondary" Content="Restart now" Click="OnRestartClick" />
+        </StackPanel>
+      </StackPanel>
+
+      <!-- ERROR -->
+      <StackPanel IsVisible="{Binding IsError}" Spacing="9">
+        <TextBlock Text="{Binding ErrorText}"
+                   FontSize="{DynamicResource FontSmall}"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource WarningBrush}" />
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+          <Button Classes="ghost" Content="Dismiss" Click="OnLaterClick" />
+        </StackPanel>
+      </StackPanel>
+
+    </StackPanel>
+  </Border>
+</Window>

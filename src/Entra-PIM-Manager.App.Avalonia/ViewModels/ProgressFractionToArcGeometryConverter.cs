@@ -6,7 +6,7 @@ using Avalonia.Media;
 
 /// <summary>
 /// Converts a 0..1 remaining-time fraction into a <see cref="Geometry"/> that
-/// traces a circular arc on a 36×36 viewport. The arc starts at the 12 o'clock
+/// traces a circular arc on a 44×44 viewport. The arc starts at the 12 o'clock
 /// position and sweeps clockwise for <c>fraction * 360°</c>, so a row that was
 /// just activated draws a near-full ring and an almost-expired row a tiny sliver.
 /// Returns <c>null</c> for fractions ≤ ~0 so the path renders nothing.
@@ -16,8 +16,10 @@ public sealed class ProgressFractionToArcGeometryConverter : IValueConverter
     /// <summary>Singleton instance for use as a static XAML resource.</summary>
     public static readonly ProgressFractionToArcGeometryConverter Instance = new();
 
-    private const double Radius = 16.0;
-    private const double Center = 18.0;
+    // 44×44 viewport. Radius sits 0.75px inside the 2.5px-thick track ring so the
+    // coloured arc reads as nested just within it (matches the Ellipse below).
+    private const double Radius = 20.0;
+    private const double Center = 22.0;
 
     /// <inheritdoc />
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)

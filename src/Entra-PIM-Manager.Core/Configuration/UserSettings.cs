@@ -25,6 +25,12 @@ namespace EntraPimManager.Core.Configuration;
 /// Whether the ACCOUNTS section in the Settings slide-in is expanded or
 /// collapsed. Persisted so the user's preference survives an app restart.
 /// </param>
+/// <param name="AutomaticUpdatesEnabled">
+/// True to periodically check GitHub Releases for a newer build and offer to
+/// install it. Defaults to true. Old settings files written before this field
+/// existed deserialize to the constructor default (on), which is the intended
+/// behaviour.
+/// </param>
 public sealed record UserSettings(
     ThemePreference Theme,
     double DefaultDurationHours,
@@ -32,12 +38,14 @@ public sealed record UserSettings(
     int ExpiryWarningMinutes,
     string? LastUsedAccountKey = null,
     Dictionary<string, bool>? ExpandedTenants = null,
-    bool SettingsAccountsExpanded = true)
+    bool SettingsAccountsExpanded = true,
+    bool AutomaticUpdatesEnabled = true)
 {
     /// <summary>Defaults applied when no settings file exists or the file is unreadable.</summary>
     public static UserSettings Default { get; } = new(
         Theme: ThemePreference.System,
         DefaultDurationHours: 1.0,
         ExpiryWarningEnabled: true,
-        ExpiryWarningMinutes: 5);
+        ExpiryWarningMinutes: 5,
+        AutomaticUpdatesEnabled: true);
 }

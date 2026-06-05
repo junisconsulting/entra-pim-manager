@@ -1,6 +1,5 @@
 namespace EntraPimManager.AppAvalonia.Services;
 
-using System.IO;
 using Microsoft.Win32;
 
 /// <summary>
@@ -25,7 +24,7 @@ public sealed class AutostartService : IAutostartService
     /// <inheritdoc />
     public void Enable()
     {
-        var executablePath = ResolveAutostartTarget();
+        var executablePath = LauncherTarget.Resolve();
         if (executablePath is null)
         {
             return;
@@ -41,38 +40,5 @@ public sealed class AutostartService : IAutostartService
     {
         using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
         key?.DeleteValue(ValueName, throwOnMissingValue: false);
-    }
-
-    /// <summary>
-    /// When the app runs out of a Velopack install the process lives at
-    /// <c>&lt;root&gt;\current\Entra-PIM-Manager.exe</c>, while Velopack also places a
-    /// stable launcher stub at <c>&lt;root&gt;\Entra-PIM-Manager.exe</c>. The stub
-    /// survives updates without its inode changing, so Windows Task Manager's
-    /// startup-app metadata cache keeps resolving it to the right Publisher /
-    /// FileDescription. Registering the inner <c>current\</c> path instead
-    /// causes Task Manager to display the bare filename with an empty
-    /// Publisher column. Dev / portable launches don't have a stub one level
-    /// up, so we fall back to the process path in that case.
-    /// </summary>
-    private static string? ResolveAutostartTarget()
-    {
-        var processPath = Environment.ProcessPath;
-        if (processPath is null)
-        {
-            return null;
-        }
-
-        var processDir = Path.GetDirectoryName(processPath);
-        if (processDir is null
-            || !string.Equals(Path.GetFileName(processDir), "current", System.StringComparison.OrdinalIgnoreCase))
-        {
-            return processPath;
-        }
-
-        var stubPath = Path.Combine(
-            Path.GetDirectoryName(processDir)!,
-            Path.GetFileName(processPath));
-
-        return File.Exists(stubPath) ? stubPath : processPath;
     }
 }

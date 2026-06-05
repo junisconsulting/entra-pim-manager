@@ -50,10 +50,6 @@ public sealed class ToastService : IToastService
     }
 
     /// <inheritdoc />
-    public void ShowExpiringSoon(string resourceName) =>
-        Show("Activation expiring soon", $"{resourceName} expires in less than 5 minutes.");
-
-    /// <inheritdoc />
     public void ShowError(string title, string detail) => Show(title, detail);
 
     private void Show(string title, string message)

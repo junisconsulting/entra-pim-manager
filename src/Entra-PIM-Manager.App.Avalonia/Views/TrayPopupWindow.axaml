@@ -162,24 +162,26 @@
                                                          Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         </StackPanel>
 
-                        <!-- Countdown ring: 36×36 donut showing the fraction of
+                        <!-- Countdown ring: 44×44 donut showing the fraction of
                              the activation window still ahead, with the
-                             remaining time inside. Track ring is always drawn;
-                             the foreground arc is computed from ProgressFraction
-                             by a converter. Both arc stroke and inner text take
-                             their colour from RemainingTime so the row escalates
-                             accent → warning (≤15 min) → danger (≤5 min). The
-                             whole stack is hidden while a pending/deactivating
-                             spinner is showing. -->
+                             remaining time inside. Sized so a wide label like
+                             "7h 53m" clears the ring instead of touching it.
+                             Track ring is always drawn; the foreground arc is
+                             computed from ProgressFraction by a converter (whose
+                             geometry must match this size). Both arc stroke and
+                             inner text take their colour from RemainingTime so the
+                             row escalates accent → warning (≤15 min) → danger
+                             (≤5 min). The whole stack is hidden while a
+                             pending/deactivating spinner is showing. -->
                         <Grid Grid.Column="2"
-                              Width="36"
-                              Height="36"
+                              Width="44"
+                              Height="44"
                               Margin="10,0"
                               VerticalAlignment="Center"
                               IsVisible="{Binding !IsBusy}"
                               ToolTip.Tip="{Binding RemainingText}">
-                          <Ellipse Width="36"
-                                   Height="36"
+                          <Ellipse Width="44"
+                                   Height="44"
                                    Stroke="{DynamicResource BorderDividerBrush}"
                                    StrokeThickness="2.5"
                                    Fill="Transparent" />
@@ -951,7 +953,16 @@
                       <SelectableTextBlock Text="{Binding DeviceCodeUserCode}"
                                            FontSize="{DynamicResource FontTitleSmall}"
                                            FontWeight="Bold"
-                                           Foreground="{DynamicResource AccentForegroundBrush}" />
+                                           Foreground="{DynamicResource AccentTextBrush}" />
+
+                      <!-- Escape hatch: stays clickable while the rest of the
+                           panel is disabled during the poll, so the user can back
+                           out instead of waiting out the 10-minute window. -->
+                      <Button Classes="secondary"
+                              HorizontalAlignment="Left"
+                              Margin="0,8,0,0"
+                              Command="{Binding CancelDeviceCodeCommand}"
+                              Content="Cancel sign-in" />
                     </StackPanel>
                   </Border>
 
@@ -1335,6 +1346,23 @@
                                 OffContent="" />
                 </Grid>
 
+                <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center"
+                      IsVisible="{Binding CanManageStartMenuShortcut}">
+                  <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="Start menu entry"
+                               FontSize="{DynamicResource FontBody}"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <TextBlock Text="Keep a shortcut in the Start menu to find and pin the app."
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1"
+                                IsChecked="{Binding CreateStartMenuShortcut}"
+                                OnContent=""
+                                OffContent="" />
+                </Grid>
+
                 <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
                   <StackPanel Grid.Column="0" VerticalAlignment="Center">
                     <TextBlock Text="Default activation duration"
@@ -1404,6 +1432,50 @@
                       </DataTemplate>
                     </ComboBox.ItemTemplate>
                   </ComboBox>
+                </Grid>
+              </StackPanel>
+              </Border>
+
+              <!-- =========== UPDATES =========== -->
+              <Border Classes="settings-card">
+              <StackPanel Spacing="8">
+                <TextBlock Text="UPDATES"
+                           FontSize="{DynamicResource FontCaption}"
+                           FontWeight="Medium"
+                           Foreground="{DynamicResource TextTertiaryBrush}" />
+
+                <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                  <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="Automatic updates"
+                               FontSize="{DynamicResource FontBody}"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <TextBlock Text="Check GitHub for new releases and offer to install them."
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1"
+                                IsChecked="{Binding AutomaticUpdatesEnabled}"
+                                OnContent=""
+                                OffContent="" />
+                </Grid>
+
+                <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                  <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="Check now"
+                               FontSize="{DynamicResource FontBody}"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <TextBlock Text="Manually check for a newer version."
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="1"
+                          Classes="secondary"
+                          Content="Check for updates"
+                          Command="{Binding CheckForUpdatesNowCommand}"
+                          IsEnabled="{Binding AutomaticUpdatesEnabled}"
+                          VerticalAlignment="Center" />
                 </Grid>
               </StackPanel>
               </Border>
