@@ -45,18 +45,22 @@ Wahlmöglichkeit für Autostart und Startmenü-Eintrag wird daher über einen
 2. Sobald die UI läuft, zeigt `FirstRunSetupController` den Dialog mit zwei
    Schaltern (Autostart / Startmenü-Eintrag, beide standardmäßig an).
 3. Beim Bestätigen — oder beim Schließen — wird die Auswahl angewendet
-   (Autostart über den `HKCU`-Run-Key, der Startmenü-Eintrag über Velopacks
-   eigene Shortcut-API für `StartMenuRoot`) und der Marker gelöscht. Der Dialog
-   erscheint dadurch genau einmal pro Installation.
+   (Autostart über den `HKCU`-Run-Key, der Startmenü-Eintrag über das direkte
+   Schreiben/Löschen der `.lnk`) und der Marker gelöscht. Der Dialog erscheint
+   dadurch genau einmal pro Installation.
 
 Beide Optionen lassen sich danach jederzeit unter **Settings → Behavior**
 umschalten. Wie beim Autostart ist auch beim Startmenü-Eintrag das Artefakt selbst
 (die `.lnk`-Datei) die Wahrheitsquelle — nichts davon liegt in `settings.json`.
 
-> **Hinweis:** Der Startmenü-Eintrag wird über Velopacks `Shortcuts`-API verwaltet,
-> damit die App-erzeugte Verknüpfung identisch zur Installer-Verknüpfung ist —
-> insbesondere mit derselben `AppUserModelId`, auf die die Toast-Benachrichtigungen
-> angewiesen sind. Eine selbstgebaute `.lnk` würde diese AUMID verlieren.
+> **Hinweis:** Der Startmenü-Eintrag wird als `.lnk` direkt am Installer-Pfad
+> (`…\Start Menu\Programs\{ProductName}.lnk`) verwaltet — Entfernen per `File.Delete`,
+> Anlegen per `WScript.Shell`. Velopacks eigene `Shortcuts`-Runtime-API wird bewusst
+> **nicht** genutzt: sie ist `[Obsolete]` und liest beim Anlegen/Löschen zunächst das
+> lokale `.nupkg`; schlägt das fehl, macht sie still gar nichts (so blieb der
+> Settings-Toggle wirkungslos). Eine `AppUserModelId` setzt auch Velopacks Runtime-API
+> nicht, und der Toast-Stack registriert sich selbst über die Registry — die direkte
+> Verwaltung hat hier also keinen Nachteil.
 
 ## Code-Signing
 

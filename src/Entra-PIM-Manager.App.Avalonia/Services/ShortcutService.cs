@@ -1,56 +1,53 @@
 namespace EntraPimManager.AppAvalonia.Services;
 
 using System;
+using System.Diagnostics;
+using System.IO;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Velopack.Locators;
-using Velopack.Windows;
-
-// Velopack's Shortcuts type is marked [Obsolete] because Velopack now creates the
-// Desktop / StartMenuRoot shortcuts automatically at install and removes them at
-// uninstall. We deliberately use it anyway: it is the only supported way to let the
-// user OPT OUT of (and back into) the Start menu entry at runtime, and it produces a
-// shortcut byte-for-byte identical to the installer's — same launcher stub target and
-// same AppUserModelId, which the toast notifications rely on. Suppress CS0618 for the
-// whole file rather than scatter pragmas around every reference to the type.
-#pragma warning disable CS0618
 
 /// <summary>
-/// Adds / removes the per-user Start menu shortcut through Velopack's own shortcut
-/// API. Only active inside a real Velopack install — see <see cref="IsSupported"/>.
+/// Adds / removes the per-user Start menu shortcut by writing or deleting the
+/// <c>.lnk</c> file directly at the same path Velopack's installer uses
+/// (<c>…\Start Menu\Programs\{ProductName}.lnk</c>).
+/// <para>
+/// We do NOT use Velopack's runtime <c>Shortcuts</c> API: besides being
+/// <c>[Obsolete]</c>, its create/delete methods first read the local <c>.nupkg</c>
+/// (<c>GetLatestLocalFullPackage</c> + <c>ZipPackage</c>) and bail out silently if
+/// that lookup fails, so a Settings toggle appeared to do nothing. Managing the
+/// file ourselves is deterministic. The installer's own runtime shortcut helper
+/// sets no AppUserModelId either, and the toast stack self-registers via the
+/// registry, so writing a plain shortcut here does not affect notifications.
+/// </para>
+/// Only active inside a real Velopack install — see <see cref="IsSupported"/>.
 /// </summary>
 public sealed class ShortcutService : IShortcutService
 {
-    // Velopack's per-user Start menu shortcut lands directly under
-    // …\Start Menu\Programs (root), matching what the installer creates.
-    private const ShortcutLocation Location = ShortcutLocation.StartMenuRoot;
+    // Must match the installer's shortcut name (vpk --packTitle / the assembly
+    // Product) so removal targets exactly the file the installer created.
+    private const string FallbackTitle = "Entra PIM Manager";
 
     private readonly ILogger<ShortcutService> _logger;
-    private readonly IVelopackLocator? _locator;
+    private readonly bool _isInstalled;
 
     public ShortcutService(ILogger<ShortcutService> logger)
     {
         _logger = logger;
-        _locator = ResolveInstalledLocator();
+        _isInstalled = ResolveIsInstalled();
     }
 
     /// <inheritdoc />
-    public bool IsSupported => _locator is not null;
+    public bool IsSupported => _isInstalled;
 
     /// <inheritdoc />
     public bool IsStartMenuShortcutPresent
     {
         get
         {
-            if (_locator is null)
-            {
-                return false;
-            }
-
             try
             {
-                var found = new Shortcuts(_locator)
-                    .FindShortcuts(_locator.ThisExeRelativePath, Location);
-                return found.Count > 0;
+                return File.Exists(StartMenuShortcutPath);
             }
             catch (Exception ex)
             {
@@ -60,17 +57,55 @@ public sealed class ShortcutService : IShortcutService
         }
     }
 
+    // …\Microsoft\Windows\Start Menu\Programs\{title}.lnk — the StartMenuRoot
+    // location Velopack uses for a per-user install.
+    private static string StartMenuShortcutPath =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.StartMenu),
+            "Programs",
+            ShortcutTitle + ".lnk");
+
+    // The exe's ProductName (what Velopack derives the shortcut title from);
+    // falls back to the known title if version info is unavailable.
+    private static string ShortcutTitle
+    {
+        get
+        {
+            try
+            {
+                var processPath = Environment.ProcessPath;
+                var productName = processPath is null
+                    ? null
+                    : FileVersionInfo.GetVersionInfo(processPath).ProductName;
+                return string.IsNullOrWhiteSpace(productName) ? FallbackTitle : productName!;
+            }
+            catch
+            {
+                return FallbackTitle;
+            }
+        }
+    }
+
     /// <inheritdoc />
     public void EnableStartMenuShortcut()
     {
-        if (_locator is null)
+        if (!_isInstalled)
         {
+            return;
+        }
+
+        var target = LauncherTarget.Resolve();
+        if (target is null)
+        {
+            _logger.LogWarning("Cannot create the Start menu shortcut — launcher path unknown");
             return;
         }
 
         try
         {
-            new Shortcuts(_locator).CreateShortcutForThisExe(Location);
+            var path = StartMenuShortcutPath;
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            WriteShortcut(path, target);
         }
         catch (Exception ex)
         {
@@ -81,14 +116,18 @@ public sealed class ShortcutService : IShortcutService
     /// <inheritdoc />
     public void DisableStartMenuShortcut()
     {
-        if (_locator is null)
+        if (!_isInstalled)
         {
             return;
         }
 
         try
         {
-            new Shortcuts(_locator).RemoveShortcutForThisExe(Location);
+            var path = StartMenuShortcutPath;
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
         }
         catch (Exception ex)
         {
@@ -97,27 +136,56 @@ public sealed class ShortcutService : IShortcutService
     }
 
     /// <summary>
-    /// Returns the current Velopack locator only when the app is running from an
-    /// installed (non-portable) Velopack package; otherwise <c>null</c> so the
-    /// service degrades to a no-op in dev / portable / cross-build runs.
+    /// Writes a <c>.lnk</c> via the Windows Script Host shell object (late-bound, so
+    /// no COM interface declarations are needed). Points at the stable launcher stub
+    /// with the exe's own icon.
     /// </summary>
-    private static IVelopackLocator? ResolveInstalledLocator()
+    private static void WriteShortcut(string linkPath, string targetPath)
+    {
+        var shellType = Type.GetTypeFromProgID("WScript.Shell")
+            ?? throw new InvalidOperationException("WScript.Shell is not registered.");
+        dynamic shell = Activator.CreateInstance(shellType)!;
+        try
+        {
+            dynamic shortcut = shell.CreateShortcut(linkPath);
+            try
+            {
+                shortcut.TargetPath = targetPath;
+                shortcut.WorkingDirectory = Path.GetDirectoryName(targetPath);
+                shortcut.IconLocation = targetPath + ",0";
+                shortcut.Description = FallbackTitle;
+                shortcut.Save();
+            }
+            finally
+            {
+                Marshal.FinalReleaseComObject(shortcut);
+            }
+        }
+        finally
+        {
+            Marshal.FinalReleaseComObject(shell);
+        }
+    }
+
+    /// <summary>
+    /// True only when running from an installed (non-portable) Velopack package;
+    /// otherwise the service no-ops and the Settings row hides.
+    /// </summary>
+    private static bool ResolveIsInstalled()
     {
         try
         {
             if (!VelopackLocator.IsCurrentSet)
             {
-                return null;
+                return false;
             }
 
             var locator = VelopackLocator.Current;
-            return locator.CurrentlyInstalledVersion is not null && !locator.IsPortable
-                ? locator
-                : null;
+            return locator.CurrentlyInstalledVersion is not null && !locator.IsPortable;
         }
         catch
         {
-            return null;
+            return false;
         }
     }
 }
