@@ -1,7 +1,9 @@
 namespace EntraPimManager.AppAvalonia;
 
+using System.IO;
 using Avalonia;
 using EntraPimManager.AppAvalonia.Services;
+using EntraPimManager.Core.Configuration;
 using Velopack;
 
 /// <summary>
@@ -30,10 +32,12 @@ public static class Program
 
     /// <summary>
     /// On the very first launch after a Velopack install, default the
-    /// "Start with Windows" autostart toggle to ON so the admin gets a
-    /// zero-config experience: install once, app starts on every login.
-    /// The user keeps full control via Settings — Velopack only fires this
-    /// hook once per install, so a manual disable sticks.
+    /// "Start with Windows" autostart toggle to ON (so even if the setup dialog
+    /// never runs the app still starts on login) and drop a marker that asks the
+    /// UI to show the one-time first-run setup dialog. There the user can opt out
+    /// of autostart and the Start menu entry; the dialog applies the choice and
+    /// deletes the marker. Velopack fires this hook once per install, so the
+    /// dialog is shown exactly once.
     /// </summary>
     private static void EnableAutostartOnFirstRun()
     {
@@ -46,6 +50,19 @@ public static class Program
             // Defensive: a registry write failure here must NOT prevent the
             // app from starting. The user can still toggle it from Settings
             // later. We can't log (no logger wired this early) — swallow.
+        }
+
+        try
+        {
+            // The UI thread isn't up yet, so we can't show the dialog here —
+            // leave a breadcrumb for FirstRunSetupController to pick up.
+            Directory.CreateDirectory(AppPaths.DataDirectory);
+            File.WriteAllText(AppPaths.FirstRunSetupMarkerFile, string.Empty);
+        }
+        catch
+        {
+            // Non-fatal: without the marker the app simply keeps the defaults
+            // (autostart on, Start menu entry kept) and skips the setup dialog.
         }
     }
 }

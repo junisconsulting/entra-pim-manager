@@ -31,4 +31,13 @@ public static class AppPaths
 
     /// <summary>User-entered configuration (e.g. ClientId) written by the Settings UI.</summary>
     public static string LocalConfigFile { get; } = Path.Combine(DataDirectory, "appsettings.local.json");
+
+    /// <summary>
+    /// Sentinel written by the Velopack <c>OnFirstRun</c> hook to signal that the
+    /// one-time first-run setup dialog (autostart / Start menu opt-out) should be
+    /// shown on this launch. The dialog deletes it once the choice is applied, so
+    /// it never reappears on subsequent starts. A leading dot keeps it visually
+    /// grouped apart from the JSON config files in the data directory.
+    /// </summary>
+    public static string FirstRunSetupMarkerFile { get; } = Path.Combine(DataDirectory, ".setup-pending");
 }

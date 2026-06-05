@@ -31,7 +31,7 @@ A Windows tray application for activating Microsoft Entra Privileged Identity Ma
 
 Download the latest installer from the [Releases](../../releases) page and run it. The installer is per-user — no UAC prompt — and places the app under `%LocalAppData%\Programs\Entra-PIM-Manager\`.
 
-Future updates are downloaded automatically and applied on the next launch.
+When a new release is published, the app checks GitHub once a day, then prompts you to download and install it — you choose whether to restart now or apply on the next launch. Toggle this under **Settings → Updates**.
 
 ## Configure
 

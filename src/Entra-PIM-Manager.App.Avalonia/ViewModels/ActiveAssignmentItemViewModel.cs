@@ -170,9 +170,6 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
         _ => string.Empty,
     };
 
-    /// <summary>Set once an expiry-soon notification has been raised for this assignment.</summary>
-    public bool ExpiryWarningSent { get; set; }
-
     /// <summary>
     /// Wall-clock time this row was constructed. Used by the shell's pending
     /// watchdog: a placeholder that hasn't been replaced by a real assignment

@@ -27,10 +27,13 @@ public sealed class TrayPopupController
     // click that lands within this window of a deactivation-hide as "close".
     private static readonly TimeSpan TogglePingPongGuard = TimeSpan.FromMilliseconds(300);
 
-    // Three-state tray indicator:
-    //   Red   — not signed in (no enrolled account / session lapsed)
+    // Tray indicator states:
+    //   Red   — not signed in (no enrolled account / session lapsed), OR an
+    //           active role is about to expire (attention); the tooltip
+    //           disambiguates. Reuses the red asset rather than shipping a
+    //           dedicated "expiring" icon.
     //   Amber — signed in but no active PIM role right now
-    //   Green — at least one active PIM role across all enrolled accounts
+    //   Green — at least one active PIM role, none expiring soon
     private static readonly WindowIcon RedIcon = LoadIcon("avares://Entra-PIM-Manager/Assets/tray-icon-red.ico");
     private static readonly WindowIcon AmberIcon = LoadIcon("avares://Entra-PIM-Manager/Assets/tray-icon-amber.ico");
     private static readonly WindowIcon GreenIcon = LoadIcon("avares://Entra-PIM-Manager/Assets/tray-icon-green.ico");
@@ -67,6 +70,7 @@ public sealed class TrayPopupController
         };
 
         _viewModel.ActiveCountChanged += (_, _) => UpdateTrayIcon();
+        _viewModel.ExpiringChanged += (_, _) => UpdateTrayIcon();
         _viewModel.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName == nameof(ShellViewModel.IsSignedIn))
@@ -174,6 +178,16 @@ public sealed class TrayPopupController
         {
             nextIcon = AmberIcon;
             nextTooltip = "Entra PIM Manager — no active roles";
+        }
+        else if (_viewModel.MostUrgentExpiring is { } urgent)
+        {
+            // At least one active role is inside the warning window — raise the
+            // tray to an attention state and put the live countdown in the tooltip.
+            nextIcon = RedIcon;
+            var more = _viewModel.ExpiringCount > 1
+                ? $" (+{_viewModel.ExpiringCount - 1} more)"
+                : string.Empty;
+            nextTooltip = $"Entra PIM Manager — {urgent.DisplayName} expires in {urgent.RemainingText}{more}";
         }
         else
         {

@@ -182,6 +182,49 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
+    public void Default_HasAutomaticUpdatesEnabled()
+    {
+        // Auto-update is on out of the box; the Settings toggle lets users opt out.
+        Assert.True(UserSettings.Default.AutomaticUpdatesEnabled);
+    }
+
+    [Fact]
+    public async Task LoadAsync_LegacyFileWithoutAutomaticUpdatesEnabled_DefaultsToTrue()
+    {
+        // Backwards-compat: a settings.json written before the auto-update feature
+        // has no AutomaticUpdatesEnabled field. It must default to enabled so
+        // existing installs start checking for updates after upgrading.
+        const string legacyJson = """
+            {
+              "Theme": "System",
+              "DefaultDurationHours": 1.0,
+              "ExpiryWarningEnabled": true,
+              "ExpiryWarningMinutes": 5
+            }
+            """;
+        await File.WriteAllTextAsync(_filePath, legacyJson);
+        var store = CreateStore();
+
+        await store.LoadAsync();
+
+        Assert.True(store.Current.AutomaticUpdatesEnabled);
+    }
+
+    [Fact]
+    public async Task SaveAsync_PersistsAutomaticUpdatesEnabled()
+    {
+        var disabled = UserSettings.Default with { AutomaticUpdatesEnabled = false };
+
+        var first = CreateStore();
+        await first.SaveAsync(disabled);
+
+        var second = CreateStore();
+        await second.LoadAsync();
+
+        Assert.False(second.Current.AutomaticUpdatesEnabled);
+    }
+
+    [Fact]
     public async Task SaveAsync_PersistsSettingsAccountsExpanded()
     {
         var collapsed = UserSettings.Default with { SettingsAccountsExpanded = false };

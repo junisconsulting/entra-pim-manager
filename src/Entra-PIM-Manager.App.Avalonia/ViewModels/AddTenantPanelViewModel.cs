@@ -30,6 +30,16 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     private readonly IAuthService _authService;
     private readonly ILogger<AddTenantPanelViewModel> _logger;
 
+    // Cancellation handle for an in-flight device-code sign-in. Held in a field
+    // (rather than a local `using`) so the user can abort the up-to-10-minute
+    // poll from the UI. Also carries the 10-minute timeout. Null when idle.
+    private CancellationTokenSource? _deviceCodeCts;
+
+    // True when the user explicitly cancelled the device-code flow, so we can
+    // tell their abort apart from a 10-minute timeout (both surface as
+    // OperationCanceledException) and stay silent instead of showing an error.
+    private bool _deviceCodeUserCancelled;
+
     [ObservableProperty]
     private bool _isOpen;
 
@@ -126,6 +136,10 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     [RelayCommand]
     private void Cancel()
     {
+        // Stop any in-flight device-code poll so it doesn't keep running in the
+        // background after the panel closes.
+        _deviceCodeUserCancelled = true;
+        _deviceCodeCts?.Cancel();
         IsOpen = false;
         Closed?.Invoke(null);
     }
@@ -175,9 +189,10 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
         DeviceCodeVerificationUri = null;
 
         IsConnecting = true;
+        _deviceCodeUserCancelled = false;
+        _deviceCodeCts = new CancellationTokenSource(DeviceCodeTimeout);
         try
         {
-            using var cts = new CancellationTokenSource(DeviceCodeTimeout);
             var account = await _authService.AddAccountViaDeviceCodeAsync(
                 input,
                 SelectedCloud.Cloud,
@@ -191,10 +206,24 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
                         DeviceCodeVerificationUri = challenge.VerificationUri;
                     }).GetTask();
                 },
-                cts.Token);
+                _deviceCodeCts.Token);
 
             IsOpen = false;
             Closed?.Invoke(account);
+        }
+        catch (OperationCanceledException)
+        {
+            // The poll was cancelled. If the user pressed "Cancel sign-in" there's
+            // nothing to surface — just drop back to the form. Otherwise the
+            // 10-minute device-code window elapsed; tell them so they can retry.
+            if (_deviceCodeUserCancelled)
+            {
+                _logger.LogDebug("Device-code sign-in cancelled by user");
+            }
+            else
+            {
+                ErrorMessage = "The device-code sign-in timed out. Please try again.";
+            }
         }
         catch (Exception ex)
         {
@@ -207,10 +236,25 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
         }
         finally
         {
+            _deviceCodeCts.Dispose();
+            _deviceCodeCts = null;
             IsConnecting = false;
             DeviceCodeUserCode = null;
             DeviceCodeVerificationUri = null;
         }
+    }
+
+    /// <summary>
+    /// Aborts an in-flight device-code sign-in. Bound to the "Cancel sign-in"
+    /// button in the instructions panel, which stays enabled while
+    /// <see cref="IsConnecting"/> is true (everything else is disabled), so the
+    /// user is never stuck waiting out the 10-minute poll.
+    /// </summary>
+    [RelayCommand]
+    private void CancelDeviceCode()
+    {
+        _deviceCodeUserCancelled = true;
+        _deviceCodeCts?.Cancel();
     }
 
     /// <summary>ComboBox row: pairs the enum value with the localized label.</summary>
