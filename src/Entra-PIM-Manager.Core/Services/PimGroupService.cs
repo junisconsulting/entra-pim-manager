@@ -1,7 +1,10 @@
 namespace EntraPimManager.Core.Services;
 
+using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.ErrorHandling;
+using EntraPimManager.Core.Graph;
 using EntraPimManager.Core.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
@@ -17,11 +20,13 @@ public sealed class PimGroupService : IPimGroupService
 {
     private readonly GraphServiceClient _graph;
     private readonly IGroupResolver _groupResolver;
+    private readonly ILogger<PimGroupService> _logger;
 
-    public PimGroupService(GraphServiceClient graph, IGroupResolver groupResolver)
+    public PimGroupService(GraphServiceClient graph, IGroupResolver groupResolver, ILogger<PimGroupService> logger)
     {
         _graph = graph;
         _groupResolver = groupResolver;
+        _logger = logger;
     }
 
     /// <inheritdoc />
@@ -196,12 +201,22 @@ public sealed class PimGroupService : IPimGroupService
             AssignmentScheduleId: instance.Id ?? string.Empty);
     }
 
-    private static ActivationResult Failure(ODataError error) => new(
-        RequestId: string.Empty,
-        Status: ActivationStatus.Failed,
-        StartDateTime: null,
-        EndDateTime: null,
-        Error: PimErrorMapper.Map(error));
+    private ActivationResult Failure(ODataError error)
+    {
+        _logger.LogWarning(
+            "PIM group request failed: {Code} (HTTP {Status}), request-id {RequestId}. {GraphMessage}",
+            error.Error?.Code,
+            error.ResponseStatusCode,
+            error.Error?.InnerError?.RequestId,
+            error.Error?.Message);
+
+        return new(
+            RequestId: string.Empty,
+            Status: ActivationStatus.Failed,
+            StartDateTime: null,
+            EndDateTime: null,
+            Error: PimErrorMapper.Map(error));
+    }
 
     private async Task<ActivationResult> SubmitActivationAsync(
         ActivationRequest request,
@@ -228,7 +243,25 @@ public sealed class PimGroupService : IPimGroupService
         };
 
         var response = await _graph.IdentityGovernance.PrivilegedAccess.Group.AssignmentScheduleRequests
-            .PostAsync(body, cancellationToken: ct)
+            .PostAsync(
+                body,
+                requestConfiguration =>
+                {
+                    if (request.AuthContextClaim is { } acrs)
+                    {
+                        // The policy demands a Conditional Access authentication
+                        // context; the token for this POST must carry the acrs
+                        // claim or Graph rejects it with HTTP 400 (not a 401
+                        // claims challenge). Never log the acrs value itself.
+                        _logger.LogInformation(
+                            "Activation requires authentication-context step-up; acquiring token with claims");
+                        requestConfiguration.Options.Add(new AuthContextRequestOption
+                        {
+                            ClaimsJson = ClaimsChallengeParser.BuildAuthContextClaims(acrs),
+                        });
+                    }
+                },
+                ct)
             .ConfigureAwait(false);
 
         return new ActivationResult(

@@ -22,6 +22,13 @@ public sealed class ClaimsChallengeParserTests
     }
 
     [Fact]
+    public void BuildAuthContextClaims_ProducesCanonicalChallengeJson()
+    {
+        // Byte-identical to what a decoded server challenge for context "c1" looks like.
+        Assert.Equal(SampleDecoded, ClaimsChallengeParser.BuildAuthContextClaims("c1"));
+    }
+
+    [Fact]
     public void ExtractClaimsChallenge_FromBearerHeader_ReturnsDecodedClaims()
     {
         var headerParameter =

@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "RoleAssignmentRequestAcrsValidationFailed",
+    "message": "The access token does not contain the acrs claim required by the Conditional Access authentication context configured for this role."
+  }
+}

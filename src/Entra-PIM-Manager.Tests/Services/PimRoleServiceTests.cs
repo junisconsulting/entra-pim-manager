@@ -1,9 +1,11 @@
 namespace EntraPimManager.Tests.Services;
 
 using System.Net;
+using EntraPimManager.Core.Graph;
 using EntraPimManager.Core.Models;
 using EntraPimManager.Core.Services;
 using EntraPimManager.Tests.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
 
 public sealed class PimRoleServiceTests
 {
@@ -12,7 +14,7 @@ public sealed class PimRoleServiceTests
     {
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("directory-eligibilities.json")));
-        var service = new PimRoleService(GraphClientTestBuilder.Build(handler));
+        var service = new PimRoleService(GraphClientTestBuilder.Build(handler), NullLogger<PimRoleService>.Instance);
 
         var result = await service.GetEligibleRolesAsync();
 
@@ -34,7 +36,7 @@ public sealed class PimRoleServiceTests
     {
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("directory-active-assignments.json")));
-        var service = new PimRoleService(GraphClientTestBuilder.Build(handler));
+        var service = new PimRoleService(GraphClientTestBuilder.Build(handler), NullLogger<PimRoleService>.Instance);
 
         var result = await service.GetActiveRolesAsync();
 
@@ -51,7 +53,7 @@ public sealed class PimRoleServiceTests
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(
                 FixtureLoader.Load("activation-provisioned.json"), HttpStatusCode.Created));
-        var service = new PimRoleService(GraphClientTestBuilder.Build(handler));
+        var service = new PimRoleService(GraphClientTestBuilder.Build(handler), NullLogger<PimRoleService>.Instance);
 
         var eligibility = new PimEligibility(PimResourceKind.DirectoryRole, "User Administrator", "role-def-ua", "/administrativeUnits/au-1", "user-oid-1", null, false);
         var request = new ActivationRequest(eligibility, TimeSpan.FromHours(2), "Fixing a locked account", new TicketInfo("INC-555", "ServiceNow"));
@@ -75,7 +77,7 @@ public sealed class PimRoleServiceTests
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(
                 FixtureLoader.Load("activation-pending-approval.json"), HttpStatusCode.Created));
-        var service = new PimRoleService(GraphClientTestBuilder.Build(handler));
+        var service = new PimRoleService(GraphClientTestBuilder.Build(handler), NullLogger<PimRoleService>.Instance);
 
         var result = await service.ActivateAsync(SampleRequest());
 
@@ -90,7 +92,7 @@ public sealed class PimRoleServiceTests
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(
                 FixtureLoader.Load("error-justification-required.json"), HttpStatusCode.BadRequest));
-        var service = new PimRoleService(GraphClientTestBuilder.Build(handler));
+        var service = new PimRoleService(GraphClientTestBuilder.Build(handler), NullLogger<PimRoleService>.Instance);
 
         var result = await service.ActivateAsync(SampleRequest());
 
@@ -108,7 +110,7 @@ public sealed class PimRoleServiceTests
                 FixtureLoader.Load("error-start-time-in-past.json"), HttpStatusCode.BadRequest),
             FakeHttpMessageHandler.JsonResponse(
                 FixtureLoader.Load("activation-provisioned.json"), HttpStatusCode.Created));
-        var service = new PimRoleService(GraphClientTestBuilder.Build(handler));
+        var service = new PimRoleService(GraphClientTestBuilder.Build(handler), NullLogger<PimRoleService>.Instance);
 
         var result = await service.ActivateAsync(SampleRequest());
 
@@ -122,7 +124,7 @@ public sealed class PimRoleServiceTests
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(
                 FixtureLoader.Load("activation-provisioned.json"), HttpStatusCode.Created));
-        var service = new PimRoleService(GraphClientTestBuilder.Build(handler));
+        var service = new PimRoleService(GraphClientTestBuilder.Build(handler), NullLogger<PimRoleService>.Instance);
 
         var eligibility = new PimEligibility(
             PimResourceKind.DirectoryRole, "Global Administrator", "role-def-ga", "/", "user-oid-1", null, false);
@@ -134,6 +136,53 @@ public sealed class PimRoleServiceTests
         var body = handler.RequestBodies[0];
         Assert.NotNull(body);
         Assert.Contains("\"isValidationOnly\":true", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ActivateAsync_WithAuthContextClaim_AttachesClaimsRequestOption()
+    {
+        var handler = new FakeHttpMessageHandler(
+            FakeHttpMessageHandler.JsonResponse(
+                FixtureLoader.Load("activation-provisioned.json"), HttpStatusCode.Created));
+        var service = new PimRoleService(GraphClientTestBuilder.Build(handler), NullLogger<PimRoleService>.Instance);
+
+        await service.ActivateAsync(SampleRequest() with { AuthContextClaim = "c1" });
+
+        var option = Assert.Single(handler.Requests[0].Options
+            .Select(kv => kv.Value)
+            .OfType<AuthContextRequestOption>());
+        Assert.Contains("\"acrs\"", option.ClaimsJson, StringComparison.Ordinal);
+        Assert.Contains("\"c1\"", option.ClaimsJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ActivateAsync_WithoutAuthContextClaim_AttachesNoClaimsRequestOption()
+    {
+        var handler = new FakeHttpMessageHandler(
+            FakeHttpMessageHandler.JsonResponse(
+                FixtureLoader.Load("activation-provisioned.json"), HttpStatusCode.Created));
+        var service = new PimRoleService(GraphClientTestBuilder.Build(handler), NullLogger<PimRoleService>.Instance);
+
+        await service.ActivateAsync(SampleRequest());
+
+        Assert.Empty(handler.Requests[0].Options
+            .Select(kv => kv.Value)
+            .OfType<AuthContextRequestOption>());
+    }
+
+    [Fact]
+    public async Task ActivateAsync_AcrsValidationFailed_ReturnsStepUpRequired()
+    {
+        var handler = new FakeHttpMessageHandler(
+            FakeHttpMessageHandler.JsonResponse(
+                FixtureLoader.Load("error-acrs-validation-failed.json"), HttpStatusCode.BadRequest));
+        var service = new PimRoleService(GraphClientTestBuilder.Build(handler), NullLogger<PimRoleService>.Instance);
+
+        var result = await service.ActivateAsync(SampleRequest());
+
+        Assert.False(result.IsSuccess);
+        Assert.NotNull(result.Error);
+        Assert.Equal(ErrorSeverity.StepUpRequired, result.Error.Severity);
     }
 
     private static ActivationRequest SampleRequest()

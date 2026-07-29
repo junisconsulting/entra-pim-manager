@@ -1,9 +1,11 @@
 namespace EntraPimManager.Tests.Services;
 
 using System.Net;
+using EntraPimManager.Core.Graph;
 using EntraPimManager.Core.Models;
 using EntraPimManager.Core.Services;
 using EntraPimManager.Tests.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 public sealed class PimGroupServiceTests
@@ -23,7 +25,8 @@ public sealed class PimGroupServiceTests
                 ["group-2"] = new GroupInfo("group-2", "grp-project-x", IsAssignableToRole: false),
             });
 
-        var service = new PimGroupService(GraphClientTestBuilder.Build(handler), resolver.Object);
+        var service = new PimGroupService(
+            GraphClientTestBuilder.Build(handler), resolver.Object, NullLogger<PimGroupService>.Instance);
 
         var result = await service.GetEligibleGroupAccessAsync();
 
@@ -47,7 +50,9 @@ public sealed class PimGroupServiceTests
             FakeHttpMessageHandler.JsonResponse(
                 FixtureLoader.Load("activation-group-provisioned.json"), HttpStatusCode.Created));
         var service = new PimGroupService(
-            GraphClientTestBuilder.Build(handler), new Mock<IGroupResolver>().Object);
+            GraphClientTestBuilder.Build(handler),
+            new Mock<IGroupResolver>().Object,
+            NullLogger<PimGroupService>.Instance);
 
         var eligibility = new PimEligibility(PimResourceKind.GroupMembership, "grp-project-x", "group-1", "group-1", "user-oid-1", null, false);
         var request = new ActivationRequest(eligibility, TimeSpan.FromHours(3), "Project work", new TicketInfo("CHG-77", "Jira"));
@@ -65,5 +70,28 @@ public sealed class PimGroupServiceTests
         Assert.DoesNotContain("ticketInfo", body, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("CHG-77", body, StringComparison.Ordinal);
         Assert.Contains("Project work", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ActivateAsync_WithAuthContextClaim_AttachesClaimsRequestOption()
+    {
+        var handler = new FakeHttpMessageHandler(
+            FakeHttpMessageHandler.JsonResponse(
+                FixtureLoader.Load("activation-group-provisioned.json"), HttpStatusCode.Created));
+        var service = new PimGroupService(
+            GraphClientTestBuilder.Build(handler),
+            new Mock<IGroupResolver>().Object,
+            NullLogger<PimGroupService>.Instance);
+
+        var eligibility = new PimEligibility(PimResourceKind.GroupMembership, "grp-project-x", "group-1", "group-1", "user-oid-1", null, false);
+        var request = new ActivationRequest(
+            eligibility, TimeSpan.FromHours(1), "Project work", null, AuthContextClaim: "c3");
+
+        await service.ActivateAsync(request);
+
+        var option = Assert.Single(handler.Requests[0].Options
+            .Select(kv => kv.Value)
+            .OfType<AuthContextRequestOption>());
+        Assert.Contains("\"c3\"", option.ClaimsJson, StringComparison.Ordinal);
     }
 }

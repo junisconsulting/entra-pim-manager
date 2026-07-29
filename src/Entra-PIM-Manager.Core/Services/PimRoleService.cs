@@ -1,7 +1,10 @@
 namespace EntraPimManager.Core.Services;
 
+using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.ErrorHandling;
+using EntraPimManager.Core.Graph;
 using EntraPimManager.Core.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Models.ODataErrors;
@@ -14,10 +17,12 @@ public sealed class PimRoleService : IPimRoleService
 {
     private const string UnknownRoleName = "(unknown role)";
     private readonly GraphServiceClient _graph;
+    private readonly ILogger<PimRoleService> _logger;
 
-    public PimRoleService(GraphServiceClient graph)
+    public PimRoleService(GraphServiceClient graph, ILogger<PimRoleService> logger)
     {
         _graph = graph;
+        _logger = logger;
     }
 
     /// <inheritdoc />
@@ -139,12 +144,22 @@ public sealed class PimRoleService : IPimRoleService
         EndDateTime: instance.EndDateTime,
         AssignmentScheduleId: instance.Id ?? string.Empty);
 
-    private static ActivationResult Failure(ODataError error) => new(
-        RequestId: string.Empty,
-        Status: ActivationStatus.Failed,
-        StartDateTime: null,
-        EndDateTime: null,
-        Error: PimErrorMapper.Map(error));
+    private ActivationResult Failure(ODataError error)
+    {
+        _logger.LogWarning(
+            "PIM role request failed: {Code} (HTTP {Status}), request-id {RequestId}. {GraphMessage}",
+            error.Error?.Code,
+            error.ResponseStatusCode,
+            error.Error?.InnerError?.RequestId,
+            error.Error?.Message);
+
+        return new(
+            RequestId: string.Empty,
+            Status: ActivationStatus.Failed,
+            StartDateTime: null,
+            EndDateTime: null,
+            Error: PimErrorMapper.Map(error));
+    }
 
     private async Task<ActivationResult> SubmitActivationAsync(
         ActivationRequest request,
@@ -180,7 +195,25 @@ public sealed class PimRoleService : IPimRoleService
         };
 
         var response = await _graph.RoleManagement.Directory.RoleAssignmentScheduleRequests
-            .PostAsync(body, cancellationToken: ct)
+            .PostAsync(
+                body,
+                requestConfiguration =>
+                {
+                    if (request.AuthContextClaim is { } acrs)
+                    {
+                        // The policy demands a Conditional Access authentication
+                        // context; the token for this POST must carry the acrs
+                        // claim or Graph rejects it with HTTP 400 (not a 401
+                        // claims challenge). Never log the acrs value itself.
+                        _logger.LogInformation(
+                            "Activation requires authentication-context step-up; acquiring token with claims");
+                        requestConfiguration.Options.Add(new AuthContextRequestOption
+                        {
+                            ClaimsJson = ClaimsChallengeParser.BuildAuthContextClaims(acrs),
+                        });
+                    }
+                },
+                ct)
             .ConfigureAwait(false);
 
         return new ActivationResult(

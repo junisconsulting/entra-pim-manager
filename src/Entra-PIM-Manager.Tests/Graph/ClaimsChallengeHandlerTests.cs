@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Graph;
 using EntraPimManager.Tests.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 public sealed class ClaimsChallengeHandlerTests
@@ -91,7 +92,8 @@ public sealed class ClaimsChallengeHandlerTests
 
     private static HttpMessageInvoker CreateInvoker(IAuthService authService, HttpMessageHandler inner)
     {
-        var handler = new ClaimsChallengeHandler(authService, Scopes, AccountId, TenantId, Cloud)
+        var handler = new ClaimsChallengeHandler(
+            authService, Scopes, AccountId, TenantId, Cloud, NullLogger<ClaimsChallengeHandler>.Instance)
         {
             InnerHandler = inner,
         };

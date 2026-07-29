@@ -48,6 +48,10 @@ public sealed class MsalAuthProvider : IAuthenticationProvider
             claims = value as string;
         }
 
+        // A server-sent challenge (Kiota retry context) wins over the proactive
+        // per-request option stamped by the PIM services for auth-context policies.
+        claims ??= request.RequestOptions.OfType<AuthContextRequestOption>().FirstOrDefault()?.ClaimsJson;
+
         var result = await _authService
             .AcquireTokenForAccountAsync(_accountId, _tenantId, _cloud, _scopes, claims, cancellationToken)
             .ConfigureAwait(false);

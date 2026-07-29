@@ -53,6 +53,12 @@ public static class PimErrorMapper
             "RoleAssignmentApprovalRequired" =>
                 Error(ErrorSeverity.Info, "This activation requires approval. The request has been submitted."),
 
+            // RoleAssignmentRequestAcrsValidationFailed on the directory-role
+            // surface; substring match also covers whatever the group surface
+            // calls it — the exact code lands in the log either way.
+            _ when code.Contains("AcrsValidationFailed", StringComparison.OrdinalIgnoreCase) =>
+                Error(ErrorSeverity.StepUpRequired, "This activation requires additional identity verification, which could not be completed. Please try again."),
+
             _ when statusCode == 429 =>
                 Error(ErrorSeverity.Throttled, "Too many requests. Please wait a moment."),
 
@@ -77,6 +83,12 @@ public static class PimErrorMapper
         return exception switch
         {
             ODataError odataError => Map(odataError),
+
+            // Must precede the MsalServiceException arm: a WAM prompt the user
+            // dismissed can surface as either MsalClientException or
+            // MsalServiceException, both deriving from MsalException.
+            MsalException { ErrorCode: MsalError.AuthenticationCanceledError } =>
+                Error(ErrorSeverity.Info, "Verification was cancelled. The role was not activated."),
 
             MsalServiceException msal => MapMsal(msal),
 
