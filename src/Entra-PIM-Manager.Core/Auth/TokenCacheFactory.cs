@@ -9,7 +9,7 @@ using Microsoft.Identity.Client.Extensions.Msal;
 /// <summary>
 /// Creates and registers the MSAL token cache. On Windows the cache file is
 /// DPAPI-encrypted and scoped to the current user at
-/// <c>%LocalAppData%\Entra-PIM-Manager\msal.cache</c>. A corrupted cache is detected
+/// <c>%LocalAppData%\junis\Entra-PIM-Manager\msal.cache</c>. A corrupted cache is detected
 /// and rebuilt rather than blocking startup.
 /// </summary>
 /// <remarks>
