@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Graph;
 
@@ -23,14 +24,19 @@ public sealed class GraphClientFactory : IGraphClientFactory
 {
     private readonly IAuthService _authService;
     private readonly string[] _scopes;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly ConcurrentDictionary<string, GraphServiceClient> _perAccountClients
         = new(StringComparer.OrdinalIgnoreCase);
 
-    public GraphClientFactory(IAuthService authService, IOptions<EntraPimManagerOptions> options)
+    public GraphClientFactory(
+        IAuthService authService,
+        IOptions<EntraPimManagerOptions> options,
+        ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(options);
         _authService = authService;
         _scopes = options.Value.Scopes;
+        _loggerFactory = loggerFactory;
     }
 
     /// <inheritdoc />
@@ -52,7 +58,13 @@ public sealed class GraphClientFactory : IGraphClientFactory
     private GraphServiceClient BuildClient(string accountId, string tenantId, EntraCloud cloud)
     {
         var handlers = Microsoft.Graph.GraphClientFactory.CreateDefaultHandlers();
-        handlers.Add(new ClaimsChallengeHandler(_authService, _scopes, accountId, tenantId, cloud));
+        handlers.Add(new ClaimsChallengeHandler(
+            _authService,
+            _scopes,
+            accountId,
+            tenantId,
+            cloud,
+            _loggerFactory.CreateLogger<ClaimsChallengeHandler>()));
 
         var httpClient = Microsoft.Graph.GraphClientFactory.Create(handlers);
         return new GraphServiceClient(

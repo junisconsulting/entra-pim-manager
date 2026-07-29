@@ -7,6 +7,7 @@ using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.ErrorHandling;
 using EntraPimManager.Core.Models;
 using EntraPimManager.Core.Services;
+using Microsoft.Extensions.Logging;
 
 /// <summary>
 /// View model for the slide-in activation panel. Replaces the modal
@@ -29,9 +30,14 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
     /// <summary>Time budget for the activation / validation Graph call.</summary>
     private static readonly TimeSpan GraphCallTimeout = TimeSpan.FromSeconds(30);
 
+    // ponytail: a human MFA step-up (WAM prompt) cannot finish inside the 30 s
+    // Graph budget — give auth-context activations room to complete interaction.
+    private static readonly TimeSpan StepUpTimeout = TimeSpan.FromMinutes(5);
+
     private readonly IEligibilityAggregator _aggregator;
     private readonly IJustificationFavoritesStore _favoritesStore;
     private readonly IUserSettingsService _userSettings;
+    private readonly ILogger<ActivationPanelViewModel> _logger;
 
     [ObservableProperty]
     private PimEligibility? _eligibility;
@@ -74,11 +80,13 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
     public ActivationPanelViewModel(
         IEligibilityAggregator aggregator,
         IJustificationFavoritesStore favoritesStore,
-        IUserSettingsService userSettings)
+        IUserSettingsService userSettings,
+        ILogger<ActivationPanelViewModel> logger)
     {
         _aggregator = aggregator;
         _favoritesStore = favoritesStore;
         _userSettings = userSettings;
+        _logger = logger;
     }
 
     /// <summary>Raised when the slide-in panel finishes — outcome is null on cancel.</summary>
@@ -329,12 +337,19 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
         var ticket = string.IsNullOrWhiteSpace(TicketNumber)
             ? null
             : new TicketInfo(TicketNumber.Trim(), TicketSystem.Trim());
+
+        // Only a real activation stamps the auth-context claim — a dry-run
+        // must not fling an MFA prompt at the user.
+        var authContextClaim = !isValidationOnly && Policy.RequiresAuthContext
+            ? Policy.AuthContextClaim
+            : null;
         var request = new ActivationRequest(
             eligibility,
             TimeSpan.FromHours(DurationHours),
             string.IsNullOrWhiteSpace(Justification) ? null : Justification.Trim(),
             ticket,
-            isValidationOnly);
+            isValidationOnly,
+            authContextClaim);
 
         if (isValidationOnly)
         {
@@ -348,13 +363,19 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
         ActivationResult result;
         try
         {
-            using var cts = new CancellationTokenSource(GraphCallTimeout);
+            using var cts = new CancellationTokenSource(
+                request.AuthContextClaim is null ? GraphCallTimeout : StepUpTimeout);
             result = await _aggregator.ActivateAsync(account, request, cts.Token);
         }
         catch (Exception ex)
         {
-            // Offline or timeout — the service layer only maps ODataError, so
+            // Offline, timeout or an MSAL failure (e.g. cancelled WAM prompt) —
             // the panel stays open with a friendly message and the user can retry.
+            _logger.LogWarning(
+                ex,
+                "Activation submit failed (tenant {TenantId}, validationOnly {IsValidationOnly})",
+                account.TenantId,
+                isValidationOnly);
             ValidationMessage = PimErrorMapper.MapException(ex).Message;
             return;
         }
@@ -364,10 +385,11 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
             IsSubmitting = false;
         }
 
-        if (result.Error is { Severity: ErrorSeverity.Validation } validationError)
+        if (result.Error is { } error)
         {
-            // Keep the panel open so the user can correct the input.
-            ValidationMessage = validationError.Message;
+            // ANY error keeps the panel open with an inline message — a closing
+            // panel plus a suppressible toast is how failures become invisible.
+            ValidationMessage = error.Message;
             return;
         }
 

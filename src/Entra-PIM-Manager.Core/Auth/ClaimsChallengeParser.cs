@@ -2,6 +2,7 @@ namespace EntraPimManager.Core.Auth;
 
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 /// <summary>
@@ -50,6 +51,19 @@ public static class ClaimsChallengeParser
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Builds the claims-challenge JSON demanding the given Conditional Access
+    /// authentication-context class reference (acrs), e.g. <c>c1</c>. Used to
+    /// proactively request a step-up token for PIM activations whose policy
+    /// declares an authentication context.
+    /// </summary>
+    public static string BuildAuthContextClaims(string acrsValue)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(acrsValue);
+        return JsonSerializer.Serialize(
+            new { access_token = new { acrs = new { essential = true, value = acrsValue } } });
     }
 
     /// <summary>

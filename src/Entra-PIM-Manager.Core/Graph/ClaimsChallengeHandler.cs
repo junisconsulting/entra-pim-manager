@@ -3,6 +3,7 @@ namespace EntraPimManager.Core.Graph;
 using System.Net;
 using System.Net.Http.Headers;
 using EntraPimManager.Core.Auth;
+using Microsoft.Extensions.Logging;
 
 /// <summary>
 /// HTTP handler that transparently satisfies a Conditional Access claims challenge:
@@ -17,19 +18,22 @@ public sealed class ClaimsChallengeHandler : DelegatingHandler
     private readonly string _accountId;
     private readonly string _tenantId;
     private readonly EntraCloud _cloud;
+    private readonly ILogger<ClaimsChallengeHandler> _logger;
 
     public ClaimsChallengeHandler(
         IAuthService authService,
         string[] scopes,
         string accountId,
         string tenantId,
-        EntraCloud cloud)
+        EntraCloud cloud,
+        ILogger<ClaimsChallengeHandler> logger)
     {
         _authService = authService;
         _scopes = scopes;
         _accountId = accountId;
         _tenantId = tenantId;
         _cloud = cloud;
+        _logger = logger;
     }
 
     /// <inheritdoc />
@@ -51,6 +55,10 @@ public sealed class ClaimsChallengeHandler : DelegatingHandler
             // A 401 not caused by a claims challenge — let it bubble up.
             return response;
         }
+
+        // Never log the claims content — only the fact that a challenge occurred.
+        _logger.LogInformation(
+            "Conditional Access claims challenge received (HTTP 401) — re-acquiring token and retrying once");
 
         var result = await _authService
             .AcquireTokenForAccountAsync(_accountId, _tenantId, _cloud, _scopes, claims, cancellationToken)

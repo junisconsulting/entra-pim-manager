@@ -12,6 +12,8 @@ public sealed class PimErrorMapperTests
     [InlineData("TicketingRuleViolated", ErrorSeverity.Validation, "ticket")]
     [InlineData("MaximumDurationExceeded", ErrorSeverity.Validation, "duration")]
     [InlineData("MfaRuleViolated", ErrorSeverity.StepUpRequired, null)]
+    [InlineData("RoleAssignmentRequestAcrsValidationFailed", ErrorSeverity.StepUpRequired, null)]
+    [InlineData("GroupAssignmentRequestAcrsValidationFailed", ErrorSeverity.StepUpRequired, null)]
     [InlineData("EligibilityNotFound", ErrorSeverity.RefreshList, null)]
     [InlineData("RoleAssignmentExists", ErrorSeverity.Info, null)]
     [InlineData("InsufficientPermissions", ErrorSeverity.Fatal, null)]
@@ -136,6 +138,26 @@ public sealed class PimErrorMapperTests
         var mapped = PimErrorMapper.MapException(msal);
 
         Assert.Contains("public client flows", mapped.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void MapException_WamPromptCancelled_ReturnsFriendlyCancellation()
+    {
+        var mapped = PimErrorMapper.MapException(
+            new MsalClientException(MsalError.AuthenticationCanceledError, "User canceled authentication."));
+
+        Assert.Equal(ErrorSeverity.Info, mapped.Severity);
+        Assert.Contains("cancelled", mapped.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void MapException_WamPromptCancelledAsServiceException_ReturnsFriendlyCancellation()
+    {
+        // Proves the cancellation arm precedes the MsalServiceException arm.
+        var mapped = PimErrorMapper.MapException(
+            new MsalServiceException(MsalError.AuthenticationCanceledError, "User canceled authentication."));
+
+        Assert.Contains("cancelled", mapped.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

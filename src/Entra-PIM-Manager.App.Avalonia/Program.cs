@@ -52,6 +52,10 @@ public static class Program
 
         CreateShowWindowSignal();
 
+        // Rescue data that pre-0.4.0 versions kept in the Velopack install root.
+        // Must run before Serilog, the account store or the MSAL cache open files.
+        AppPaths.MigrateLegacyDataDirectory();
+
         return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

@@ -89,7 +89,7 @@ that account is added.
 The normal path requires no file editing: start the app, open **Settings**, and
 paste the `ClientId` from step 1 into the App Registration field. The app saves
 it to your per-user config at
-`%LocalAppData%\Entra-PIM-Manager\appsettings.local.json` and applies it on the
+`%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` and applies it on the
 next restart. The shipped `appsettings.json` carries only a placeholder.
 
 ### Optional: restrict the allowed tenants
@@ -128,7 +128,7 @@ commit either**.
    opens with an optional tenant field and a primary **Sign in** button.
 2. **Leave the tenant field blank and click Sign in** → the WAM picker appears;
    pick your admin account in the home tenant. It then appears in
-   `%LocalAppData%\Entra-PIM-Manager\accounts.json` and in the UI.
+   `%LocalAppData%\junis\Entra-PIM-Manager\accounts.json` and in the UI.
 3. **Add a second account in another tenant** → open "Add account…" again, enter
    that tenant's id or domain, and sign in. This requires admin consent in the
    second tenant (step 4 of this guide).

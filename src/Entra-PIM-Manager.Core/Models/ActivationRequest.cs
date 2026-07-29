@@ -17,9 +17,19 @@ namespace EntraPimManager.Core.Models;
 /// but does not actually create the schedule request. Used by the "Validieren"
 /// button so the user can see what activating would require before committing.
 /// </param>
+/// <param name="AuthContextClaim">
+/// The Conditional Access authentication-context class reference (acrs, e.g.
+/// <c>c1</c>) the activation must satisfy, from the policy's
+/// <c>AuthenticationContext_EndUser_Assignment</c> rule. When set, the activation
+/// POST is authorized with a token acquired for that claim (WAM step-up prompt
+/// if needed). Set only for real activations — never for validation-only runs.
+/// Device-code enrollments cannot satisfy this: their token path drops claims
+/// by documented design (see MsalAuthService).
+/// </param>
 public sealed record ActivationRequest(
     PimEligibility Eligibility,
     TimeSpan Duration,
     string? Justification,
     TicketInfo? Ticket,
-    bool IsValidationOnly = false);
+    bool IsValidationOnly = false,
+    string? AuthContextClaim = null);

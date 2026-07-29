@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Caching;
 using EntraPimManager.Core.Graph;
+using Microsoft.Extensions.Logging;
 
 /// <summary>
 /// Default <see cref="IAccountScopedServices"/> implementation. Each bundle's
@@ -14,13 +15,15 @@ public sealed class AccountScopedServices : IAccountScopedServices
 {
     private readonly IGraphClientFactory _graphFactory;
     private readonly PolicyCache _policyCache;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly ConcurrentDictionary<string, AccountScopedServiceBundle> _bundles =
         new(StringComparer.OrdinalIgnoreCase);
 
-    public AccountScopedServices(IGraphClientFactory graphFactory, PolicyCache policyCache)
+    public AccountScopedServices(IGraphClientFactory graphFactory, PolicyCache policyCache, ILoggerFactory loggerFactory)
     {
         _graphFactory = graphFactory;
         _policyCache = policyCache;
+        _loggerFactory = loggerFactory;
     }
 
     /// <inheritdoc />
@@ -41,8 +44,8 @@ public sealed class AccountScopedServices : IAccountScopedServices
     {
         var graph = _graphFactory.CreateFor(account);
         var groupResolver = new GroupResolver(graph);
-        var roleService = new PimRoleService(graph);
-        var groupService = new PimGroupService(graph, groupResolver);
+        var roleService = new PimRoleService(graph, _loggerFactory.CreateLogger<PimRoleService>());
+        var groupService = new PimGroupService(graph, groupResolver, _loggerFactory.CreateLogger<PimGroupService>());
         var policyService = new PolicyService(graph, _policyCache);
         return new AccountScopedServiceBundle(roleService, groupService, policyService);
     }
