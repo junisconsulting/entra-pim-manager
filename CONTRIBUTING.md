@@ -22,6 +22,10 @@ The build enforces warnings-as-errors and runs StyleCop analyzers; both must pas
 
 To produce a Velopack installer locally, see [packaging/velopack/README.md](packaging/velopack/README.md).
 
+The tray icons under `src/Entra-PIM-Manager.App.Avalonia/Assets/` are generated from
+their `.svg` sources — edit the SVG, then run `build/generate-tray-icons.sh` and commit
+the regenerated `.ico` files. The script needs `librsvg2-bin` and `imagemagick`.
+
 ## Code conventions
 
 ### Language

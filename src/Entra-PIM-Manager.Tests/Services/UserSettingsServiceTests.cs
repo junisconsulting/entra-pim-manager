@@ -225,6 +225,43 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task LoadAsync_LegacyFileWithoutVerifiedClientId_LeavesItUnset()
+    {
+        // Backwards-compat: a settings.json written before the App Registration
+        // verification feature has no VerifiedClientId. It must stay null so the
+        // shell's one-time backfill can adopt the working ClientId instead of a
+        // stale value being treated as proof.
+        const string legacyJson = """
+            {
+              "Theme": "System",
+              "DefaultDurationHours": 1.0,
+              "ExpiryWarningEnabled": true,
+              "ExpiryWarningMinutes": 5
+            }
+            """;
+        await File.WriteAllTextAsync(_filePath, legacyJson);
+        var store = CreateStore();
+
+        await store.LoadAsync();
+
+        Assert.Null(store.Current.VerifiedClientId);
+    }
+
+    [Fact]
+    public async Task SaveAsync_PersistsVerifiedClientId()
+    {
+        var verified = UserSettings.Default with { VerifiedClientId = "8f3a1c2e-0000-4000-8000-000000000001" };
+
+        var first = CreateStore();
+        await first.SaveAsync(verified);
+
+        var second = CreateStore();
+        await second.LoadAsync();
+
+        Assert.Equal("8f3a1c2e-0000-4000-8000-000000000001", second.Current.VerifiedClientId);
+    }
+
+    [Fact]
     public async Task SaveAsync_PersistsSettingsAccountsExpanded()
     {
         var collapsed = UserSettings.Default with { SettingsAccountsExpanded = false };

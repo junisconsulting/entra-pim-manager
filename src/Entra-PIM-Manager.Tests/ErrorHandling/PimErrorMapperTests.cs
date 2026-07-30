@@ -1,5 +1,6 @@
 namespace EntraPimManager.Tests.ErrorHandling;
 
+using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.ErrorHandling;
 using EntraPimManager.Core.Models;
 using Microsoft.Graph.Models.ODataErrors;
@@ -53,6 +54,35 @@ public sealed class PimErrorMapperTests
         var mapped = PimErrorMapper.Map(error);
 
         Assert.Equal(ErrorSeverity.Fatal, mapped.Severity);
+    }
+
+    [Fact]
+    public void Describe_StepUpRequiredOnDeviceCodeAccount_ExplainsTheSignInMethodCannotSatisfyIt()
+    {
+        var error = new UserFacingError(ErrorSeverity.StepUpRequired, "generic step-up message", null);
+
+        var described = PimErrorMapper.Describe(error, AuthMethod.DeviceCode);
+
+        Assert.Contains("device-code", described, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("standard sign-in", described, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("try again", described, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Describe_StepUpRequiredOnBrokerAccount_KeepsTheOriginalMessage()
+    {
+        // The broker path CAN satisfy the challenge — retrying is sound advice there.
+        var error = new UserFacingError(ErrorSeverity.StepUpRequired, "generic step-up message", null);
+
+        Assert.Equal("generic step-up message", PimErrorMapper.Describe(error, AuthMethod.Broker));
+    }
+
+    [Fact]
+    public void Describe_OtherSeverityOnDeviceCodeAccount_KeepsTheOriginalMessage()
+    {
+        var error = new UserFacingError(ErrorSeverity.Validation, "A justification is required.", "justification");
+
+        Assert.Equal("A justification is required.", PimErrorMapper.Describe(error, AuthMethod.DeviceCode));
     }
 
     [Theory]

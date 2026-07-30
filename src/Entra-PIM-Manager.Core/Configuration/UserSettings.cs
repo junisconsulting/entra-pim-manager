@@ -31,6 +31,18 @@ namespace EntraPimManager.Core.Configuration;
 /// existed deserialize to the constructor default (on), which is the intended
 /// behaviour.
 /// </param>
+/// <param name="VerifiedClientId">
+/// The App Registration ClientId a sign-in has actually succeeded with. Set
+/// when an account is enrolled, and compared against the active ClientId to
+/// decide whether Settings may show the App Registration as verified.
+/// <para/>
+/// A well-formed GUID proves nothing on its own — the common setup mistakes
+/// (pasting the Object or Directory id, "Allow public client flows" off, an
+/// unregistered broker redirect URI, missing admin consent) all pass a format
+/// check and only surface at sign-in. Recording the id that actually worked is
+/// what keeps the green check honest, including after the ClientId is changed.
+/// <c>null</c> until the first successful enrollment.
+/// </param>
 public sealed record UserSettings(
     ThemePreference Theme,
     double DefaultDurationHours,
@@ -39,7 +51,8 @@ public sealed record UserSettings(
     string? LastUsedAccountKey = null,
     Dictionary<string, bool>? ExpandedTenants = null,
     bool SettingsAccountsExpanded = true,
-    bool AutomaticUpdatesEnabled = true)
+    bool AutomaticUpdatesEnabled = true,
+    string? VerifiedClientId = null)
 {
     /// <summary>Defaults applied when no settings file exists or the file is unreadable.</summary>
     public static UserSettings Default { get; } = new(
