@@ -1,0 +1,103 @@
+name: Release
+
+# Publishing a release is a deliberate act: push a version tag and this builds
+# the Velopack package and creates the GitHub release from it.
+#
+#   git tag v0.4.1 && git push origin v0.4.1
+#
+# The release body is packaging/release-notes/{version}.md — the same file the
+# installer and the in-app update prompt show, so all three can never drift.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Derive version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+              throw "Tag '${{ github.ref_name }}' is not vMAJOR.MINOR.PATCH."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Require release notes
+        shell: pwsh
+        run: |
+          # Fail before building rather than shipping a release with an empty body.
+          $notes = "packaging/release-notes/${{ steps.version.outputs.version }}.md"
+          if (-not (Test-Path $notes)) { throw "Missing release notes: $notes" }
+
+      - name: Build and test
+        run: |
+          dotnet build -c Release -warnaserror
+          dotnet test -c Release --no-build
+
+      - name: Fetch previous releases
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          # Velopack needs the existing feed on disk to generate a delta package
+          # (a few hundred KB instead of a ~65 MB full download). Missing on the
+          # first-ever release, hence continue-on-error.
+          $project = 'src/Entra-PIM-Manager.App.Avalonia/Entra-PIM-Manager.App.Avalonia.csproj'
+          $velopack = ([xml](Get-Content $project)).Project.ItemGroup.PackageReference |
+              Where-Object { $_.Include -eq 'Velopack' } |
+              Select-Object -First 1 -ExpandProperty Version
+          dotnet tool install --global vpk --version $velopack
+          vpk download github `
+              --repoUrl '${{ github.server_url }}/${{ github.repository }}' `
+              --channel win `
+              --outputDir packaging/velopack/releases
+
+      - name: Pack with Velopack
+        shell: pwsh
+        run: ./packaging/velopack/build.ps1 -Version ${{ steps.version.outputs.version }}
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $releases = 'packaging/velopack/releases'
+
+          # The update feed matters as much as the installer: GithubSource reads
+          # releases.win.json / RELEASES, so an installed client that only finds
+          # the .exe attached will never see the update. Named explicitly rather
+          # than globbing the folder, which also holds the previous version's
+          # full package pulled in for the delta.
+          $assets = @(
+              "$releases/releases.win.json"
+              "$releases/RELEASES"
+              "$releases/Entra-PIM-Manager-win-Setup.exe"
+              "$releases/Entra-PIM-Manager-win-Portable.zip"
+              "$releases/Entra-PIM-Manager-$version-full.nupkg"
+          )
+          $delta = "$releases/Entra-PIM-Manager-$version-delta.nupkg"
+          if (Test-Path $delta) { $assets += $delta }
+
+          $missing = $assets | Where-Object { -not (Test-Path $_) }
+          if ($missing) { throw "Expected release assets are missing:`n$($missing -join "`n")" }
+
+          gh release create '${{ github.ref_name }}' `
+              --title '${{ github.ref_name }}' `
+              --notes-file "packaging/release-notes/$version.md" `
+              --verify-tag `
+              $assets
