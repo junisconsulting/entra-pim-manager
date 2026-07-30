@@ -35,6 +35,7 @@ public sealed class TrayPopupController
     //   Amber — signed in but no active PIM role right now
     //   Green — at least one active PIM role, none expiring soon
     private static readonly WindowIcon RedIcon = LoadIcon("avares://Entra-PIM-Manager/Assets/tray-icon-red.ico");
+    private static readonly WindowIcon GreyIcon = LoadIcon("avares://Entra-PIM-Manager/Assets/tray-icon-grey.ico");
     private static readonly WindowIcon AmberIcon = LoadIcon("avares://Entra-PIM-Manager/Assets/tray-icon-amber.ico");
     private static readonly WindowIcon GreenIcon = LoadIcon("avares://Entra-PIM-Manager/Assets/tray-icon-green.ico");
 
@@ -176,14 +177,19 @@ public sealed class TrayPopupController
         }
         else if (_viewModel.ActiveCount == 0)
         {
-            nextIcon = AmberIcon;
+            // Resting state — nothing is wrong, so it must not compete for
+            // attention with the amber expiry warning.
+            nextIcon = GreyIcon;
             nextTooltip = "Entra PIM Manager — no active roles";
         }
         else if (_viewModel.MostUrgentExpiring is { } urgent)
         {
             // At least one active role is inside the warning window — raise the
             // tray to an attention state and put the live countdown in the tooltip.
-            nextIcon = RedIcon;
+            // Amber, not red: the role is still active (the warning window only
+            // covers RemainingTime > 0), and red is reserved for "you have no
+            // working privilege" so it doesn't read as "already expired".
+            nextIcon = AmberIcon;
             var more = _viewModel.ExpiringCount > 1
                 ? $" (+{_viewModel.ExpiringCount - 1} more)"
                 : string.Empty;
