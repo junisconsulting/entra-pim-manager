@@ -1066,10 +1066,61 @@
                    per cloud at startup. -->
               <Border Classes="settings-card">
               <StackPanel Spacing="8">
-                <TextBlock Text="APP REGISTRATION"
-                           FontSize="{DynamicResource FontCaption}"
-                           FontWeight="Medium"
-                           Foreground="{DynamicResource TextTertiaryBrush}" />
+                <!-- Header doubles as the collapse toggle. The green check is
+                     only ever shown for a configuration a sign-in has actually
+                     proven — see SettingsPanelViewModel.IsAppRegistrationVerified. -->
+                <Button Classes="ghost"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
+                        Padding="0"
+                        Command="{Binding ToggleAppRegistrationSectionCommand}">
+                  <Grid ColumnDefinitions="Auto,Auto,*,Auto" VerticalAlignment="Center">
+                    <TextBlock Grid.Column="0"
+                               Text="APP REGISTRATION"
+                               FontSize="{DynamicResource FontCaption}"
+                               FontWeight="Medium"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               VerticalAlignment="Center" />
+                    <!-- Same dot-plus-label badge the active-role rows use, so
+                         "green means confirmed" reads the same everywhere. A
+                         PathIcon check clips here: its glyph is far wider than
+                         it is tall, unlike the square chevrons next to it. -->
+                    <Border Grid.Column="1"
+                            Background="{DynamicResource SuccessSoftBrush}"
+                            CornerRadius="4"
+                            Padding="6,2"
+                            Margin="8,0,0,0"
+                            VerticalAlignment="Center"
+                            ToolTip.Tip="An account signed in successfully with this App Registration."
+                            IsVisible="{Binding IsAppRegistrationVerified}">
+                      <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                        <Ellipse Width="6" Height="6"
+                                 Fill="{DynamicResource SuccessBrush}"
+                                 VerticalAlignment="Center" />
+                        <TextBlock Text="Verified"
+                                   FontSize="10"
+                                   FontWeight="Medium"
+                                   Foreground="{DynamicResource SuccessBrush}" />
+                      </StackPanel>
+                    </Border>
+                    <!-- Collapsed: chevron-right. Expanded: chevron-down. -->
+                    <PathIcon Grid.Column="3"
+                              Data="M9 6l6 6-6 6"
+                              Width="12" Height="12"
+                              Foreground="{DynamicResource TextTertiaryBrush}"
+                              VerticalAlignment="Center"
+                              IsVisible="{Binding !IsAppRegistrationSectionExpanded}" />
+                    <PathIcon Grid.Column="3"
+                              Data="M6 9l6 6 6-6"
+                              Width="12" Height="12"
+                              Foreground="{DynamicResource TextTertiaryBrush}"
+                              VerticalAlignment="Center"
+                              IsVisible="{Binding IsAppRegistrationSectionExpanded}" />
+                  </Grid>
+                </Button>
+
+                <StackPanel Spacing="8"
+                            IsVisible="{Binding IsAppRegistrationSectionExpanded}">
                 <TextBlock Text="ClientId of your Entra App Registration (multi-tenant)."
                            FontSize="{DynamicResource FontSmall}"
                            Foreground="{DynamicResource TextSecondaryBrush}"
@@ -1082,6 +1133,33 @@
                         CornerRadius="6"
                         Padding="10,8">
                   <TextBlock Text="Not configured yet — paste the GUID below and click Save."
+                             FontSize="{DynamicResource FontSmall}"
+                             Foreground="{DynamicResource TextPrimaryBrush}"
+                             TextWrapping="Wrap" />
+                </Border>
+
+                <!-- Configured but unproven. Deliberately neutral, not green:
+                     a saved GUID says nothing about whether the registration
+                     itself works. Only a sign-in settles that. -->
+                <Border IsVisible="{Binding IsAppRegistrationUnverified}"
+                        Background="{DynamicResource Surface1Brush}"
+                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6"
+                        Padding="10,8">
+                  <TextBlock Text="Configured. Add an account below to verify the setup — signing in is what confirms the ClientId, public client flows, redirect URI and admin consent."
+                             FontSize="{DynamicResource FontSmall}"
+                             Foreground="{DynamicResource TextSecondaryBrush}"
+                             TextWrapping="Wrap" />
+                </Border>
+
+                <!-- Verified. Shown inside the body too, so expanding the
+                     collapsed card still explains why it is checked. -->
+                <Border IsVisible="{Binding IsAppRegistrationVerified}"
+                        Background="{DynamicResource SuccessSoftBrush}"
+                        CornerRadius="6"
+                        Padding="10,8">
+                  <TextBlock Text="Verified — an account signed in successfully with this App Registration."
                              FontSize="{DynamicResource FontSmall}"
                              Foreground="{DynamicResource TextPrimaryBrush}"
                              TextWrapping="Wrap" />
@@ -1119,6 +1197,7 @@
                             Command="{Binding RestartAppCommand}" />
                   </Grid>
                 </Border>
+                </StackPanel>
               </StackPanel>
               </Border>
 

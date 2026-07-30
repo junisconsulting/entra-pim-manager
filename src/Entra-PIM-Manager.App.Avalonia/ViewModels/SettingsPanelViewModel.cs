@@ -84,6 +84,15 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     private bool _isAccountsSectionExpanded = true;
 
     /// <summary>
+    /// Whether the APP REGISTRATION section is expanded. Not persisted — it is
+    /// derived on each <see cref="Open"/> from whether the configuration is
+    /// verified, so a proven setup stays out of the way while an unproven one
+    /// keeps asking for attention.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isAppRegistrationSectionExpanded = true;
+
+    /// <summary>
     /// Bound to the App Registration ClientId TextBox. Validated as a GUID
     /// before <see cref="SaveClientIdCommand"/> writes it to the local config
     /// file. Seeded from the current effective value when the panel opens.
@@ -179,6 +188,26 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         || !Guid.TryParse(_options.ClientId, out _);
 
     /// <summary>
+    /// True once a sign-in has actually succeeded against the active ClientId
+    /// (see <see cref="UserSettings.VerifiedClientId"/>). Only then does the
+    /// section collapse to a green check — a saved GUID alone says nothing
+    /// about whether the App Registration itself is usable.
+    /// </summary>
+    public bool IsAppRegistrationVerified =>
+        !IsCurrentClientIdMissing
+        && string.Equals(
+            _userSettings.Current.VerifiedClientId,
+            _options.ClientId,
+            StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when a ClientId is configured but no sign-in has proven it yet.
+    /// Drives the neutral "sign in to verify" hint — deliberately not green.
+    /// </summary>
+    public bool IsAppRegistrationUnverified =>
+        !IsCurrentClientIdMissing && !IsAppRegistrationVerified;
+
+    /// <summary>
     /// Folder holding the rolling Serilog files — the same location
     /// <c>App.BuildHost</c> configures the file sink to write to.
     /// </summary>
@@ -225,6 +254,18 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         OnPropertyChanged(nameof(SelectAccountCommand));
     }
 
+    /// <summary>
+    /// Re-raises the App Registration verification properties. Called by the
+    /// shell when a sign-in proves the configuration while the panel is open,
+    /// so the card flips to its verified state without a reopen.
+    /// </summary>
+    public void NotifyAppRegistrationVerificationChanged()
+    {
+        OnPropertyChanged(nameof(IsAppRegistrationVerified));
+        OnPropertyChanged(nameof(IsAppRegistrationUnverified));
+        OnPropertyChanged(nameof(IsCurrentClientIdMissing));
+    }
+
     /// <summary>Seeds the controls from the current settings + autostart state and slides the panel in.</summary>
     public void Open()
     {
@@ -246,6 +287,11 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             // placeholder hint shows.
             ClientIdInput = IsCurrentClientIdMissing ? string.Empty : _options.ClientId;
             ShowRestartPrompt = false;
+
+            // Verified setups collapse out of the way; anything unproven stays
+            // open so the next step is visible without hunting for it.
+            IsAppRegistrationSectionExpanded = !IsAppRegistrationVerified;
+            NotifyAppRegistrationVerificationChanged();
 
             // Pulled live from the registry so a parallel toggle in the tray
             // menu is reflected even mid-session.
@@ -469,6 +515,10 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
     [RelayCommand]
     private void ToggleAccountsSection() => IsAccountsSectionExpanded = !IsAccountsSectionExpanded;
+
+    [RelayCommand]
+    private void ToggleAppRegistrationSection() =>
+        IsAppRegistrationSectionExpanded = !IsAppRegistrationSectionExpanded;
 
     [RelayCommand]
     private void Close()

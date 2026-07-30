@@ -274,6 +274,16 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             var accounts = await _authService.GetAllAccountsAsync(ct);
             ReplaceAccounts(accounts);
 
+            // Installations that enrolled their accounts before VerifiedClientId
+            // existed have no record to compare against. Those enrollments were
+            // still proven by a real sign-in — against the ClientId configured
+            // then, which for an upgrade is necessarily the current one. Adopt
+            // it once so they don't get told to verify an already-working setup.
+            if (_userSettings.Current.VerifiedClientId is null && Accounts.Count > 0)
+            {
+                MarkAppRegistrationVerified();
+            }
+
             // Restore last-used account if it's still enrolled. ReplaceAccounts
             // already set ActiveAccount to the first enrollment as a fallback;
             // override it here so the user's actual most-recent choice wins.
@@ -895,11 +905,34 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         EnrollAccountItem(added);
         ActiveAccount = added;
         IsSignedIn = true;
+
+        // A completed sign-in is the only real proof the App Registration is
+        // set up correctly — it exercises the ClientId, public client flows,
+        // the broker redirect URI and admin consent in one go. Record it so
+        // Settings can show the configuration as verified.
+        MarkAppRegistrationVerified();
+
         await RefreshAsync();
 
         // Refresh rebuilt the groups; expand the new one (OnActiveAccountChanged
         // ran before the group existed so its expand call was a no-op).
         ExpandGroupFor(added);
+    }
+
+    /// <summary>
+    /// Stamps the active ClientId as proven. No-op when it is already recorded,
+    /// so the common case doesn't rewrite the settings file.
+    /// </summary>
+    private void MarkAppRegistrationVerified()
+    {
+        if (NeedsConfiguration
+            || string.Equals(_userSettings.Current.VerifiedClientId, _options.ClientId, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        PersistShellSettings(s => s with { VerifiedClientId = _options.ClientId });
+        _settingsPanel.NotifyAppRegistrationVerificationChanged();
     }
 
     private bool IsSameEnrollment(SignedInAccount? left, SignedInAccount? right)
