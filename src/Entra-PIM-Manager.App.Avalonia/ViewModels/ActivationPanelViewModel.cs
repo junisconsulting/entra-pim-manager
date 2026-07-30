@@ -376,7 +376,7 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
                 "Activation submit failed (tenant {TenantId}, validationOnly {IsValidationOnly})",
                 account.TenantId,
                 isValidationOnly);
-            ValidationMessage = PimErrorMapper.MapException(ex).Message;
+            ValidationMessage = PimErrorMapper.Describe(PimErrorMapper.MapException(ex), account.AuthMethod);
             return;
         }
         finally
@@ -389,7 +389,7 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
         {
             // ANY error keeps the panel open with an inline message — a closing
             // panel plus a suppressible toast is how failures become invisible.
-            ValidationMessage = error.Message;
+            ValidationMessage = PimErrorMapper.Describe(error, account.AuthMethod);
             return;
         }
 

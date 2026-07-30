@@ -1,5 +1,6 @@
 namespace EntraPimManager.Core.ErrorHandling;
 
+using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Models;
 using Microsoft.Graph.Models.ODataErrors;
 using Microsoft.Identity.Client;
@@ -101,6 +102,24 @@ public static class PimErrorMapper
             _ =>
                 Error(ErrorSeverity.Fatal, "An unexpected error occurred. See the log file for details."),
         };
+    }
+
+    /// <summary>
+    /// Returns the message to show for <paramref name="error"/> on an account
+    /// enrolled with <paramref name="authMethod"/>. A device-code enrollment
+    /// cannot satisfy a Conditional Access authentication context — that token
+    /// path has no way to carry the required claim — so the generic "please try
+    /// again" would send the user into a loop that can never succeed. Name the
+    /// cause and the way out instead.
+    /// </summary>
+    public static string Describe(UserFacingError error, AuthMethod authMethod)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+
+        return error.Severity == ErrorSeverity.StepUpRequired && authMethod == AuthMethod.DeviceCode
+            ? "This role requires additional verification, which device-code sign-in cannot provide. "
+              + "Remove this account in Settings and add it again using the standard sign-in."
+            : error.Message;
     }
 
     /// <summary>

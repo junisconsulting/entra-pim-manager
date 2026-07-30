@@ -1241,6 +1241,24 @@
                                            TextTrimming="CharacterEllipsis"
                                            Margin="0,2,0,0"
                                            ToolTip.Tip="{Binding TenantId}" />
+
+                                <!-- Device-code enrollments are limited (no CA
+                                     auth-context step-up); the badge makes an
+                                     otherwise invisible account property visible. -->
+                                <Border IsVisible="{Binding IsDeviceCodeAccount}"
+                                        Background="{DynamicResource Surface1Brush}"
+                                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Padding="5,1"
+                                        HorizontalAlignment="Left"
+                                        Margin="0,4,0,0"
+                                        ToolTip.Tip="Signed in with a device code. Roles protected by a Conditional Access authentication context cannot be activated with this sign-in method — remove the account and add it again using the standard sign-in.">
+                                  <TextBlock Text="Device code"
+                                             FontSize="{DynamicResource FontSmall}"
+                                             FontWeight="Medium"
+                                             Foreground="{DynamicResource TextSecondaryBrush}" />
+                                </Border>
                               </StackPanel>
                             </Grid>
                           </Button>

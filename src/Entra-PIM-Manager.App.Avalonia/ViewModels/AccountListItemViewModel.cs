@@ -42,5 +42,13 @@ public sealed partial class AccountListItemViewModel : ObservableObject
     /// </summary>
     public string TenantLabel => TenantLabelFormatter.Format(TenantName, Account.TenantId, includeId: true);
 
+    /// <summary>
+    /// True for enrollments signed in via the device-code fallback. Surfaced as a
+    /// row badge because the method is fixed at enrollment time and silently
+    /// limits what the account can do — most visibly, it cannot satisfy a
+    /// Conditional Access authentication context on role activation.
+    /// </summary>
+    public bool IsDeviceCodeAccount => Account.AuthMethod == AuthMethod.DeviceCode;
+
     partial void OnTenantNameChanged(string? value) => OnPropertyChanged(nameof(TenantLabel));
 }
