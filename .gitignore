@@ -14,9 +14,12 @@ appsettings.local.json
 .idea/
 *.DotSettings.user
 
-# Claude Code — AI tooling stays out of the public repo
+# Claude Code — shared procedures are tracked; personal settings and scratch files are not
 .claude/*
-CLAUDE.md
+!.claude/skills/
+!.claude/agents/
+!.claude/hooks/
+!.claude/settings.json
 
 # Velopack / packaging output
 packaging/**/output/
