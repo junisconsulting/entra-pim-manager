@@ -21,10 +21,22 @@ Das Skript:
 
 `publish/` und `releases/` sind gitignored.
 
-> **Nur auf Windows baubar:** Velopack packt immer nur für das Host-Betriebssystem
-> (`vpk pack` auf Linux erzeugt z. B. ein `.AppImage`). Der Windows-`Setup.exe` muss
-> daher auf einer Windows-Maschine gebaut werden — ein Cross-Build des Pakets von
-> Linux/macOS aus ist nicht möglich.
+> **Cross-Build von Linux aus ist möglich:** `vpk pack` zielt *standardmäßig* auf das
+> Host-Betriebssystem — auf Linux entsteht also ein `.AppImage`. Mit vorangestellter
+> OS-Direktive baut dieselbe CLI aber ein Windows-Paket:
+>
+> ```bash
+> vpk '[win]' pack --channel win --packId Entra-PIM-Manager --packVersion X.Y.Z \
+>     --packDir <publish-dir> --mainExe Entra-PIM-Manager.exe --shortcuts StartMenuRoot
+> ```
+>
+> Die Direktive muss in der Shell gequotet werden (`'[win]'`) — ungequotet frisst die
+> Shell die Klammern und `vpk` fällt auf den Host-Zielmodus zurück. Verifiziert mit
+> vpk 1.2.0: *"Directive enabled for cross-compiling from Linux (current os) to Windows."*
+>
+> Das **Code-Signing** bleibt Windows-gebunden (`signtool`). Ein signiertes, promotable
+> Release-Artefakt entsteht daher weiterhin nur auf Windows bzw. in der Release-CI;
+> der Linux-Cross-Build ist für lokales Testen des Paketformats gedacht.
 
 ## Installationsmodell
 
