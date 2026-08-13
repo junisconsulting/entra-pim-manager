@@ -93,15 +93,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     private bool _isAppRegistrationSectionExpanded = true;
 
     /// <summary>
-    /// Bound to the App Registration ClientId TextBox. Validated as a GUID
-    /// before <see cref="SaveClientIdCommand"/> writes it to the local config
-    /// file. Seeded from the current effective value when the panel opens.
-    /// </summary>
-    [ObservableProperty]
-    private string _clientIdInput = string.Empty;
-
-    /// <summary>
-    /// True after the user successfully saved a new ClientId. Drives the
+    /// True after the user successfully saved a client id. Drives the
     /// inline "Restart required" banner — the new value only takes effect
     /// on the next process start.
     /// </summary>
@@ -125,6 +117,13 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         _selectedTheme = ThemeOptions[0];
         _selectedDuration = DurationOptions[0];
         _selectedExpiryThreshold = ExpiryThresholdOptions[0];
+
+        AppRegistrations = [.. Enum.GetValues<EntraCloud>()
+            .Select(c => new AppRegistrationRowViewModel(
+                c,
+                _options,
+                () => _userSettings.Current.VerifiedClientIds ?? [],
+                SaveClientId))];
     }
 
     /// <summary>Raised when the panel closes — payload-less; the shell uses it to drop the exclusive-toggle.</summary>
@@ -172,40 +171,20 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     public bool CanManageStartMenuShortcut => _shortcuts.IsSupported;
 
     /// <summary>
-    /// True when <see cref="ClientIdInput"/> contains a syntactically valid
-    /// GUID. Drives the enabled state of the Save button so the user gets
-    /// inline feedback before submission.
+    /// One row per sovereign cloud. National clouds are isolated instances, so an
+    /// app registration exists in exactly one of them and each cloud needs its own
+    /// client id — see <see cref="AppRegistrationRowViewModel"/>.
     /// </summary>
-    public bool IsClientIdInputValid => Guid.TryParse(ClientIdInput, out _);
+    public IReadOnlyList<AppRegistrationRowViewModel> AppRegistrations { get; }
 
     /// <summary>
-    /// True when the currently active configuration has no usable ClientId —
-    /// either empty or a non-GUID placeholder. Drives the inline "not yet
-    /// configured" hint inside the App Registration section.
+    /// True when at least one cloud is configured and every configured cloud has
+    /// been proven by a sign-in. Drives the single "Verified" badge in the section
+    /// header. A cloud left unconfigured is a deliberate choice, not a defect.
     /// </summary>
-    public bool IsCurrentClientIdMissing =>
-        string.IsNullOrWhiteSpace(_options.ClientId)
-        || !Guid.TryParse(_options.ClientId, out _);
-
-    /// <summary>
-    /// True once a sign-in has actually succeeded against the active ClientId
-    /// (see <see cref="UserSettings.VerifiedClientId"/>). Only then does the
-    /// section collapse to a green check — a saved GUID alone says nothing
-    /// about whether the App Registration itself is usable.
-    /// </summary>
-    public bool IsAppRegistrationVerified =>
-        !IsCurrentClientIdMissing
-        && string.Equals(
-            _userSettings.Current.VerifiedClientId,
-            _options.ClientId,
-            StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// True when a ClientId is configured but no sign-in has proven it yet.
-    /// Drives the neutral "sign in to verify" hint — deliberately not green.
-    /// </summary>
-    public bool IsAppRegistrationUnverified =>
-        !IsCurrentClientIdMissing && !IsAppRegistrationVerified;
+    public bool AreAppRegistrationsVerified =>
+        AppRegistrations.Any(r => !r.IsMissing)
+        && AppRegistrations.All(r => r.IsMissing || r.IsVerified);
 
     /// <summary>
     /// Folder holding the rolling Serilog files — the same location
@@ -261,9 +240,12 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     /// </summary>
     public void NotifyAppRegistrationVerificationChanged()
     {
-        OnPropertyChanged(nameof(IsAppRegistrationVerified));
-        OnPropertyChanged(nameof(IsAppRegistrationUnverified));
-        OnPropertyChanged(nameof(IsCurrentClientIdMissing));
+        foreach (var row in AppRegistrations)
+        {
+            row.NotifyStateChanged();
+        }
+
+        OnPropertyChanged(nameof(AreAppRegistrationsVerified));
     }
 
     /// <summary>Seeds the controls from the current settings + autostart state and slides the panel in.</summary>
@@ -282,16 +264,22 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             AutomaticUpdatesEnabled = current.AutomaticUpdatesEnabled;
             IsAccountsSectionExpanded = current.SettingsAccountsExpanded;
 
-            // Pre-fill the ClientId input with the current effective value
-            // when it's already a real GUID; otherwise leave it blank so the
+            // Pre-fill each row's input with the current effective value when
+            // it's already a real GUID; otherwise leave it blank so the
             // placeholder hint shows.
-            ClientIdInput = IsCurrentClientIdMissing ? string.Empty : _options.ClientId;
+            foreach (var row in AppRegistrations)
+            {
+                row.Seed();
+            }
+
             ShowRestartPrompt = false;
 
-            // Verified setups collapse out of the way; anything unproven stays
-            // open so the next step is visible without hunting for it.
-            IsAppRegistrationSectionExpanded = !IsAppRegistrationVerified;
-            NotifyAppRegistrationVerificationChanged();
+            // A fully proven setup collapses out of the way; as long as any cloud
+            // is configured-but-unproven the section stays open so the next step
+            // is visible without hunting for it. A cloud left entirely unconfigured
+            // is a deliberate choice, not an open task.
+            IsAppRegistrationSectionExpanded = AppRegistrations.Any(r => r.IsUnverified)
+                || AppRegistrations.All(r => r.IsMissing);
 
             // Pulled live from the registry so a parallel toggle in the tray
             // menu is reflected even mid-session.
@@ -310,23 +298,24 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Persists the entered ClientId to the per-user
-    /// <c>appsettings.local.json</c> and surfaces the restart-required banner.
-    /// The new ClientId only takes effect on the next process launch because
-    /// MSAL's PCA is built once per cloud at startup.
+    /// Persists a cloud's client id to the per-user <c>appsettings.local.json</c>
+    /// and surfaces the restart-required banner. The new value only takes effect
+    /// on the next process launch because MSAL's PCA is built once per cloud at
+    /// startup. Invoked by the rows in <see cref="AppRegistrations"/>.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(IsClientIdInputValid))]
-    private void SaveClientId()
+    private void SaveClientId(EntraCloud cloud, string clientId)
     {
         try
         {
-            LocalConfigStore.SaveClientId(ClientIdInput.Trim());
+            LocalConfigStore.SaveClientId(AppPaths.LocalConfigFile, cloud, clientId);
             ShowRestartPrompt = true;
-            _logger.LogInformation("App Registration ClientId saved; awaiting restart.");
+            _logger.LogInformation(
+                "App Registration client id saved for cloud {Cloud}; awaiting restart.",
+                cloud);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to save App Registration ClientId");
+            _logger.LogError(ex, "Failed to save the App Registration client id for cloud {Cloud}", cloud);
         }
     }
 
@@ -391,12 +380,6 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         {
             await handler.Invoke();
         }
-    }
-
-    partial void OnClientIdInputChanged(string value)
-    {
-        SaveClientIdCommand.NotifyCanExecuteChanged();
-        OnPropertyChanged(nameof(IsClientIdInputValid));
     }
 
     partial void OnIsOpenChanged(bool value) => OnPropertyChanged(nameof(PanelOffsetX));

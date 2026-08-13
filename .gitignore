@@ -20,6 +20,9 @@ appsettings.local.json
 !.claude/agents/
 !.claude/hooks/
 !.claude/settings.json
+# The manual test checklist IS the release gate — the `release` skill refuses to
+# tag without a signed-off run. Untracked it existed on one machine only.
+!.claude/manual-test-checklist.md
 
 # Velopack / packaging output
 packaging/**/output/

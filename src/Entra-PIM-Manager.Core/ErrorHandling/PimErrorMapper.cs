@@ -158,6 +158,27 @@ public static class PimErrorMapper
     /// </summary>
     private static UserFacingError MapMsal(MsalServiceException msal)
     {
+        // Raised by MsalAuthService before it can even build a PCA: the selected
+        // cloud has no app registration configured. National clouds are isolated,
+        // so each one needs its own registration — the message names the cloud.
+        if (msal.ErrorCode == "app_registration_missing")
+        {
+            return Error(
+                ErrorSeverity.Fatal,
+                $"{msal.Message} Open Settings → App Registration and enter the client id for that cloud.");
+        }
+
+        // AADSTS700016: the client id is unknown in the directory it was sent to.
+        // The usual cause is a cloud mismatch — a Global client id cannot exist in
+        // the 21Vianet directory (and vice versa), because the clouds are separate
+        // instances with separate app registrations.
+        if (msal.Message.Contains("AADSTS700016", StringComparison.Ordinal))
+        {
+            return Error(
+                ErrorSeverity.Fatal,
+                "This app registration is unknown in the selected cloud. Each cloud (Global, China) needs its own app registration — check the client id in Settings → App Registration.");
+        }
+
         // AADSTS7000218: the token endpoint demanded a client secret/assertion,
         // i.e. the app registration is treated as a confidential client. A desktop
         // app is a PUBLIC client and cannot ship a secret — the registration is

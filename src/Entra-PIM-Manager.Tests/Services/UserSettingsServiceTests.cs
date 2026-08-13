@@ -225,11 +225,11 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task LoadAsync_LegacyFileWithoutVerifiedClientId_LeavesItUnset()
+    public async Task LoadAsync_LegacyFileWithoutVerifiedClientIds_LeavesItUnset()
     {
         // Backwards-compat: a settings.json written before the App Registration
-        // verification feature has no VerifiedClientId. It must stay null so the
-        // shell's one-time backfill can adopt the working ClientId instead of a
+        // verification feature has no VerifiedClientIds. It must stay null so the
+        // shell's one-time backfill can adopt the working client ids instead of a
         // stale value being treated as proof.
         const string legacyJson = """
             {
@@ -244,13 +244,41 @@ public sealed class UserSettingsServiceTests : IDisposable
 
         await store.LoadAsync();
 
-        Assert.Null(store.Current.VerifiedClientId);
+        Assert.Null(store.Current.VerifiedClientIds);
     }
 
     [Fact]
-    public async Task SaveAsync_PersistsVerifiedClientId()
+    public async Task LoadAsync_PreV042FileWithSingularVerifiedClientId_LeavesItUnset()
     {
-        var verified = UserSettings.Default with { VerifiedClientId = "8f3a1c2e-0000-4000-8000-000000000001" };
+        // The pre-0.4.2 singular `VerifiedClientId` is deliberately not migrated —
+        // per-cloud registrations made verification a set. The badge falls back to
+        // "configured, not verified" once and heals on the next sign-in.
+        const string legacyJson = """
+            {
+              "Theme": "System",
+              "DefaultDurationHours": 1.0,
+              "ExpiryWarningEnabled": true,
+              "ExpiryWarningMinutes": 5,
+              "VerifiedClientId": "8f3a1c2e-0000-4000-8000-000000000001"
+            }
+            """;
+        await File.WriteAllTextAsync(_filePath, legacyJson);
+        var store = CreateStore();
+
+        await store.LoadAsync();
+
+        Assert.Null(store.Current.VerifiedClientIds);
+    }
+
+    [Fact]
+    public async Task SaveAsync_PersistsVerifiedClientIdsForEveryCloud()
+    {
+        string[] ids =
+        [
+            "8f3a1c2e-0000-4000-8000-000000000001",
+            "8f3a1c2e-0000-4000-8000-000000000002",
+        ];
+        var verified = UserSettings.Default with { VerifiedClientIds = ids };
 
         var first = CreateStore();
         await first.SaveAsync(verified);
@@ -258,7 +286,7 @@ public sealed class UserSettingsServiceTests : IDisposable
         var second = CreateStore();
         await second.LoadAsync();
 
-        Assert.Equal("8f3a1c2e-0000-4000-8000-000000000001", second.Current.VerifiedClientId);
+        Assert.Equal(ids, second.Current.VerifiedClientIds);
     }
 
     [Fact]

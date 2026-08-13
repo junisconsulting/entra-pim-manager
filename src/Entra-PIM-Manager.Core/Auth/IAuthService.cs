@@ -14,22 +14,20 @@ using Microsoft.Identity.Client;
 public interface IAuthService
 {
     /// <summary>
-    /// Drives an interactive WAM sign-in (account picker) targeting the chosen
-    /// identity's home tenant, persists the result to the <see cref="IAccountStore"/>,
-    /// and returns it.
+    /// Drives an interactive WAM sign-in in <paramref name="cloud"/>, persists the
+    /// result to the <see cref="IAccountStore"/>, and returns it. A null or blank
+    /// <paramref name="tenantIdOrDomain"/> enrolls the chosen identity's home tenant;
+    /// a value targets a specific guest/secondary tenant within that cloud.
     /// </summary>
-    Task<SignedInAccount> AddAccountAsync(CancellationToken ct = default);
-
-    /// <summary>
-    /// Drives an interactive WAM sign-in targeting <paramref name="tenantIdOrDomain"/>
-    /// in <paramref name="cloud"/> — used to enroll the same identity against a
-    /// guest/secondary tenant, including a sovereign cloud (e.g. China). The
-    /// returned <see cref="SignedInAccount"/> carries the requested tenant's id
+    /// <remarks>
+    /// The returned <see cref="SignedInAccount"/> carries the requested tenant's id
     /// and cloud; the underlying MSAL <c>IAccount</c> is the user's home identity
     /// in the chosen cloud, reused across tenant enrollments within that cloud.
-    /// </summary>
-    Task<SignedInAccount> AddAccountForTenantAsync(
-        string tenantIdOrDomain,
+    /// Each cloud authenticates against its own app registration — see
+    /// <see cref="Configuration.EntraPimManagerOptions.ClientIdFor"/>.
+    /// </remarks>
+    Task<SignedInAccount> AddAccountAsync(
+        string? tenantIdOrDomain,
         EntraCloud cloud,
         CancellationToken ct = default);
 

@@ -222,14 +222,12 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     IRelayCommand<SignedInAccount?> IAccountsHost.SelectAccountCommand => SelectAccountCommand;
 
     /// <summary>
-    /// True when the App Registration ClientId hasn't been configured yet —
-    /// either empty or a non-GUID placeholder. The main popup shows a
+    /// True when not a single cloud has a usable App Registration client id —
+    /// every entry is empty or a non-GUID placeholder. The main popup shows a
     /// first-run empty state pointing the user at Settings → App Registration;
     /// the regular eligibility / active lists stay hidden until this is false.
     /// </summary>
-    public bool NeedsConfiguration =>
-        string.IsNullOrWhiteSpace(_options.ClientId)
-        || !Guid.TryParse(_options.ClientId, out _);
+    public bool NeedsConfiguration => _options.ConfiguredClouds().Count == 0;
 
     /// <summary>True when configuration is valid but no account is enrolled yet.</summary>
     public bool HasNoAccounts => !NeedsConfiguration && Accounts.Count == 0;
@@ -274,14 +272,14 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             var accounts = await _authService.GetAllAccountsAsync(ct);
             ReplaceAccounts(accounts);
 
-            // Installations that enrolled their accounts before VerifiedClientId
+            // Installations that enrolled their accounts before VerifiedClientIds
             // existed have no record to compare against. Those enrollments were
-            // still proven by a real sign-in — against the ClientId configured
-            // then, which for an upgrade is necessarily the current one. Adopt
-            // it once so they don't get told to verify an already-working setup.
-            if (_userSettings.Current.VerifiedClientId is null && Accounts.Count > 0)
+            // still proven by a real sign-in — against the client ids configured
+            // then, which for an upgrade are necessarily the current ones. Adopt
+            // them once so the user isn't told to verify an already-working setup.
+            if (_userSettings.Current.VerifiedClientIds is null && Accounts.Count > 0)
             {
-                MarkAppRegistrationVerified();
+                MarkAppRegistrationVerified(Accounts.Select(a => a.Account.Cloud).Distinct());
             }
 
             // Restore last-used account if it's still enrolled. ReplaceAccounts
@@ -907,10 +905,11 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         IsSignedIn = true;
 
         // A completed sign-in is the only real proof the App Registration is
-        // set up correctly — it exercises the ClientId, public client flows,
-        // the broker redirect URI and admin consent in one go. Record it so
-        // Settings can show the configuration as verified.
-        MarkAppRegistrationVerified();
+        // set up correctly — it exercises the client id, public client flows,
+        // the broker redirect URI and admin consent in one go. Record it against
+        // the cloud that was signed into; the other clouds' registrations are
+        // separate and prove nothing here.
+        MarkAppRegistrationVerified([added.Cloud]);
 
         await RefreshAsync();
 
@@ -920,18 +919,28 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     }
 
     /// <summary>
-    /// Stamps the active ClientId as proven. No-op when it is already recorded,
-    /// so the common case doesn't rewrite the settings file.
+    /// Stamps the app registrations of <paramref name="clouds"/> as proven — a
+    /// sign-in against them actually succeeded. Ids already recorded are skipped,
+    /// so the common case doesn't rewrite the settings file. All clouds are folded
+    /// into a single write; two <see cref="PersistShellSettings"/> calls in a row
+    /// would both read the same pre-write snapshot and one would lose.
     /// </summary>
-    private void MarkAppRegistrationVerified()
+    private void MarkAppRegistrationVerified(IEnumerable<EntraCloud> clouds)
     {
-        if (NeedsConfiguration
-            || string.Equals(_userSettings.Current.VerifiedClientId, _options.ClientId, StringComparison.OrdinalIgnoreCase))
+        var verified = _userSettings.Current.VerifiedClientIds ?? [];
+        var added = clouds
+            .Select(_options.ClientIdFor)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(id => !verified.Contains(id!, StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (added.Length == 0)
         {
             return;
         }
 
-        PersistShellSettings(s => s with { VerifiedClientId = _options.ClientId });
+        PersistShellSettings(s => s with { VerifiedClientIds = [.. verified, .. added!] });
         _settingsPanel.NotifyAppRegistrationVerificationChanged();
     }
 

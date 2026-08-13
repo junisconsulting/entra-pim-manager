@@ -1,14 +1,21 @@
 // Copy this file to `appsettings.local.json` (same directory) and fill in
 // your real values. `appsettings.local.json` is gitignored — never commit it.
 //
-// See docs/app-registration-setup.md for how to obtain a ClientId.
+// See docs/app-registration-setup.md for how to obtain a client id.
 {
   "EntraPimManager": {
-    // Application (client) ID from your Entra App Registration. Required.
-    "ClientId": "00000000-0000-0000-0000-000000000000",
+    // Application (client) ID per cloud. National clouds are physically isolated
+    // instances, so an App Registration exists in exactly one of them — a Global
+    // client id is unknown in Entra China and vice versa. Configure the clouds
+    // you use and leave the rest out; at least one is required.
+    "AppRegistrations": {
+      "Global": "00000000-0000-0000-0000-000000000000",
+      "China": ""
+    },
 
     // Optional: restrict sign-in to these tenants only. Leave as []
     // (or omit) to allow any tenant that has granted admin consent.
+    // Tenant GUIDs are unique across clouds, so one flat list covers both.
     "AllowedTenants": []
   }
 }

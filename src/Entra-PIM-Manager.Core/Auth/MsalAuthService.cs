@@ -60,18 +60,14 @@ public sealed class MsalAuthService : IAuthService, IDisposable
     }
 
     /// <inheritdoc />
-    public Task<SignedInAccount> AddAccountAsync(CancellationToken ct = default)
-        => AddAccountCoreAsync(tenantIdOrDomain: null, EntraCloud.Global, ct);
-
-    /// <inheritdoc />
-    public Task<SignedInAccount> AddAccountForTenantAsync(
-        string tenantIdOrDomain,
+    public Task<SignedInAccount> AddAccountAsync(
+        string? tenantIdOrDomain,
         EntraCloud cloud,
         CancellationToken ct = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(tenantIdOrDomain);
-        return AddAccountCoreAsync(tenantIdOrDomain.Trim(), cloud, ct);
-    }
+        => AddAccountCoreAsync(
+            string.IsNullOrWhiteSpace(tenantIdOrDomain) ? null : tenantIdOrDomain.Trim(),
+            cloud,
+            ct);
 
     /// <inheritdoc />
     public Task<SignedInAccount> AddAccountViaDeviceCodeAsync(
@@ -224,6 +220,25 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         EntraCloud.China => "msal-devicecode-china.cache",
         _ => "msal-devicecode.cache",
     };
+
+    /// <summary>
+    /// Client id for <paramref name="cloud"/>, or a mapped error. National clouds are
+    /// isolated instances: a Global client id does not exist in the 21Vianet directory,
+    /// so sending it there yields an opaque <c>AADSTS700016</c>. Failing here instead
+    /// names the missing registration and points at Settings.
+    /// </summary>
+    private string RequireClientId(EntraCloud cloud)
+    {
+        var clientId = _options.ClientIdFor(cloud);
+        if (!string.IsNullOrWhiteSpace(clientId))
+        {
+            return clientId;
+        }
+
+        throw new MsalServiceException(
+            "app_registration_missing",
+            $"No App Registration is configured for {EntraCloudInfo.DisplayName(cloud)}.");
+    }
 
     private async Task<SignedInAccount> AddAccountCoreAsync(
         string? tenantIdOrDomain,
@@ -460,15 +475,16 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         }
 
         ct.ThrowIfCancellationRequested();
+        var clientId = RequireClientId(cloud);
 
         var pca = PublicClientApplicationBuilder
-            .Create(_options.ClientId)
+            .Create(clientId)
 
             // Multi-tenant authority within the chosen sovereign cloud: one PCA
             // per cloud, each serving any work-or-school tenant in that cloud.
             // The chosen tenant is encoded in each IAccount.HomeAccountId.
             .WithAuthority(EntraCloudInfo.MsalCloudInstance(cloud), AadAuthorityAudience.AzureAdMultipleOrgs)
-            .WithRedirectUri($"ms-appx-web://microsoft.aad.brokerplugin/{_options.ClientId}")
+            .WithRedirectUri($"ms-appx-web://microsoft.aad.brokerplugin/{clientId}")
             .WithBroker(new BrokerOptions(BrokerOptions.OperatingSystems.Windows)
             {
                 Title = "Entra-PIM-Manager",
@@ -501,6 +517,7 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         }
 
         ct.ThrowIfCancellationRequested();
+        var clientId = RequireClientId(cloud);
 
         // Broker-LESS public client for the device-code escape hatch. No
         // .WithBroker (device code is incompatible with WAM) and no redirect URI
@@ -508,7 +525,7 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         // the refresh tokens — this PCA persists its own RTs, so it MUST have a
         // dedicated cache file that never collides with the broker caches.
         var pca = PublicClientApplicationBuilder
-            .Create(_options.ClientId)
+            .Create(clientId)
             .WithAuthority(EntraCloudInfo.MsalCloudInstance(cloud), AadAuthorityAudience.AzureAdMultipleOrgs)
             .WithClientName("Entra-PIM-Manager")
             .WithLogging(OnMsalLog, MsalLogLevel.Info, enablePiiLogging: false)

@@ -6,7 +6,7 @@ using Avalonia.Data.Converters;
 using Avalonia.Media;
 
 /// <summary>
-/// Picks the ring / countdown text colour from the remaining time on an active
+/// Picks the countdown bar / text colour from the remaining time on an active
 /// assignment. Three steps: accent (default), warning at ≤ 15 min, danger at
 /// ≤ 5 min. Resolves to theme resources at convert time so palette changes
 /// apply without rebuilding.

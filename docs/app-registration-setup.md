@@ -6,10 +6,15 @@
 > and in every additional tenant in which Entra PIM Manager will be used.
 >
 > Entra PIM Manager is multi-tenant: **one** App Registration covers any number of
-> tenants. Account selection happens interactively in the WAM picker. An optional
-> `AllowedTenants` whitelist in the local configuration locks the app down to
-> a known set of tenant GUIDs (e.g. group subsidiaries); without a whitelist,
-> all tenants in which admin consent was granted are allowed.
+> tenants **within one cloud**. Account selection happens interactively in the WAM
+> picker. An optional `AllowedTenants` whitelist in the local configuration locks
+> the app down to a known set of tenant GUIDs (e.g. group subsidiaries); without a
+> whitelist, all tenants in which admin consent was granted are allowed.
+>
+> **Using Entra China (21Vianet) too?** National clouds are physically isolated
+> instances of Entra, so a Global App Registration does not exist there. Work
+> through this guide once per cloud and see [§7](#7-sovereign-clouds-entra-china-21vianet)
+> for what differs.
 
 ## 1. Create the App Registration in the home tenant
 
@@ -24,7 +29,7 @@
 
 Note from the overview:
 
-- **Application (client) ID** → `ClientId`
+- **Application (client) ID** → the client id for this cloud
 
 (A `TenantId` is no longer entered into the app configuration — the tenant
 of each enrolled account is determined from the WAM result at sign-in.)
@@ -81,27 +86,47 @@ https://login.microsoftonline.com/{external-tenant-id}/adminconsent
 Replace `{external-tenant-id}` and `{pim-manager-client-id}`. The admin in that
 tenant follows the link, signs in, and confirms the permissions once.
 
+The host above is the **Global** authority. Consent for a tenant in another
+cloud runs against that cloud's own authority and its own client id — for
+Entra China:
+
+```text
+https://login.partner.microsoftonline.cn/{external-tenant-id}/adminconsent
+    ?client_id={china-client-id}
+    &redirect_uri=ms-appx-web://microsoft.aad.brokerplugin/{china-client-id}
+```
+
 Without admin consent in the respective tenant, the first Graph call fails when
 that account is added.
 
-## 5. Enter the ClientId
+## 5. Enter the client id
 
-The normal path requires no file editing: start the app, open **Settings**, and
-paste the `ClientId` from step 1 into the App Registration field. The app saves
-it to your per-user config at
+The normal path requires no file editing: start the app, open **Settings → APP
+REGISTRATION**, and paste the client id from step 1 into the row for its cloud.
+The app saves it to your per-user config at
 `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` and applies it on the
 next restart. The shipped `appsettings.json` carries only a placeholder.
+
+Leave a cloud's row blank if you don't use it — that cloud is then simply absent
+from the cloud picker when you add an account. At least one row must be filled in.
+
+The green **Verified** badge only appears once an account has actually signed in
+with that registration; it is per cloud, because a Global sign-in proves nothing
+about the China registration.
 
 ### Optional: restrict the allowed tenants
 
 `AllowedTenants` is not exposed in the UI — to lock the app down to a known set
 of tenant GUIDs, edit the per-user config file directly and add the array
-alongside the `ClientId` the UI already wrote:
+alongside the registrations the UI already wrote:
 
 ```json
 {
   "EntraPimManager": {
-    "ClientId": "00000000-0000-0000-0000-000000000000",
+    "AppRegistrations": {
+      "Global": "00000000-0000-0000-0000-000000000000",
+      "China": "00000000-0000-0000-0000-000000000000"
+    },
     "AllowedTenants": [
       "11111111-1111-1111-1111-111111111111",
       "22222222-2222-2222-2222-222222222222"
@@ -111,7 +136,10 @@ alongside the `ClientId` the UI already wrote:
 ```
 
 Empty array or omitted entry = unrestricted (any tenant with admin consent may
-be enrolled).
+be enrolled). Tenant GUIDs are unique across clouds, so one flat list covers both.
+
+A bare `"ClientId"` from a pre-0.4.2 configuration is still read, as the **Global**
+registration. `AppRegistrations:Global` wins if both are present.
 
 ### Running from source
 
@@ -119,8 +147,8 @@ When launching from a source build instead of an installer, you can skip the UI
 and provide the value directly: copy
 `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` to
 `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json` and fill in
-`ClientId`. Both this file and the per-user one are in `.gitignore` — **never
-commit either**.
+`AppRegistrations`. Both this file and the per-user one are in `.gitignore` —
+**never commit either**.
 
 ## 6. Verification
 
@@ -141,3 +169,52 @@ commit either**.
 For every enrolled account a dedicated `GraphServiceClient` is instantiated
 (see [IGraphClientFactory.CreateFor(account)](../src/Entra-PIM-Manager.Core/Graph/IGraphClientFactory.cs)),
 so that token acquisition, retry, and claims challenges run cleanly per tenant.
+
+## 7. Sovereign clouds (Entra China / 21Vianet)
+
+Microsoft's national clouds are *physically isolated instances* of Azure and
+Entra — separate directories, separate authorities, separate Graph endpoints.
+Two consequences drive the whole setup:
+
+- An App Registration exists in exactly **one** cloud. "Multitenant" means every
+  tenant *in that cloud*, not across clouds. A Global client id sent to the
+  21Vianet authority fails with `AADSTS700016` ("application not found in the
+  directory").
+- Access tokens are not interchangeable between clouds.
+
+So you need **a second App Registration, created inside a China tenant**.
+
+### What differs
+
+| | Global | Entra China (21Vianet) |
+|---|---|---|
+| Portal to register in | `portal.azure.com` | `portal.azure.cn` |
+| Authority | `login.microsoftonline.com` | `login.partner.microsoftonline.cn` |
+| Microsoft Graph | `graph.microsoft.com` | `microsoftgraph.chinacloudapi.cn` |
+| Config key | `AppRegistrations:Global` | `AppRegistrations:China` |
+
+### Procedure
+
+1. Sign in to [portal.azure.cn](https://portal.azure.cn) with an admin of your
+   China tenant and repeat **steps 1–4** of this guide there. Nothing changes in
+   substance: same name, multitenant, same redirect-URI pattern (with the
+   **China** client id), "Allow public client flows" on, the same six delegated
+   Graph scopes, admin consent per China tenant via the `login.partner…` URL in
+   step 4.
+2. In the app: **Settings → APP REGISTRATION → Entra China (21Vianet)** → paste
+   the China client id → **Save** → **Restart now**.
+3. After the restart, **Settings → ACCOUNTS → "Add account…"** shows a **Cloud**
+   dropdown (it is hidden while only one cloud is configured). Pick
+   *Entra China (21Vianet)* and sign in.
+
+Global and China accounts coexist: each enrollment records its cloud, and the app
+routes its token acquisition, token cache file and Graph base URL accordingly.
+
+### Caveats
+
+- **Feature availability.** Microsoft states that services and features present
+  in the global service may be missing from a national cloud. Verify that your
+  eligibilities actually list before relying on the China path in production.
+- **WAM broker.** The broker is used against the 21Vianet authority the same way
+  as against Global. If it misbehaves in your environment, **Advanced → Sign in
+  with device code** in the same panel is the fallback and is wired per cloud too.

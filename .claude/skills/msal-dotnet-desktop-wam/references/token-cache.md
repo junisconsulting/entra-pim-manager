@@ -41,10 +41,10 @@ var storageProperties = new StorageCreationPropertiesBuilder(
         cacheFileName: "msal.cache",
         cacheDirectory: cacheDir)
     .WithMacKeyChain(
-        serviceName: "Hannover Re Entra PIM Manager",
+        serviceName: "Entra PIM Manager",
         accountName: "MSALCache")
     .WithLinuxKeyring(
-        schemaName: "de.hannover-rueck.Entra-PIM-Manager.tokencache",
+        schemaName: "de.junis.Entra-PIM-Manager.tokencache",
         collection: MsalCacheHelper.LinuxKeyRingDefaultCollection,
         secretLabel: "MSAL token cache for Entra PIM Manager",
         attribute1: new KeyValuePair<string, string>("Version", "1"),
