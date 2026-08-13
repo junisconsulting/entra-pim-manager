@@ -54,10 +54,12 @@ public sealed partial class AppRegistrationRowViewModel : ObservableObject
     public bool IsInputValid => Guid.TryParse(Input, out _);
 
     /// <summary>
-    /// True when this cloud has no usable client id configured — empty, or a
-    /// non-GUID placeholder. Drives the inline "not configured" hint.
+    /// True when this cloud has no usable client id configured. Drives the inline
+    /// "not configured" hint, and keeps the shipped placeholder out of the TextBox
+    /// — <see cref="EntraPimManagerOptions.ClientIdFor"/> returns null rather than a
+    /// non-GUID value.
     /// </summary>
-    public bool IsMissing => !Guid.TryParse(ConfiguredClientId, out _);
+    public bool IsMissing => ConfiguredClientId is null;
 
     /// <summary>
     /// True once a sign-in has actually succeeded against this cloud's client id

@@ -44,31 +44,37 @@ public sealed class EntraPimManagerOptions
 
     /// <summary>
     /// Client id to authenticate with in <paramref name="cloud"/>, or <c>null</c> when no
-    /// app registration is configured for it. Lookup is case-insensitive so a hand-edited
-    /// <c>appsettings.local.json</c> with <c>"global"</c> still resolves.
+    /// usable app registration is configured for it. Lookup is case-insensitive so a
+    /// hand-edited <c>appsettings.local.json</c> with <c>"global"</c> still resolves.
     /// </summary>
+    /// <remarks>
+    /// Only a GUID counts as configured. Entra client ids are always GUIDs, and treating
+    /// anything else as unset is what keeps the shipped <c>"YOUR-CLIENT-ID-HERE"</c>
+    /// placeholder from shadowing a real value: <c>IConfiguration</c> merges the shipped
+    /// and per-user files per key, so after an upgrade the placeholder in
+    /// <c>AppRegistrations:Global</c> and a pre-0.4.2 <see cref="ClientId"/> are both
+    /// present at once.
+    /// </remarks>
     public string? ClientIdFor(EntraCloud cloud)
     {
         var name = cloud.ToString();
         foreach (var (key, value) in AppRegistrations)
         {
-            if (string.Equals(key, name, StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrWhiteSpace(value))
+            if (string.Equals(key, name, StringComparison.OrdinalIgnoreCase) && IsUsable(value))
             {
                 return value.Trim();
             }
         }
 
-        return cloud == EntraCloud.Global && !string.IsNullOrWhiteSpace(ClientId)
-            ? ClientId.Trim()
-            : null;
+        return cloud == EntraCloud.Global && IsUsable(ClientId) ? ClientId.Trim() : null;
     }
 
     /// <summary>
-    /// Clouds that have a syntactically usable (GUID) app registration configured, in
-    /// <see cref="EntraCloud"/> declaration order. Drives the cloud picker and the
-    /// first-run configuration gate.
+    /// Clouds that have a usable app registration configured, in <see cref="EntraCloud"/>
+    /// declaration order. Drives the cloud picker and the first-run configuration gate.
     /// </summary>
     public IReadOnlyList<EntraCloud> ConfiguredClouds()
-        => [.. Enum.GetValues<EntraCloud>().Where(c => Guid.TryParse(ClientIdFor(c), out _))];
+        => [.. Enum.GetValues<EntraCloud>().Where(c => ClientIdFor(c) is not null)];
+
+    private static bool IsUsable(string? clientId) => Guid.TryParse(clientId, out _);
 }

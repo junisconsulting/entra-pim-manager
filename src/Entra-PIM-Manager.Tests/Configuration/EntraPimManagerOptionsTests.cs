@@ -48,6 +48,29 @@ public sealed class EntraPimManagerOptionsTests
     }
 
     [Fact]
+    public void ClientIdFor_ShippedPlaceholderDoesNotShadowALegacyClientId()
+    {
+        // The real 0.4.1 -> 0.4.2 in-place upgrade. Velopack replaces the install
+        // directory's appsettings.json — which now carries AppRegistrations:Global
+        // = the placeholder — while the per-user file still holds only the legacy
+        // ClientId. IConfiguration merges the two layers PER KEY, so both land in
+        // this object at once and the placeholder must lose.
+        //
+        // Regression: while the placeholder counted as "configured", ConfiguredClouds
+        // came back empty, ShellViewModel.NeedsConfiguration flipped to true, and
+        // InitializeAsync returned before loading accounts.json — so the upgrade
+        // looked like it had wiped both the App Registration and every account.
+        var options = new EntraPimManagerOptions
+        {
+            ClientId = GlobalId,
+            AppRegistrations = { ["Global"] = "YOUR-CLIENT-ID-HERE", ["China"] = string.Empty },
+        };
+
+        Assert.Equal(GlobalId, options.ClientIdFor(EntraCloud.Global));
+        Assert.Equal([EntraCloud.Global], options.ConfiguredClouds());
+    }
+
+    [Fact]
     public void ClientIdFor_PrefersTheMapOverTheLegacyClientId()
     {
         var options = new EntraPimManagerOptions
@@ -59,13 +82,19 @@ public sealed class EntraPimManagerOptionsTests
         Assert.Equal(GlobalId, options.ClientIdFor(EntraCloud.Global));
     }
 
-    [Fact]
-    public void ClientIdFor_TreatsABlankEntryAsUnconfigured()
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("YOUR-CLIENT-ID-HERE")]
+    [InlineData("not-a-guid")]
+    public void ClientIdFor_TreatsAnUnusableEntryAsUnconfigured(string value)
     {
-        // The Settings UI can leave a cloud's key present but empty.
+        // A cloud's key can be present but empty (Settings leaves an unused cloud
+        // blank) or hold a placeholder (the shipped appsettings.json). Entra client
+        // ids are always GUIDs, so anything else means "not configured".
         var options = new EntraPimManagerOptions
         {
-            AppRegistrations = { ["Global"] = GlobalId, ["China"] = "   " },
+            AppRegistrations = { ["Global"] = GlobalId, ["China"] = value },
         };
 
         Assert.Null(options.ClientIdFor(EntraCloud.China));
