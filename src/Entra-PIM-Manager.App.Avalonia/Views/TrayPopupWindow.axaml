@@ -109,7 +109,8 @@
                 <ItemsControl.ItemTemplate>
                   <DataTemplate DataType="vm:ActiveAssignmentItemViewModel">
                     <Border Classes="active" Margin="0,0,0,6">
-                      <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center">
+                      <Grid RowDefinitions="Auto,Auto">
+                      <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center">
 
                         <!-- Live dot -->
                         <Ellipse Grid.Column="0"
@@ -134,24 +135,16 @@
                                      FontSize="{DynamicResource FontSmall}"
                                      Foreground="{DynamicResource TextSecondaryBrush}"
                                      TextTrimming="CharacterEllipsis" />
-                          <StackPanel Orientation="Horizontal"
-                                      Spacing="6"
-                                      VerticalAlignment="Center">
-                            <TextBlock Text="{Binding TenantLabel}"
-                                       FontSize="{DynamicResource FontSmall}"
-                                       Foreground="{DynamicResource TextTertiaryBrush}"
-                                       TextTrimming="CharacterEllipsis"
-                                       VerticalAlignment="Center"
-                                       ToolTip.Tip="{Binding TenantId}" />
-                            <TextBlock Text="·"
-                                       FontSize="{DynamicResource FontSmall}"
-                                       Foreground="{DynamicResource TextTertiaryBrush}"
-                                       VerticalAlignment="Center" />
-                            <TextBlock Text="{Binding KindLabel}"
-                                       FontSize="{DynamicResource FontSmall}"
-                                       Foreground="{DynamicResource TextTertiaryBrush}"
-                                       VerticalAlignment="Center" />
-                          </StackPanel>
+                          <!-- Tenant · kind as ONE bound string. Three TextBlocks in a
+                               horizontal StackPanel would never ellipsize: that panel
+                               measures children against infinite width, so a long
+                               tenant name overflowed this column and painted over the
+                               countdown. See ActiveAssignmentItemViewModel.MetaLine. -->
+                          <TextBlock Text="{Binding MetaLine}"
+                                     FontSize="{DynamicResource FontSmall}"
+                                     Foreground="{DynamicResource TextTertiaryBrush}"
+                                     TextTrimming="CharacterEllipsis"
+                                     ToolTip.Tip="{Binding TenantId}" />
                           <TextBlock Text="{Binding DeactivationErrorText}"
                                      FontSize="{DynamicResource FontCaption}"
                                      FontWeight="Medium"
@@ -162,46 +155,25 @@
                                                          Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         </StackPanel>
 
-                        <!-- Countdown ring: 44×44 donut showing the fraction of
-                             the activation window still ahead, with the
-                             remaining time inside. Sized so a wide label like
-                             "7h 53m" clears the ring instead of touching it.
-                             Track ring is always drawn; the foreground arc is
-                             computed from ProgressFraction by a converter (whose
-                             geometry must match this size). Both arc stroke and
-                             inner text take their colour from RemainingTime so the
-                             row escalates accent → warning (≤15 min) → danger
-                             (≤5 min). The whole stack is hidden while a
-                             pending/deactivating spinner is showing. -->
-                        <Grid Grid.Column="2"
-                              Width="44"
-                              Height="44"
-                              Margin="10,0"
-                              VerticalAlignment="Center"
-                              IsVisible="{Binding !IsBusy}"
-                              ToolTip.Tip="{Binding RemainingText}">
-                          <Ellipse Width="44"
-                                   Height="44"
-                                   Stroke="{DynamicResource BorderDividerBrush}"
-                                   StrokeThickness="2.5"
-                                   Fill="Transparent" />
-                          <Path Data="{Binding ProgressFraction,
-                                                Converter={x:Static vm:ProgressFractionToArcGeometryConverter.Instance}}"
-                                Stroke="{Binding RemainingTime,
-                                                  Converter={x:Static vm:RemainingTimeToBrushConverter.Instance},
-                                                  FallbackValue={DynamicResource AccentTextBrush}}"
-                                StrokeThickness="2.5"
-                                StrokeLineCap="Round" />
-                          <TextBlock Text="{Binding RemainingText}"
-                                     FontFamily="Inter, Consolas, monospace"
-                                     FontSize="10"
-                                     FontWeight="SemiBold"
-                                     HorizontalAlignment="Center"
-                                     VerticalAlignment="Center"
-                                     Foreground="{Binding RemainingTime,
-                                                          Converter={x:Static vm:RemainingTimeToBrushConverter.Instance},
-                                                          FallbackValue={DynamicResource TextPrimaryBrush}}" />
-                        </Grid>
+                        <!-- Remaining time as plain text. It deliberately competes
+                             for no more width than the string itself needs — the
+                             progress fraction moved to the full-width bar below, so
+                             nothing here has to be wide enough to contain "7h 53m"
+                             inside a shape. Colour escalates accent → warning
+                             (≤15 min) → danger (≤5 min) via RemainingTime, and the
+                             text is hidden while a pending/deactivating spinner
+                             occupies this column. -->
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding RemainingText}"
+                                   FontFamily="Inter, Consolas, monospace"
+                                   FontSize="{DynamicResource FontSmall}"
+                                   FontWeight="SemiBold"
+                                   Margin="10,0"
+                                   VerticalAlignment="Center"
+                                   IsVisible="{Binding !IsBusy}"
+                                   Foreground="{Binding RemainingTime,
+                                                        Converter={x:Static vm:RemainingTimeToBrushConverter.Instance},
+                                                        FallbackValue={DynamicResource TextPrimaryBrush}}" />
 
                         <!-- Pending indicator: spinner + "Activating…" replaces the
                              countdown until the real assignment shows up. -->
@@ -276,6 +248,30 @@
                                     Width="11" Height="11"
                                     Foreground="{DynamicResource DangerBrush}" />
                         </Button>
+                      </Grid>
+
+                      <!-- Countdown as a hairline across the card. Spanning the full
+                           width rather than sitting in the row means the indicator
+                           costs zero horizontal budget — no amount of tenant-name
+                           length can crowd it — and a wide bar is far easier to read
+                           from the corner of the eye than a 44px arc, which is the
+                           whole point of a tray tool. ProgressBar handles the 0..1
+                           fraction natively, so no geometry converter is involved.
+                           MinHeight="0" is required: the Fluent theme's default
+                           would otherwise keep it several pixels tall. -->
+                      <ProgressBar Grid.Row="1"
+                                   Minimum="0"
+                                   Maximum="1"
+                                   Value="{Binding ProgressFraction}"
+                                   Height="2"
+                                   MinHeight="0"
+                                   CornerRadius="1"
+                                   Margin="0,8,0,0"
+                                   IsVisible="{Binding !IsBusy}"
+                                   Background="{DynamicResource BorderDividerBrush}"
+                                   Foreground="{Binding RemainingTime,
+                                                        Converter={x:Static vm:RemainingTimeToBrushConverter.Instance},
+                                                        FallbackValue={DynamicResource AccentTextBrush}}" />
                       </Grid>
                     </Border>
                   </DataTemplate>

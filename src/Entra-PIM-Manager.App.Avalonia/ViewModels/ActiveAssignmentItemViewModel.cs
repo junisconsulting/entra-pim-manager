@@ -25,7 +25,7 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
     private string _remainingText = string.Empty;
 
     /// <summary>
-    /// Remaining time on the assignment. Drives the ring/text colour through
+    /// Remaining time on the assignment. Drives the bar/text colour through
     /// <see cref="RemainingTimeToBrushConverter"/>: accent → warning at ≤ 15 min
     /// → danger at ≤ 5 min.
     /// </summary>
@@ -34,8 +34,8 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
 
     /// <summary>
     /// Fraction of the activation window still ahead (1.0 → 0.0). Drives the
-    /// donut ring on the row: the arc starts almost complete on activation and
-    /// shrinks counter-clockwise from the 6 o'clock position as time elapses.
+    /// countdown bar spanning the bottom of the row, which drains from full to
+    /// empty as the activation elapses.
     /// </summary>
     [ObservableProperty]
     private double _progressFraction;
@@ -171,6 +171,20 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
     };
 
     /// <summary>
+    /// Tenant and resource kind as one string for the row's meta line.
+    /// </summary>
+    /// <remarks>
+    /// Composed here rather than laid out as three controls in the view on purpose:
+    /// a horizontal <c>StackPanel</c> measures its children against infinite width,
+    /// so <c>TextTrimming</c> never engages and a long tenant name (e.g. a CJK one)
+    /// overflows its grid column and paints over the countdown. One TextBlock bound
+    /// to one string trims correctly at any width.
+    /// </remarks>
+    public string MetaLine => string.IsNullOrEmpty(KindLabel)
+        ? TenantLabel
+        : $"{TenantLabel} · {KindLabel}";
+
+    /// <summary>
     /// Wall-clock time this row was constructed. Used by the shell's pending
     /// watchdog: a placeholder that hasn't been replaced by a real assignment
     /// within ~30 s is assumed lost and dropped to avoid stale "Activating…" UI.
@@ -214,7 +228,7 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
 
     /// <summary>
     /// Recomputes the countdown text, the remaining-time field that drives the
-    /// ring/text colour, and the 0..1 progress fraction. The expiring-soon
+    /// bar/text colour, and the 0..1 progress fraction. The expiring-soon
     /// toast threshold lives on <see cref="ShellViewModel"/> (user-configurable).
     /// </summary>
     public void UpdateCountdown()
@@ -223,7 +237,11 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
         {
             RemainingText = "No expiry";
             RemainingTime = TimeSpan.Zero;
-            ProgressFraction = 0;
+
+            // Full, not empty: nothing has drained. As a 44px arc a zero sweep was
+            // merely ambiguous, but the full-width bar would read as "0 % left, about
+            // to expire" — the exact opposite of what this branch means.
+            ProgressFraction = 1.0;
             return;
         }
 
@@ -238,9 +256,9 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
 
         RemainingTime = remaining;
 
-        // Ring sweep proportional to remaining / total. StartDateTime can be
+        // Bar fill proportional to remaining / total. StartDateTime can be
         // null for activations we read back from Graph before its scheduledStart
-        // field is populated; fall back to a full ring in that case so the
+        // field is populated; fall back to a full bar in that case so the
         // countdown text alone carries the information.
         if (Assignment.StartDateTime is { } start && end > start)
         {
@@ -252,9 +270,9 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
             ProgressFraction = 1.0;
         }
 
-        // Format: drop the trailing "left" so the text fits inside the ring;
-        // surface seconds in the final minute so the countdown visibly ticks
-        // instead of sitting on "0m" for 60 seconds.
+        // Format: terse, no trailing "left" — the row has no width to spare next
+        // to the tenant name. Surface seconds in the final minute so the countdown
+        // visibly ticks instead of sitting on "0m" for 60 seconds.
         if (remaining.TotalHours >= 1)
         {
             RemainingText = $"{(int)remaining.TotalHours}h {remaining.Minutes}m";
@@ -277,7 +295,11 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
     [RelayCommand]
     private Task DeactivateAsync() => _deactivate(this);
 
-    partial void OnTenantNameChanged(string? value) => OnPropertyChanged(nameof(TenantLabel));
+    partial void OnTenantNameChanged(string? value)
+    {
+        OnPropertyChanged(nameof(TenantLabel));
+        OnPropertyChanged(nameof(MetaLine));
+    }
 
     partial void OnIsPendingChanged(bool value) => OnPropertyChanged(nameof(IsBusy));
 
