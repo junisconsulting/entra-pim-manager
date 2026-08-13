@@ -43,6 +43,71 @@ public sealed class EntraPimManagerOptionsValidatorTests
     }
 
     [Fact]
+    public void Validate_WithPerCloudRegistrations_Succeeds()
+    {
+        var validator = new EntraPimManagerOptionsValidator();
+        var options = ValidOptions();
+        options.AppRegistrations = new()
+        {
+            ["Global"] = "8f3a1c2e-0000-4000-8000-000000000001",
+            ["China"] = "8f3a1c2e-0000-4000-8000-000000000002",
+        };
+
+        var result = validator.Validate(name: null, options);
+
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
+    public void Validate_WithUnknownCloudName_Fails()
+    {
+        // A typo here would silently leave that cloud unconfigured, and the user
+        // has no way to see it from the UI — so fail loudly at startup instead.
+        var validator = new EntraPimManagerOptionsValidator();
+        var options = ValidOptions();
+        options.AppRegistrations = new() { ["Chnia"] = "8f3a1c2e-0000-4000-8000-000000000002" };
+
+        var result = validator.Validate(name: null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("Chnia", result.FailureMessage, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("YOUR-CLIENT-ID-HERE")]
+    [InlineData("")]
+    public void Validate_WithUnusableRegistrationValue_Succeeds(string clientId)
+    {
+        // Same leniency as the legacy ClientId, and for the same reason: the
+        // shipped appsettings.json carries the placeholder, and a cloud the user
+        // doesn't use stays blank. ValidateOnStart failing here would shut the app
+        // down (App.axaml.cs) instead of showing the first-run CTA. Unusable values
+        // are filtered by ConfiguredClouds, not rejected here.
+        var validator = new EntraPimManagerOptionsValidator();
+        var options = ValidOptions();
+        options.AppRegistrations = new() { ["Global"] = clientId };
+
+        var result = validator.Validate(name: null, options);
+
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
+    public void Validate_ShippedAppSettingsShape_Succeeds()
+    {
+        // Guards first-run end to end: this is verbatim what
+        // src/Entra-PIM-Manager.App.Avalonia/appsettings.json ships.
+        var validator = new EntraPimManagerOptionsValidator();
+        var options = ValidOptions();
+        options.ClientId = string.Empty;
+        options.AppRegistrations = new() { ["Global"] = "YOUR-CLIENT-ID-HERE", ["China"] = string.Empty };
+
+        var result = validator.Validate(name: null, options);
+
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
     public void Validate_WithNoScopes_Fails()
     {
         var validator = new EntraPimManagerOptionsValidator();

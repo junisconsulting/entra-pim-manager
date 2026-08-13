@@ -50,16 +50,18 @@ For Entra PIM Manager:
 
 ## Authority variants
 
-### Single-tenant (preferred for Entra PIM Manager)
+### Multi-tenant (what Entra PIM Manager uses)
+```csharp
+.WithAuthority(AzureCloudInstance.AzurePublic, AadAuthorityAudience.AzureAdMultipleOrgs)
+```
+One PCA per cloud, each serving every work-or-school tenant in that cloud. The
+target tenant is selected per request with `.WithTenantId(...)`.
+
+### Single-tenant
 ```csharp
 .WithAuthority($"https://login.microsoftonline.com/{tenantId}")
 // or equivalently
 .WithAuthority(AzureCloudInstance.AzurePublic, tenantId)
-```
-
-### Multi-tenant (if ever needed)
-```csharp
-.WithAuthority(AzureCloudInstance.AzurePublic, AadAuthorityAudience.AzureAdMultipleOrgs)
 ```
 
 ### Common (allows MSA — generally avoid for privileged tools)
@@ -69,12 +71,26 @@ For Entra PIM Manager:
 
 ### National clouds
 ```csharp
-.WithAuthority(AzureCloudInstance.AzureUsGovernment, tenantId)   // GCC High
-.WithAuthority(AzureCloudInstance.AzureChina, tenantId)           // China
-.WithAuthority(AzureCloudInstance.AzureGermany, tenantId)         // deprecated, do not use
+.WithAuthority(AzureCloudInstance.AzureUsGovernment, AadAuthorityAudience.AzureAdMultipleOrgs)  // GCC High
+.WithAuthority(AzureCloudInstance.AzureChina, AadAuthorityAudience.AzureAdMultipleOrgs)         // 21Vianet
+.WithAuthority(AzureCloudInstance.AzureGermany, tenantId)                                        // closed 2021, do not use
 ```
 
-Hannover Re is on Azure Public — no special config needed.
+**A national cloud needs its own App Registration.** National clouds are physically
+isolated instances of Entra with separate directories, authorities and Graph
+endpoints. `AzureAdMultipleOrgs` means "every tenant *in this cloud*" — a client id
+registered at `portal.azure.com` does not exist at `portal.azure.cn`, and sending it
+there fails with `AADSTS700016`. Tokens are likewise not interchangeable between
+clouds. Register separately in each cloud's portal
+([Microsoft Learn](https://learn.microsoft.com/en-us/entra/identity-platform/authentication-national-cloud)).
+
+Never hardcode the authority host: MSAL's `AzureCloudInstance.AzureChina` resolves
+to `login.partner.microsoftonline.cn`, while some Microsoft docs still list the
+legacy `login.chinacloudapi.cn`. Let the enum decide.
+
+Entra PIM Manager keys everything off `EntraCloud` (`Core/Auth/EntraCloud.cs`): one
+PCA, one token-cache file, one Graph base URL and one client id per cloud. See
+`EntraCloudInfo` and `EntraPimManagerOptions.ClientIdFor`.
 
 ## Logging integration
 
@@ -128,7 +144,9 @@ For WAM to work end-to-end, the app registration must have:
    - `http://localhost` — for browser fallback (older OS, AAD B2C if ever)
 3. **Allow public client flows**: Yes
 4. **Implicit grant**: None
-5. **Supported account types**: typically "Single tenant" for enterprise tools
+5. **Supported account types**: "Multitenant" for a tool that serves several tenants
+   (Entra PIM Manager does); "Single tenant" for an in-house tool. Either way, one
+   registration **per cloud** — see "National clouds" above.
 
 PowerShell to verify:
 ```powershell
@@ -186,7 +204,7 @@ Silent → interactive should be the only retry. After interactive fails, surfac
 
 ## Testing locally
 
-For development against Hannover Re's tenant, individual developers can use their own admin account. For unit/integration tests, mock `IPublicClientApplication` directly:
+For development, individual developers use their own admin account in a test tenant. For unit/integration tests, mock `IPublicClientApplication` directly:
 
 ```csharp
 var mockPca = new Mock<IPublicClientApplication>();

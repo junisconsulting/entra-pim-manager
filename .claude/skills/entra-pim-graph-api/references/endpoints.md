@@ -4,7 +4,12 @@ Full catalog of endpoints. The SKILL.md covers the essentials; this file goes de
 
 ## Conventions
 
-- Base URL: `https://graph.microsoft.com/v1.0` unless marked `(beta)`.
+- Base URL: `https://graph.microsoft.com/v1.0` unless marked `(beta)`. The **host is
+  per cloud** — Entra China is `https://microsoftgraph.chinacloudapi.cn/v1.0`. Every
+  path below is host-relative and identical in both. In this codebase the host comes
+  from `EntraCloudInfo.GraphBaseUrl(cloud)`; never hardcode it. Note that Microsoft
+  does not guarantee feature parity across national clouds — verify availability
+  against the target cloud rather than assuming.
 - All endpoints require `Authorization: Bearer <token>` with delegated permissions.
 - All POST/PATCH bodies are `Content-Type: application/json`.
 

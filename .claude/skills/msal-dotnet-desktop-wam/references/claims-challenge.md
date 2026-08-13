@@ -3,7 +3,7 @@
 Conditional Access (CA) and Continuous Access Evaluation (CAE) can require step-up authentication for specific operations. The mechanism is the **claims challenge**: a downstream API returns 401 with a `WWW-Authenticate` header containing a `claims` parameter. MSAL re-acquires the token with those claims, WAM prompts the user to satisfy them (MFA, compliant device, Auth Strength, etc.), and the new token can access the protected resource.
 
 This is critical for PIM activation flows because:
-- Hannover Re likely has a CA policy requiring strong auth for PIM activation
+- Tenants running PIM commonly have a CA policy requiring strong auth for activation
 - "Authentication Context" policies (used by PIM) emit claims challenges by design
 - Without handling this, users get "Access Denied" instead of a step-up prompt
 
@@ -214,7 +214,7 @@ The claims string can contain ACR values that hint at internal policy structure.
 
 ## Authentication Context as the canonical use case
 
-For PIM specifically, Hannover Re may have:
+For PIM specifically, a tenant may have:
 1. A Conditional Access policy: "When activating PIM, require Authentication Context c1 (= phishing-resistant MFA)"
 2. A PIM policy rule (`AuthenticationContext_EndUser_Assignment`) referencing `c1`
 

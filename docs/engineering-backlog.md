@@ -43,3 +43,22 @@ solution argument), so the breakage is invisible there.
 `global.json` (and confirm CI's `setup-dotnet` still resolves), or add a classic `.sln` alongside.
 Both are decisions about the supported toolchain, not cleanups — do not change this as a side
 effect of another task.
+
+---
+
+## `.claude/manual-test-checklist.md` describes a UI that no longer exists
+
+**Evidence:** the checklist still asks the tester to verify a `ConfigurationWindow` at first start
+(§5) and a tray-menu **"Sign out"** / **"Eligible Roles…"** / **"Active Assignments…"** entry (§1,
+§4). None of them exist: configuration moved into the Settings slide-in, and `App.axaml:22-38`
+defines the menu as Open / Refresh / Settings… / Start with Windows / Exit. The paths in §5 and §7
+also predate the 0.4.0 move to `%LocalAppData%\junis\Entra-PIM-Manager\`.
+
+**Why it matters:** the checklist is the release gate — the `release` skill refuses to tag without a
+signed-off run. A gate that asks for things that cannot be found trains the tester to wave items
+through, which is worse than having no gate.
+
+**What makes the fix safe:** a full pass on Windows against the current UI, rewriting each item to
+what is actually on screen. Do this as its own change with the app in front of you, not as a
+side effect of a feature — guessing at the wording is how the drift happened in the first place.
+Section 1b (sovereign cloud, added in 0.4.2) is current and should be kept as-is.

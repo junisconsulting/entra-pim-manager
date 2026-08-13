@@ -294,7 +294,7 @@ Reference the manifest from `.csproj`:
 4. **WAM falls back to a browser silently on Windows < 10.0.17763** — log the auth flow used (`AuthenticationResult.AuthenticationResultMetadata.TokenSource`) to diagnose surprising prompts.
 5. **Embedded browser is dead** — `.WithUseEmbeddedWebView(true)` doesn't combine with broker. Pick one. For desktop apps with Entra, always pick broker.
 6. **`.WithBrokerPreview()` is obsolete** — references in blog posts pre-2022 predate the GA broker API. Don't paste them.
-7. **AAD B2C and ADFS are NOT supported by WAM** — falls back to browser. If your app must support these, plan UX for it. For Hannover Re's Entra-only tenant, this isn't a concern.
+7. **AAD B2C and ADFS are NOT supported by WAM** — falls back to browser. If your app must support these, plan UX for it. Entra PIM Manager targets Entra-only tenants, so this isn't a concern here.
 8. **For a tray app, foreground window may be null** — `GetForegroundWindow()` can return `IntPtr.Zero` if nothing is focused. Track the last interactive window or always use a hidden helper window as fallback.
 9. **`IPublicClientApplication` is thread-safe**, but cache operations during concurrent token acquisition can race. Use a `SemaphoreSlim` around token acquisition if you call from multiple threads.
 10. **Don't call `.GetAccountsAsync()` on the UI thread without await** — it does I/O and can block.

@@ -4,14 +4,16 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EntraPimManager.Core.Auth;
+using EntraPimManager.Core.Configuration;
 using EntraPimManager.Core.ErrorHandling;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 /// <summary>
 /// View model for the "Connect to additional tenant" slide-in. Mirrors the
 /// activation panel pattern: an animated overlay with one text field for the
 /// tenant id / domain, a Connect button that triggers WAM with
-/// <see cref="IAuthService.AddAccountForTenantAsync"/>, and a Cancel button.
+/// <see cref="IAuthService.AddAccountAsync"/>, and a Cancel button.
 /// </summary>
 /// <remarks>
 /// On success, fires <see cref="Closed"/> with the new <see cref="SignedInAccount"/>;
@@ -20,6 +22,14 @@ using Microsoft.Extensions.Logging;
 /// </remarks>
 public sealed partial class AddTenantPanelViewModel : ObservableObject
 {
+    /// <summary>
+    /// Shown when the panel is opened without a single app registration configured.
+    /// Reachable via Settings → ACCOUNTS → "Add account…", which is not gated on the
+    /// shell's <c>NeedsConfiguration</c> state.
+    /// </summary>
+    private const string NoRegistrationMessage =
+        "No App Registration is configured yet. Enter a client id under Settings → App Registration first.";
+
     private static readonly TimeSpan AuthCallTimeout = TimeSpan.FromMinutes(2);
 
     // Device code is completed on a second device (phone), so it needs a much
@@ -72,35 +82,46 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     private string? _deviceCodeVerificationUri;
 
     /// <summary>
-    /// Cloud the user has selected for this enrollment. Defaults to
-    /// <see cref="EntraCloud.Global"/>; the China option targets the 21Vianet-
-    /// operated <c>login.partner.microsoftonline.cn</c> authority and
+    /// Cloud the user has selected for this enrollment. Defaults to the first
+    /// configured cloud; the China option targets the 21Vianet-operated
+    /// <c>login.partner.microsoftonline.cn</c> authority and
     /// <c>microsoftgraph.chinacloudapi.cn</c> Graph endpoint.
     /// </summary>
     [ObservableProperty]
-    private CloudOption _selectedCloud;
+    private CloudOption? _selectedCloud;
 
     public AddTenantPanelViewModel(
         IAuthService authService,
+        IOptions<EntraPimManagerOptions> options,
         ILogger<AddTenantPanelViewModel> logger)
     {
+        ArgumentNullException.ThrowIfNull(options);
         _authService = authService;
         _logger = logger;
-        _selectedCloud = CloudOptions[0];
+
+        // Only clouds that actually have an app registration configured. National
+        // clouds are isolated instances, so a Global client id is unusable against
+        // the 21Vianet authority — offering China without its own registration
+        // would just route the user into an opaque AADSTS700016.
+        CloudOptions = [.. options.Value.ConfiguredClouds()
+            .Select(c => new CloudOption(c, EntraCloudInfo.DisplayName(c)))];
+        _selectedCloud = CloudOptions.FirstOrDefault();
     }
 
     /// <summary>Raised when the panel finishes — payload is null on cancel/error.</summary>
     public event Action<SignedInAccount?>? Closed;
 
     /// <summary>
-    /// Options shown in the cloud ComboBox. Ordered with Global first so the
-    /// default keeps the existing single-cloud behaviour.
+    /// Options shown in the cloud ComboBox — one per configured app registration,
+    /// in <see cref="EntraCloud"/> declaration order (Global first).
     /// </summary>
-    public IReadOnlyList<CloudOption> CloudOptions { get; } = new[]
-    {
-        new CloudOption(EntraCloud.Global, EntraCloudInfo.DisplayName(EntraCloud.Global)),
-        new CloudOption(EntraCloud.China, EntraCloudInfo.DisplayName(EntraCloud.China)),
-    };
+    public IReadOnlyList<CloudOption> CloudOptions { get; }
+
+    /// <summary>
+    /// Whether the cloud ComboBox is worth showing. With a single configured
+    /// registration there is nothing to choose.
+    /// </summary>
+    public bool IsCloudChoiceVisible => CloudOptions.Count > 1;
 
     /// <summary>X-offset for the slide-in transform — mirrors <c>ActivationPanelViewModel</c>.</summary>
     public double PanelOffsetX => IsOpen ? 0 : 420;
@@ -118,7 +139,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
         TenantInput = string.Empty;
         ErrorMessage = null;
         IsConnecting = false;
-        SelectedCloud = CloudOptions[0];
+        SelectedCloud = CloudOptions.FirstOrDefault();
         IsAdvancedExpanded = false;
         DeviceCodeUserCode = null;
         DeviceCodeVerificationUri = null;
@@ -147,6 +168,12 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     [RelayCommand]
     private async Task ConnectAsync()
     {
+        if (SelectedCloud is not { } cloud)
+        {
+            ErrorMessage = NoRegistrationMessage;
+            return;
+        }
+
         // Tenant is optional: blank enrolls the identity's home tenant (the
         // common case), a value targets a specific guest/secondary tenant.
         var input = TenantInput?.Trim() ?? string.Empty;
@@ -156,9 +183,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
         try
         {
             using var cts = new CancellationTokenSource(AuthCallTimeout);
-            var account = string.IsNullOrEmpty(input)
-                ? await _authService.AddAccountAsync(cts.Token)
-                : await _authService.AddAccountForTenantAsync(input, SelectedCloud.Cloud, cts.Token);
+            var account = await _authService.AddAccountAsync(input, cloud.Cloud, cts.Token);
 
             IsOpen = false;
             Closed?.Invoke(account);
@@ -169,7 +194,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
                 ex,
                 "Failed to add account (tenant {TenantInput}, cloud {Cloud})",
                 string.IsNullOrEmpty(input) ? "<home>" : input,
-                SelectedCloud.Cloud);
+                cloud.Cloud);
             ErrorMessage = PimErrorMapper.MapException(ex).Message;
         }
         finally
@@ -181,6 +206,12 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     [RelayCommand]
     private async Task ConnectViaDeviceCodeAsync()
     {
+        if (SelectedCloud is not { } cloud)
+        {
+            ErrorMessage = NoRegistrationMessage;
+            return;
+        }
+
         // Tenant input is optional for device code — a blank field enrolls the
         // identity's home tenant, same as the broker "Add account" entry point.
         var input = TenantInput?.Trim();
@@ -195,7 +226,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
         {
             var account = await _authService.AddAccountViaDeviceCodeAsync(
                 input,
-                SelectedCloud.Cloud,
+                cloud.Cloud,
                 challenge =>
                 {
                     // MSAL invokes this from a background thread; marshal the
@@ -231,7 +262,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
                 ex,
                 "Device-code sign-in failed for tenant {TenantInput} (cloud {Cloud})",
                 string.IsNullOrEmpty(input) ? "<home>" : input,
-                SelectedCloud.Cloud);
+                cloud.Cloud);
             ErrorMessage = PimErrorMapper.MapException(ex).Message;
         }
         finally

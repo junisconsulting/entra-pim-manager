@@ -226,7 +226,7 @@ public partial class App : Application
         builder.Configuration
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
             .AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: false)
-            .AddJsonFile(LocalConfigStore.ConfigFilePath, optional: true, reloadOnChange: false);
+            .AddJsonFile(AppPaths.LocalConfigFile, optional: true, reloadOnChange: false);
 
         Directory.CreateDirectory(AppPaths.LogDirectory);
 

@@ -31,17 +31,20 @@ namespace EntraPimManager.Core.Configuration;
 /// existed deserialize to the constructor default (on), which is the intended
 /// behaviour.
 /// </param>
-/// <param name="VerifiedClientId">
-/// The App Registration ClientId a sign-in has actually succeeded with. Set
-/// when an account is enrolled, and compared against the active ClientId to
-/// decide whether Settings may show the App Registration as verified.
+/// <param name="VerifiedClientIds">
+/// The App Registration client ids a sign-in has actually succeeded with. An id is
+/// appended when an account is enrolled; Settings shows a registration as verified
+/// only when its configured client id is in this set.
 /// <para/>
 /// A well-formed GUID proves nothing on its own — the common setup mistakes
 /// (pasting the Object or Directory id, "Allow public client flows" off, an
 /// unregistered broker redirect URI, missing admin consent) all pass a format
-/// check and only surface at sign-in. Recording the id that actually worked is
-/// what keeps the green check honest, including after the ClientId is changed.
-/// <c>null</c> until the first successful enrollment.
+/// check and only surface at sign-in. Recording the ids that actually worked is
+/// what keeps the green check honest, including after a client id is changed.
+/// <para/>
+/// A set rather than a single value because each sovereign cloud has its own
+/// registration, and each must prove itself separately. <c>null</c> until the
+/// first successful enrollment.
 /// </param>
 public sealed record UserSettings(
     ThemePreference Theme,
@@ -52,7 +55,11 @@ public sealed record UserSettings(
     Dictionary<string, bool>? ExpandedTenants = null,
     bool SettingsAccountsExpanded = true,
     bool AutomaticUpdatesEnabled = true,
-    string? VerifiedClientId = null)
+
+    // ponytail: the pre-0.4.2 `VerifiedClientId` string is deliberately not migrated.
+    // The badge falls back to "configured, not verified" once and heals itself on the
+    // next sign-in; custom deserialization for a display flag is not worth carrying.
+    string[]? VerifiedClientIds = null)
 {
     /// <summary>Defaults applied when no settings file exists or the file is unreadable.</summary>
     public static UserSettings Default { get; } = new(

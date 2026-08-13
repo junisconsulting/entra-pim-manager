@@ -12,6 +12,7 @@ A Windows tray application for activating Microsoft Entra Privileged Identity Ma
 
 - One-click activation of Entra PIM eligibilities from the system tray
 - Multi-tenant: sign in with multiple admin accounts; eligibilities and active assignments are grouped per tenant
+- Multi-cloud: Global and Entra China (21Vianet) side by side, each with its own App Registration
 - WAM-broker authentication (no embedded WebView, no in-app password prompts), with a device-code fallback for tenants whose federated IdP forces seamless SSO onto the wrong account
 - Activation form with justification, ticket reference, and a duration slider in 0.5 h steps (bounded by the per-role policy maximum)
 - Live watchdog — the list refreshes automatically when assignments are activated, deactivated, or expire
@@ -35,7 +36,7 @@ When a new release is published, the app checks GitHub once a day, then prompts 
 
 ## Configure
 
-Before first use, an Entra App Registration must be created once (an admin task). Its ClientId is then entered into the app — no file editing required.
+Before first use, an Entra App Registration must be created once (an admin task). Its client id is then entered into the app — no file editing required.
 
 Setup steps: [docs/app-registration-setup.md](docs/app-registration-setup.md).
 
@@ -45,9 +46,11 @@ In short:
 2. Add the WAM redirect URI `ms-appx-web://microsoft.aad.brokerplugin/{client-id}` and enable public client flows.
 3. Grant delegated Graph permissions: `User.Read`, `RoleEligibilitySchedule.Read.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`, `RoleManagementPolicy.Read.Directory`, `PrivilegedAccess.ReadWrite.AzureADGroup`, `Group.Read.All`.
 4. Grant admin consent in every tenant where Entra PIM Manager will be used.
-5. Launch the app, open **Settings**, and paste the ClientId. It is saved to your per-user config at `%LocalAppData%\Entra-PIM-Manager\appsettings.local.json` and applied on the next restart — the shipped `appsettings.json` only carries a placeholder.
+5. Launch the app, open **Settings → APP REGISTRATION**, and paste the client id into the row for its cloud. It is saved to your per-user config at `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` and applied on the next restart — the shipped `appsettings.json` only carries a placeholder.
 
-> Running from source instead of an installer? Copy `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` to `appsettings.local.json` and put your `ClientId` there — a developer convenience that avoids retyping it in the UI on every run.
+> **Entra China (21Vianet)?** National clouds are physically isolated instances of Entra, so a Global App Registration does not exist there — a Global client id sent to `login.partner.microsoftonline.cn` fails with `AADSTS700016`. Repeat steps 1–4 in [portal.azure.cn](https://portal.azure.cn) and enter that client id in the **Entra China** row. Both clouds then work side by side; the cloud picker appears in "Add account…" as soon as more than one is configured.
+>
+> Running from source instead of an installer? Copy `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` to `appsettings.local.json` and fill in `AppRegistrations` — a developer convenience that avoids retyping the ids in the UI on every run.
 
 ## Build from source
 

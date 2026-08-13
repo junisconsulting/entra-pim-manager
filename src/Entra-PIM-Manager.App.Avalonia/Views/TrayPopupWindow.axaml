@@ -862,7 +862,11 @@
           <!-- Body -->
           <ScrollViewer Grid.Row="1" Margin="0,18,0,0" Classes="popup">
             <StackPanel Spacing="14">
-              <StackPanel>
+              <!-- Only shown when more than one cloud has an App Registration
+                   configured. With a single registration there is nothing to
+                   choose, and offering a cloud without its own client id would
+                   only route the user into an opaque AADSTS700016. -->
+              <StackPanel IsVisible="{Binding IsCloudChoiceVisible}">
                 <TextBlock Text="Cloud"
                            FontSize="{DynamicResource FontCaption}"
                            FontWeight="Medium"
@@ -1059,11 +1063,13 @@
             <StackPanel Spacing="10">
 
               <!-- =========== APP REGISTRATION =========== -->
-              <!-- ClientId of the user's Entra App Registration. Saved into
-                   %LocalAppData%\Entra-PIM-Manager\appsettings.local.json (outside
-                   the install dir so it survives Velopack updates) and takes
-                   effect on the next process start — MSAL's PCA is built once
-                   per cloud at startup. -->
+              <!-- One client id per sovereign cloud. National clouds are isolated
+                   instances, so an App Registration exists in exactly one of them
+                   and each cloud needs its own. Saved into
+                   %LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json
+                   (outside the install dir so it survives Velopack updates) and
+                   takes effect on the next process start — MSAL's PCA is built
+                   once per cloud at startup. -->
               <Border Classes="settings-card">
               <StackPanel Spacing="8">
                 <!-- Header doubles as the collapse toggle. The green check is
@@ -1091,8 +1097,8 @@
                             Padding="6,2"
                             Margin="8,0,0,0"
                             VerticalAlignment="Center"
-                            ToolTip.Tip="An account signed in successfully with this App Registration."
-                            IsVisible="{Binding IsAppRegistrationVerified}">
+                            ToolTip.Tip="An account signed in successfully with every configured App Registration."
+                            IsVisible="{Binding AreAppRegistrationsVerified}">
                       <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                         <Ellipse Width="6" Height="6"
                                  Fill="{DynamicResource SuccessBrush}"
@@ -1121,73 +1127,83 @@
 
                 <StackPanel Spacing="8"
                             IsVisible="{Binding IsAppRegistrationSectionExpanded}">
-                <TextBlock Text="ClientId of your Entra App Registration (multi-tenant)."
+                <TextBlock Text="Client id of your Entra App Registration, one per cloud. A registration lives in a single cloud — a Global one is unknown in Entra China and vice versa. Leave a cloud blank if you don't use it."
                            FontSize="{DynamicResource FontSmall}"
                            Foreground="{DynamicResource TextSecondaryBrush}"
                            TextWrapping="Wrap" />
 
-                <!-- Hint: shown when the current effective ClientId is empty
-                     or non-GUID (covers the committed placeholder). -->
-                <Border IsVisible="{Binding IsCurrentClientIdMissing}"
-                        Background="{DynamicResource WarningSoftBrush}"
-                        CornerRadius="6"
-                        Padding="10,8">
-                  <TextBlock Text="Not configured yet — paste the GUID below and click Save."
-                             FontSize="{DynamicResource FontSmall}"
-                             Foreground="{DynamicResource TextPrimaryBrush}"
-                             TextWrapping="Wrap" />
-                </Border>
+                <!-- One row per EntraCloud. Everything below is per-registration:
+                     each cloud has its own client id, its own Save, and its own
+                     verification state — a sign-in only proves the cloud it ran
+                     against. -->
+                <ItemsControl ItemsSource="{Binding AppRegistrations}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="12" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:AppRegistrationRowViewModel">
+                      <StackPanel Spacing="6">
+                        <TextBlock Text="{Binding DisplayName}"
+                                   FontSize="{DynamicResource FontSmall}"
+                                   FontWeight="Medium"
+                                   Foreground="{DynamicResource TextPrimaryBrush}" />
 
-                <!-- Configured but unproven. Deliberately neutral, not green:
-                     a saved GUID says nothing about whether the registration
-                     itself works. Only a sign-in settles that. -->
-                <Border IsVisible="{Binding IsAppRegistrationUnverified}"
-                        Background="{DynamicResource Surface1Brush}"
-                        BorderBrush="{DynamicResource BorderSubtleBrush}"
-                        BorderThickness="1"
-                        CornerRadius="6"
-                        Padding="10,8">
-                  <TextBlock Text="Configured. Add an account below to verify the setup — signing in is what confirms the ClientId, public client flows, redirect URI and admin consent."
-                             FontSize="{DynamicResource FontSmall}"
-                             Foreground="{DynamicResource TextSecondaryBrush}"
-                             TextWrapping="Wrap" />
-                </Border>
+                        <!-- Input + save row. The button enables only when the
+                             input parses as a GUID (CanExecute on SaveCommand). -->
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                          <TextBox Grid.Column="0"
+                                   Text="{Binding Input}"
+                                   PlaceholderText="00000000-0000-0000-0000-000000000000"
+                                   FontSize="{DynamicResource FontBody}" />
+                          <Button Grid.Column="1"
+                                  Classes="primary"
+                                  Content="Save"
+                                  Command="{Binding SaveCommand}" />
+                        </Grid>
 
-                <!-- Verified. Shown inside the body too, so expanding the
-                     collapsed card still explains why it is checked. -->
-                <Border IsVisible="{Binding IsAppRegistrationVerified}"
-                        Background="{DynamicResource SuccessSoftBrush}"
-                        CornerRadius="6"
-                        Padding="10,8">
-                  <TextBlock Text="Verified — an account signed in successfully with this App Registration."
-                             FontSize="{DynamicResource FontSmall}"
-                             Foreground="{DynamicResource TextPrimaryBrush}"
-                             TextWrapping="Wrap" />
-                </Border>
+                        <!-- Configured but unproven. Deliberately neutral, not
+                             green: a saved GUID says nothing about whether the
+                             registration itself works. Only a sign-in settles that. -->
+                        <Border IsVisible="{Binding IsUnverified}"
+                                Background="{DynamicResource Surface1Brush}"
+                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="10,8">
+                          <TextBlock Text="Configured. Add an account in this cloud to verify the setup — signing in is what confirms the client id, public client flows, redirect URI and admin consent."
+                                     FontSize="{DynamicResource FontSmall}"
+                                     Foreground="{DynamicResource TextSecondaryBrush}"
+                                     TextWrapping="Wrap" />
+                        </Border>
 
-                <!-- Input + save row. The button enables only when the input
-                     parses as a GUID (CanExecute on SaveClientIdCommand). -->
-                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                  <TextBox Grid.Column="0"
-                           Text="{Binding ClientIdInput}"
-                           PlaceholderText="00000000-0000-0000-0000-000000000000"
-                           FontSize="{DynamicResource FontBody}" />
-                  <Button Grid.Column="1"
-                          Classes="primary"
-                          Content="Save"
-                          Command="{Binding SaveClientIdCommand}" />
-                </Grid>
+                        <!-- Verified. Shown inside the body too, so expanding the
+                             collapsed card still explains why it is checked. -->
+                        <Border IsVisible="{Binding IsVerified}"
+                                Background="{DynamicResource SuccessSoftBrush}"
+                                CornerRadius="6"
+                                Padding="10,8">
+                          <TextBlock Text="Verified — an account signed in successfully with this App Registration."
+                                     FontSize="{DynamicResource FontSmall}"
+                                     Foreground="{DynamicResource TextPrimaryBrush}"
+                                     TextWrapping="Wrap" />
+                        </Border>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
                 <!-- Restart-required banner. Visible right after a successful
                      save. The restart button replaces the running process so
-                     MSAL re-initialises against the new ClientId. -->
+                     MSAL re-initialises against the new client id. -->
                 <Border IsVisible="{Binding ShowRestartPrompt}"
                         Background="{DynamicResource SuccessSoftBrush}"
                         CornerRadius="6"
                         Padding="10,8">
                   <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                     <TextBlock Grid.Column="0"
-                               Text="Saved. Restart the app to apply the new ClientId."
+                               Text="Saved. Restart the app to apply the new client id."
                                FontSize="{DynamicResource FontSmall}"
                                TextWrapping="Wrap"
                                VerticalAlignment="Center" />

@@ -141,7 +141,7 @@ Activating membership of a role-assignable group:
 
 If the group has an `Eligible` role assignment (not `Assigned`), activating group membership alone won't grant the role. The role activation is a separate step on the group as principal.
 
-In practice, Hannover Re-style topologies typically use `Assigned` for the group-to-role binding and `Eligible` for the user-to-group binding. Verify per-group.
+In practice, most topologies use `Assigned` for the group-to-role binding and `Eligible` for the user-to-group binding. Verify per-group.
 
 ---
 
