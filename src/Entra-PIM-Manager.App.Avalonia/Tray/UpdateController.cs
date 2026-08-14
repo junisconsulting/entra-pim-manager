@@ -49,10 +49,8 @@ public sealed class UpdateController
         UpdatePromptViewModel viewModel,
         IUpdateService updateService,
         IUserSettingsService settings,
-        SettingsPanelViewModel settingsPanel,
         ILogger<UpdateController> logger)
     {
-        ArgumentNullException.ThrowIfNull(settingsPanel);
         _window = window;
         _viewModel = viewModel;
         _updateService = updateService;
@@ -76,10 +74,6 @@ public sealed class UpdateController
         _window.RestartRequested += OnRestartRequested;
         _window.LaterRequested += OnLaterRequested;
 
-        // The Settings "Check for updates" button routes here (the VM has no
-        // direct controller dependency — it just raises this event).
-        settingsPanel.CheckForUpdatesRequested += CheckNowAsync;
-
         _timer = new DispatcherTimer { Interval = InitialDelay };
         _timer.Tick += OnTimerTick;
     }
@@ -102,20 +96,16 @@ public sealed class UpdateController
         _timer.Start();
     }
 
-    /// <summary>Runs a check immediately. Backs the Settings "Check for updates" button.</summary>
-    public Task CheckNowAsync() => CheckAsync(manual: true);
-
     private async void OnTimerTick(object? sender, EventArgs e)
     {
         // The first tick fires after InitialDelay; from then on poll daily.
         _timer.Interval = PollInterval;
-        await CheckAsync(manual: false);
+        await CheckAsync();
     }
 
-    private async Task CheckAsync(bool manual)
+    private async Task CheckAsync()
     {
-        // Live-read so toggling the setting takes effect without a restart; a
-        // manual "Check now" press still honours the off switch.
+        // Live-read so toggling the setting takes effect without a restart.
         if (_busy || !_settings.Current.AutomaticUpdatesEnabled)
         {
             return;
@@ -127,11 +117,6 @@ public sealed class UpdateController
             var result = await _updateService.CheckAsync().ConfigureAwait(true);
             if (result is null)
             {
-                if (manual)
-                {
-                    _logger.LogDebug("Manual update check: already up to date");
-                }
-
                 return;
             }
 

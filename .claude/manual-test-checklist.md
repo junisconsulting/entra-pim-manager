@@ -142,6 +142,10 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 - [ ] Eingegebene Werte landen in `%LocalAppData%\Entra-PIM-Manager\appsettings.local.json`.
 - [ ] Höhere Version paketieren → App erkennt das Update und wendet es beim
       nächsten Start an (laufende Sitzung wird nicht unterbrochen).
+      **Hinweis Alters-Gate:** Releases jünger als 72 h werden absichtlich
+      nicht angeboten (Reputationsfenster unsignierter Builds; Log-Zeile
+      „deferred until 72h"). Für diesen Testpunkt ein Release ≥ 72 h nutzen
+      oder das Gate im Log als Deferral verifizieren.
 - [ ] Deinstallation entfernt den `HKCU\…\Run`-Autostart-Eintrag.
 
 ### 5b. In-Place-Upgrade von der Vorversion
