@@ -15,12 +15,15 @@ published release to date (0.4.x, 0.5.0) ships unsigned binaries — confirmed i
 2026-08-14: `Get-AuthenticodeSignature` on the installed 0.5.0 stub and app exe returns
 `NotSigned`.
 
-**Why it matters:** managed environments (AppLocker/WDAC/EDR) block unknown unsigned executables.
-A customer environment that had whitelisted one version's binaries (by hash) blocks **every
-update** — observed as a Setup that "partially succeeds" (files written, launch denied) or an app
-that silently never starts. Unsigned releases make each update a support ticket at every
-app-control customer, and hash-whitelisting on the customer side is a treadmill because Velopack
-updates change every hash.
+**Why it matters:** managed environments block unknown unsigned executables — observed as a Setup
+that "partially succeeds" (files written, launch denied at `CreateProcess`) or an app that
+silently never starts. Field evidence 2026-08-14 points at **reputation/age-based** enforcement
+(Defender ASR "prevalence, age, or trusted list" rule / WDAC ISG / EDR reputation): on the same
+machine, a ~12-hour-old unsigned release ran while a minutes-old one was denied, with no IT
+action in between. Consequence: every fresh release is dead on arrival at such customers for
+roughly a day, and auto-update stages a blocked binary that kills the installed app. Signing
+fixes this durably: reputation attaches to the constant publisher, and IT can build a one-time
+publisher exception instead of waiting out the age window per release.
 
 **What makes the fix safe:** a junis code-signing certificate (OV/EV) provisioned as a CI secret,
 `build.ps1 -SignParams` wired into the release workflow on `windows-latest`, and one release

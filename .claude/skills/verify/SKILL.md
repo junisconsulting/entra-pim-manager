@@ -108,12 +108,15 @@ Traps, all verified (see also `packaging/velopack/README.md`):
   fails launching the app with `Access is denied (0x80070005)` — "Install Partially Succeeded" —
   or the installed app silently never starts (`CreateProcess` denied before any code runs, so no
   app log exists). **CI releases are currently unsigned too** (no signing anywhere in the
-  pipeline — see `docs/engineering-backlog.md`, "Releases are not code-signed"), so a release
-  passes on such machines only where the customer's IT has whitelisted that version's binaries —
-  and the whitelist breaks again on the next update. Test unsigned builds on unmanaged machines
-  only. Diagnose via `Get-AuthenticodeSignature`, `Setup.exe --verbose --log <path>`, and the
-  AppLocker `EXE and DLL` (8004) / `CodeIntegrity` (3077) event logs — reading those channels
-  needs admin rights; an empty result as a standard user proves nothing.
+  pipeline — see `docs/engineering-backlog.md`, "Releases are not code-signed"). The blocking is
+  often **reputation/age-based**, not a static whitelist: the Defender ASR rule "prevalence, age,
+  or trusted list" (`01443614-CD74-433A-B99E-2ECDC07BFC25`), WDAC ISG, or EDR reputation deny
+  hashes younger than ~a day — field-confirmed 2026-08-14, where a 12-hour-old release ran and a
+  minutes-old one was denied on the same machine. So: a *fresh* release failing there is expected;
+  retry after ~24 h before suspecting the code. Diagnose via `Get-AuthenticodeSignature`,
+  `Setup.exe --verbose --log <path>`, Defender/Operational events 1121/1122 (user-readable), and
+  the AppLocker `EXE and DLL` (8004) / `CodeIntegrity` (3077) logs — those last channels need
+  admin rights; an empty result as a standard user proves nothing.
 
 After packing, tell the user the Setup.exe is ready and name the path — they copy that one file to
 Windows, quit the running tray instance, and run it to upgrade in place.
