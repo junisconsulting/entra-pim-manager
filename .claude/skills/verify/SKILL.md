@@ -109,11 +109,14 @@ Traps, all verified (see also `packaging/velopack/README.md`):
   or the installed app silently never starts (`CreateProcess` denied before any code runs, so no
   app log exists). **CI releases are currently unsigned too** (no signing anywhere in the
   pipeline — see `docs/engineering-backlog.md`, "Releases are not code-signed"). The blocking is
-  often **reputation/age-based**, not a static whitelist: the Defender ASR rule "prevalence, age,
-  or trusted list" (`01443614-CD74-433A-B99E-2ECDC07BFC25`), WDAC ISG, or EDR reputation deny
-  hashes younger than ~a day — field-confirmed 2026-08-14, where a 12-hour-old release ran and a
-  minutes-old one was denied on the same machine. So: a *fresh* release failing there is expected;
-  retry after ~24 h before suspecting the code. Diagnose via `Get-AuthenticodeSignature`,
+  often **reputation-based**, not a static whitelist. Field-confirmed 2026-08-14 via Defender
+  events: the ASR rule "Use advanced protection against ransomware"
+  (`C1DB55AB-C21A-4637-BB3F-A12568109D35`, block mode) denied the freshly released exe as
+  "untrusted or unsigned", while "prevalence, age, or trusted list"
+  (`01443614-CD74-433A-B99E-2ECDC07BFC25`) fired in audit — a 12-hour-old release ran on the same
+  machine because its hash had accrued cloud reputation overnight. So: a *fresh* release failing
+  there is expected; retry after ~24 h before suspecting the code, or have IT add an ASR
+  exclusion / submit the file to Microsoft. Diagnose via `Get-AuthenticodeSignature`,
   `Setup.exe --verbose --log <path>`, Defender/Operational events 1121/1122 (user-readable), and
   the AppLocker `EXE and DLL` (8004) / `CodeIntegrity` (3077) logs — those last channels need
   admin rights; an empty result as a standard user proves nothing.

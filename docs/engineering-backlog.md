@@ -17,13 +17,15 @@ published release to date (0.4.x, 0.5.0) ships unsigned binaries — confirmed i
 
 **Why it matters:** managed environments block unknown unsigned executables — observed as a Setup
 that "partially succeeds" (files written, launch denied at `CreateProcess`) or an app that
-silently never starts. Field evidence 2026-08-14 points at **reputation/age-based** enforcement
-(Defender ASR "prevalence, age, or trusted list" rule / WDAC ISG / EDR reputation): on the same
-machine, a ~12-hour-old unsigned release ran while a minutes-old one was denied, with no IT
-action in between. Consequence: every fresh release is dead on arrival at such customers for
-roughly a day, and auto-update stages a blocked binary that kills the installed app. Signing
-fixes this durably: reputation attaches to the constant publisher, and IT can build a one-time
-publisher exception instead of waiting out the age window per release.
+silently never starts. Field evidence 2026-08-14 (Defender events 1121/1122): the ASR rule
+"Use advanced protection against ransomware" (`C1DB55AB-C21A-4637-BB3F-A12568109D35`, block mode)
+denied a minutes-old unsigned release as "untrusted or unsigned", while the "prevalence, age, or
+trusted list" rule fired in audit; a ~12-hour-old unsigned release ran on the same machine
+because its hash had accrued cloud reputation — no IT action in between. Consequence: every
+fresh release is dead on arrival at such customers for roughly a day, and auto-update stages a
+blocked binary that kills the installed app. Signing fixes this durably: the blocking rule's
+trigger is literally "untrusted and unsigned", and reputation then attaches to the constant
+publisher instead of each release's day-old hash.
 
 **What makes the fix safe:** a junis code-signing certificate (OV/EV) provisioned as a CI secret,
 `build.ps1 -SignParams` wired into the release workflow on `windows-latest`, and one release
