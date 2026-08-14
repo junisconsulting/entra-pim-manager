@@ -7,6 +7,30 @@ v1 out-of-scope list lives in `CONTRIBUTING.md`.
 
 ---
 
+## Releases are not code-signed — no signing exists anywhere in the pipeline
+
+**Evidence:** `.github/workflows/release.yml` contains no signing step, no certificate secret and
+never passes `-SignParams`; `packaging/velopack/build.ps1` only *warns* "Building UNSIGNED". Every
+published release to date (0.4.x, 0.5.0) ships unsigned binaries — confirmed in the field
+2026-08-14: `Get-AuthenticodeSignature` on the installed 0.5.0 stub and app exe returns
+`NotSigned`.
+
+**Why it matters:** managed environments (AppLocker/WDAC/EDR) block unknown unsigned executables.
+A customer environment that had whitelisted one version's binaries (by hash) blocks **every
+update** — observed as a Setup that "partially succeeds" (files written, launch denied) or an app
+that silently never starts. Unsigned releases make each update a support ticket at every
+app-control customer, and hash-whitelisting on the customer side is a treadmill because Velopack
+updates change every hash.
+
+**What makes the fix safe:** a junis code-signing certificate (OV/EV) provisioned as a CI secret,
+`build.ps1 -SignParams` wired into the release workflow on `windows-latest`, and one release
+verified with `Get-AuthenticodeSignature` = `Valid` on Setup.exe, Update.exe, the stub and the app
+exe. Then app-control customers can replace per-version hash rules with a single publisher rule.
+Until that lands, the docs must say releases are unsigned (they do, as of 2026-08-14) — not imply
+the opposite.
+
+---
+
 ## Velopack Desktop shortcut suppression is unverified
 
 **Evidence:** `packaging/velopack/build.ps1:97` passes `--shortcuts StartMenuRoot` and its comment

@@ -117,9 +117,11 @@ This is a privileged-access tool; these are not style preferences.
 
 ## Known gaps
 
-Two are open: the unverified Velopack Desktop-shortcut suppression, and the `.slnx` that SDK 8.0.x
-cannot parse. Both are recorded with their evidence and their "what makes the fix safe" in
-`docs/engineering-backlog.md` — read it there before touching either, and do not "fix" them casually.
+Three are open: **releases are not code-signed** (every published build ships unsigned; app-control
+environments block installs until a cert lands in CI), the unverified Velopack Desktop-shortcut
+suppression, and the `.slnx` that SDK 8.0.x cannot parse. All are recorded with their evidence and
+their "what makes the fix safe" in `docs/engineering-backlog.md` — read it there before touching
+any of them, and do not "fix" them casually.
 
 ## Learning Loop
 

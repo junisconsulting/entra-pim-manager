@@ -124,8 +124,12 @@ Two traps:
 - **`-p:Version=` is not optional.** The repo carries no `<Version>` property, so without the flag
   the assembly silently gets `1.0.0` — the app footer and Explorer's Details tab then disagree with
   the release. `--packVersion` must match it.
-- **Local builds are unsigned.** Signing needs `signtool` on Windows. Never promote an unsigned
-  artifact to a release; that is what the release workflow is for.
+- **Nothing is signed yet — local builds *and* CI releases.** `build.ps1` accepts `-SignParams`,
+  but the release workflow never passes it and no certificate secret exists; every published
+  release ships unsigned (field-confirmed 2026-08-14). Consequence: app-control environments
+  (AppLocker/WDAC/EDR) block installs and updates unless the customer whitelists each version's
+  hashes. The fix — cert as CI secret + `-SignParams` in the workflow — is tracked in
+  `docs/engineering-backlog.md`, "Releases are not code-signed".
 
 ## Out of scope
 

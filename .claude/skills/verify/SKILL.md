@@ -105,12 +105,15 @@ Traps, all verified (see also `packaging/velopack/README.md`):
   release. `packaging/velopack/publish|releases` are gitignored.
 - **Unsigned builds cannot be tested on machines with application control** (AppLocker/WDAC/EDR —
   typical on customer VMs). Symptom, seen in the field 2026-08: Setup extracts everything, then
-  fails launching the app with `Access is denied (0x80070005)` — "Install Partially Succeeded",
-  and the machine is left with an unlaunchable `current\`; repair by re-running the signed release
-  Setup from GitHub. Signed CI releases pass (publisher rule on the junis cert). Test unsigned
-  builds on unmanaged machines only, or sign on Windows via `build.ps1 -SignParams`. Diagnose via
-  `Setup.exe --verbose --log <path>` plus the AppLocker `EXE and DLL` (8004) / `CodeIntegrity`
-  (3077) event logs.
+  fails launching the app with `Access is denied (0x80070005)` — "Install Partially Succeeded" —
+  or the installed app silently never starts (`CreateProcess` denied before any code runs, so no
+  app log exists). **CI releases are currently unsigned too** (no signing anywhere in the
+  pipeline — see `docs/engineering-backlog.md`, "Releases are not code-signed"), so a release
+  passes on such machines only where the customer's IT has whitelisted that version's binaries —
+  and the whitelist breaks again on the next update. Test unsigned builds on unmanaged machines
+  only. Diagnose via `Get-AuthenticodeSignature`, `Setup.exe --verbose --log <path>`, and the
+  AppLocker `EXE and DLL` (8004) / `CodeIntegrity` (3077) event logs — reading those channels
+  needs admin rights; an empty result as a standard user proves nothing.
 
 After packing, tell the user the Setup.exe is ready and name the path — they copy that one file to
 Windows, quit the running tray instance, and run it to upgrade in place.
