@@ -20,7 +20,7 @@ using MsalLogLevel = Microsoft.Identity.Client.LogLevel;
 /// <remarks>
 /// Excluded from coverage: every path drives the live Windows WAM broker and the
 /// DPAPI token cache, neither of which can be exercised by a unit test. Verified
-/// by the manual WAM smoke test in <c>docs/manual-test-checklist.md</c>.
+/// by the manual WAM smoke test in <c>.claude/manual-test-checklist.md</c>.
 /// </remarks>
 [ExcludeFromCodeCoverage]
 public sealed class MsalAuthService : IAuthService, IDisposable

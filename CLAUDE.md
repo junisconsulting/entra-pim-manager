@@ -83,10 +83,12 @@ from `CONTRIBUTING.md` work as documented; the flags above are the Linux-host ad
 - Every public async method in `Core` takes `CancellationToken ct = default` last. UI callers pass a
   token with a sensible timeout (~30 s for Graph).
 - Graph errors are mapped through `PimErrorMapper`. Never surface a stack trace in the UI.
-- Warnings are errors, and StyleCop runs as part of the build. Two rules bite constantly:
+- Warnings are errors, and StyleCop runs as part of the build. Three rules bite constantly:
   **SA1115** (no blank line between call arguments) and **SA1515** (a single-line comment needs a
-  preceding blank line) — together they make comments inside an argument list impossible. Hoist the
-  value to a local and comment the local instead.
+  preceding blank line) — together they make comments inside an argument list impossible; hoist the
+  value to a local and comment the local instead. And **SA1204** (static members before non-static):
+  a private static helper added below the instance methods fails the build — reorder it, or drop
+  `static` / inline it.
 - Comment intent, not mechanics: the maintainers are identity admins as much as developers.
 
 ## Security conventions
