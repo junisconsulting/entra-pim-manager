@@ -3,6 +3,7 @@ namespace EntraPimManager.AppAvalonia.ViewModels;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Styling;
@@ -11,6 +12,7 @@ using CommunityToolkit.Mvvm.Input;
 using EntraPimManager.AppAvalonia.Services;
 using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Configuration;
+using EntraPimManager.Core.Diagnostics;
 using EntraPimManager.Core.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -23,11 +25,25 @@ using Microsoft.Extensions.Options;
 /// </summary>
 public sealed partial class SettingsPanelViewModel : ObservableObject
 {
+    /// <summary>
+    /// Outer guard for the whole network-check run; each probe already caps
+    /// itself at 10 s and all probes run in parallel, so this never fires in
+    /// practice.
+    /// </summary>
+    private static readonly TimeSpan NetworkCheckTimeout = TimeSpan.FromSeconds(30);
+
     private readonly IUserSettingsService _userSettings;
     private readonly IAutostartService _autostart;
     private readonly IShortcutService _shortcuts;
     private readonly EntraPimManagerOptions _options;
+    private readonly INetworkDiagnosticsService _networkDiagnostics;
     private readonly ILogger<SettingsPanelViewModel> _logger;
+
+    /// <summary>
+    /// The plain-text report of the last completed network check — what the
+    /// "Copy report" button puts on the clipboard.
+    /// </summary>
+    private string? _lastNetworkReportText;
 
     /// <summary>
     /// When true, the <c>OnXxxChanged</c> partial-void handlers skip
@@ -100,11 +116,25 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     [ObservableProperty]
     private bool _showRestartPrompt;
 
+    [ObservableProperty]
+    private bool _isNetworkCheckRunning;
+
+    [ObservableProperty]
+    private bool _hasNetworkCheckResults;
+
+    /// <summary>True right after a copy, until the next run — drives the "Copied" hint.</summary>
+    [ObservableProperty]
+    private bool _reportCopied;
+
+    [ObservableProperty]
+    private IReadOnlyList<NetworkCheckGroupViewModel> _networkCheckGroups = [];
+
     public SettingsPanelViewModel(
         IUserSettingsService userSettings,
         IAutostartService autostart,
         IShortcutService shortcuts,
         IOptions<EntraPimManagerOptions> options,
+        INetworkDiagnosticsService networkDiagnostics,
         ILogger<SettingsPanelViewModel> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -112,6 +142,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         _autostart = autostart;
         _shortcuts = shortcuts;
         _options = options.Value;
+        _networkDiagnostics = networkDiagnostics;
         _logger = logger;
 
         _selectedTheme = ThemeOptions[0];
@@ -134,6 +165,18 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     /// subscribes to it; the VM has no direct dependency on the updater.
     /// </summary>
     public event Func<Task>? CheckForUpdatesRequested;
+
+    /// <summary>
+    /// Raised by "Copy report" with the report text. <see cref="Tray.TrayPopupController"/>
+    /// subscribes and forwards to the window's clipboard; the VM has no view dependency.
+    /// </summary>
+    public event Func<string, Task>? CopyReportRequested;
+
+    /// <summary>
+    /// The WAM out-of-process caveat, shown under the results and appended to
+    /// the report — single-sourced so UI and ticket text never drift apart.
+    /// </summary>
+    public string NetworkCheckCaveat => NetworkDiagnosticsReportFormatter.WamCaveat;
 
     /// <summary>Theme choices presented in the ComboBox.</summary>
     public IReadOnlyList<ThemeOption> ThemeOptions { get; } = new[]
@@ -380,6 +423,55 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         {
             await handler.Invoke();
         }
+    }
+
+    /// <summary>
+    /// Probes every endpoint the app and the Windows sign-in window need and
+    /// renders the per-endpoint results. Built for the field case where the
+    /// WAM window stays blank in a locked-down network: the report proves
+    /// whether the environment blocks a required endpoint.
+    /// </summary>
+    [RelayCommand]
+    private async Task RunNetworkCheck()
+    {
+        IsNetworkCheckRunning = true;
+        ReportCopied = false;
+        try
+        {
+            using var cts = new CancellationTokenSource(NetworkCheckTimeout);
+            var report = await _networkDiagnostics.RunAsync(cts.Token);
+            NetworkCheckGroups = [.. report.Groups.Select(g => new NetworkCheckGroupViewModel(g))];
+            HasNetworkCheckResults = true;
+
+            // Entry-assembly version, same source as the footer label.
+            var version = Assembly.GetEntryAssembly()?.GetName().Version;
+            var appVersion = version is null ? "?" : $"{version.Major}.{version.Minor}.{version.Build}";
+            _lastNetworkReportText = NetworkDiagnosticsReportFormatter.Format(
+                report,
+                appVersion,
+                Environment.OSVersion.VersionString);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Network check failed");
+        }
+        finally
+        {
+            IsNetworkCheckRunning = false;
+        }
+    }
+
+    /// <summary>Puts the last report on the clipboard via <see cref="CopyReportRequested"/>.</summary>
+    [RelayCommand]
+    private async Task CopyNetworkReport()
+    {
+        if (_lastNetworkReportText is null || CopyReportRequested is not { } handler)
+        {
+            return;
+        }
+
+        await handler.Invoke(_lastNetworkReportText);
+        ReportCopied = true;
     }
 
     partial void OnIsOpenChanged(bool value) => OnPropertyChanged(nameof(PanelOffsetX));

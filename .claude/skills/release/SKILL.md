@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut an Entra PIM Manager release — preconditions, release notes, the manual test gate, pushing the version tag, and verifying the published assets. Use when asked to release, cut a version, publish a build, or when a release run failed and needs interpreting. Also covers building a Velopack package locally.
+description: Cut an Entra PIM Manager release — preconditions, release notes, choosing the version number (major/minor/patch rules), the manual test gate, pushing the version tag, and verifying the published assets. Use when asked to release, cut a version, decide a version number, publish a build, or when a release run failed and needs interpreting. Also covers building a Velopack package locally.
 ---
 
 # Release
@@ -29,7 +29,33 @@ Work through `.claude/manual-test-checklist.md` on Windows before tagging. Treat
 integration-test gate: **no explicit pass, no release.** If the session is on Linux or the user has
 not confirmed the checklist, say so and stop — do not tag "because CI is green".
 
-## 3. Cut the release
+## 3. Choose the version — rules, not gut feeling
+
+Semantic versioning, translated for an end-user identity tool (there is no public API; the
+"contract" is what admins and users must do or notice). Judge the **whole diff since the last
+release** and take the **highest** rule that applies:
+
+| Bump | Rule | Examples |
+| --- | --- | --- |
+| **MAJOR** (1.x.y → 2.0.0) | The update demands human action outside the app before it fully works again | New or changed Graph scope (admin consent in *every* tenant), config change without automatic migration, raised minimum OS, changed install model |
+| **MINOR** (x.4.y → x.5.0) | Users get a new capability or a changed workflow — no action required | New settings section or diagnostic panel, additional cloud, new activation option, reworked UI flow |
+| **PATCH** (x.y.2 → x.y.3) | Same capabilities, just working better | Bug fixes, resilience/performance, dependency bumps, corrected texts or logs |
+
+Two questions decide almost every case: *"Must an admin or user **do** anything after this
+update?"* → MAJOR. *"Will they **notice** something new?"* → MINOR. Neither → PATCH.
+
+Edge rules:
+
+- **Mixed releases take the highest bump.** One feature plus five fixes is a MINOR.
+- **Security fixes are a PATCH** and ship promptly — unless the fix itself demands action, which
+  makes it MAJOR like any other action-required change.
+- **Pre-1.0:** the same rules apply to MINOR/PATCH, but `1.0.0` is never reached by counting — it
+  is the deliberate "production-ready" declaration. An action-required change during 0.x bumps
+  MINOR, with the required action as the *first line* of the release notes.
+- The `-local.<timestamp>` versions from the `verify` skill are mechanical (always next PATCH) and
+  never released; the decision above happens only here, at tag time.
+
+## 4. Cut the release
 
 ```bash
 git tag v0.4.2
@@ -46,7 +72,7 @@ That is the whole trigger. The workflow does the rest:
 - packs via `packaging/velopack/build.ps1`,
 - creates the GitHub release with an explicit asset list.
 
-## 4. Verify the published release
+## 5. Verify the published release
 
 The workflow already asserts the asset list, but confirm it on the release page:
 
@@ -65,7 +91,7 @@ missing, fix and re-release rather than leaving it.
 
 Then confirm the release body matches `packaging/release-notes/{version}.md`.
 
-## 5. Interpreting failures
+## 6. Interpreting failures
 
 - **`Tag 'x' is not vMAJOR.MINOR.PATCH.`** — the tag format. No suffixes, no `-rc1`; the workflow
   accepts three numeric segments only.
@@ -81,7 +107,7 @@ Then confirm the release body matches `packaging/release-notes/{version}.md`.
   the whole repo including the Avalonia app; `verify` on Linux covers the same ground, so this
   usually means the tag points at a commit older than your fix.
 
-## 6. Building a package locally (optional)
+## 7. Building a package locally (optional)
 
 On Windows:
 
