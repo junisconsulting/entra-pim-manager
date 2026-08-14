@@ -15,6 +15,7 @@ using EntraPimManager.AppAvalonia.Views;
 using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Caching;
 using EntraPimManager.Core.Configuration;
+using EntraPimManager.Core.Diagnostics;
 using EntraPimManager.Core.Graph;
 using EntraPimManager.Core.Services;
 using Microsoft.Extensions.Configuration;
@@ -267,6 +268,7 @@ public partial class App : Application
         builder.Services.AddSingleton<IAccountScopedServices, AccountScopedServices>();
         builder.Services.AddSingleton<IEligibilityAggregator, EligibilityAggregator>();
         builder.Services.AddSingleton<ITenantInfoService, TenantInfoService>();
+        builder.Services.AddSingleton<INetworkDiagnosticsService, NetworkDiagnosticsService>();
 
         // UI + tray (App.Avalonia).
         builder.Services.AddSingleton<IToastService, ToastService>();

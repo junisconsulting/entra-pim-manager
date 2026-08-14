@@ -1618,6 +1618,132 @@
                     </StackPanel>
                   </Button>
                 </Grid>
+
+                <!-- Network check: probes the endpoints the app and the WAM
+                     sign-in window need, per configured cloud. Built for the
+                     field case where the sign-in window opens but stays blank
+                     inside a locked-down customer network. -->
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalAlignment="Center">
+                  <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="Network check"
+                               FontSize="{DynamicResource FontBody}"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <TextBlock Text="Probe the sign-in, Graph and update endpoints this app and the Windows sign-in window need — useful when the sign-in window stays blank."
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="1"
+                          Classes="secondary"
+                          Command="{Binding RunNetworkCheckCommand}"
+                          IsEnabled="{Binding !IsNetworkCheckRunning}"
+                          VerticalAlignment="Center">
+                    <Panel>
+                      <TextBlock Text="Run check"
+                                 VerticalAlignment="Center"
+                                 IsVisible="{Binding !IsNetworkCheckRunning}" />
+                      <StackPanel Orientation="Horizontal" Spacing="8"
+                                  VerticalAlignment="Center"
+                                  IsVisible="{Binding IsNetworkCheckRunning}">
+                        <Border Classes="spinner" Width="13" Height="13">
+                          <Border.RenderTransform>
+                            <RotateTransform />
+                          </Border.RenderTransform>
+                          <Path Data="M 6.5,1 A 5.5,5.5 0 1 1 1,6.5"
+                                Stroke="{DynamicResource TextSecondaryBrush}"
+                                StrokeThickness="1.6"
+                                StrokeLineCap="Round" />
+                        </Border>
+                        <TextBlock Text="Checking…" VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Panel>
+                  </Button>
+                </Grid>
+
+                <!-- Results: one section per probed group (configured clouds,
+                     then the update feed). Same dot badge convention as the
+                     App Registration card — green means confirmed everywhere. -->
+                <StackPanel Spacing="10" IsVisible="{Binding HasNetworkCheckResults}">
+                  <ItemsControl ItemsSource="{Binding NetworkCheckGroups}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Spacing="10" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:NetworkCheckGroupViewModel">
+                        <StackPanel Spacing="4">
+                          <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="{Binding DisplayName}"
+                                       FontSize="{DynamicResource FontSmall}"
+                                       FontWeight="Medium"
+                                       Foreground="{DynamicResource TextPrimaryBrush}" />
+                            <TextBlock Text="{Binding ProxyLabel}"
+                                       FontSize="10"
+                                       Foreground="{DynamicResource TextTertiaryBrush}"
+                                       VerticalAlignment="Center" />
+                          </StackPanel>
+                          <ItemsControl ItemsSource="{Binding Rows}">
+                            <ItemsControl.ItemsPanel>
+                              <ItemsPanelTemplate>
+                                <StackPanel Spacing="4" />
+                              </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate x:DataType="vm:NetworkCheckRowViewModel">
+                                <StackPanel Spacing="1">
+                                  <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Ellipse Width="6" Height="6"
+                                             Fill="{DynamicResource SuccessBrush}"
+                                             VerticalAlignment="Center"
+                                             IsVisible="{Binding IsPass}" />
+                                    <Ellipse Width="6" Height="6"
+                                             Fill="{DynamicResource DangerBrush}"
+                                             VerticalAlignment="Center"
+                                             IsVisible="{Binding !IsPass}" />
+                                    <TextBlock Text="{Binding Host}"
+                                               FontSize="{DynamicResource FontSmall}"
+                                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                                  </StackPanel>
+                                  <TextBlock Margin="14,0,0,0"
+                                             Text="{Binding DetailLabel}"
+                                             FontSize="10"
+                                             Foreground="{DynamicResource TextTertiaryBrush}"
+                                             TextWrapping="Wrap"
+                                             IsVisible="{Binding IsPass}" />
+                                  <TextBlock Margin="14,0,0,0"
+                                             Text="{Binding DetailLabel}"
+                                             FontSize="10"
+                                             Foreground="{DynamicResource DangerBrush}"
+                                             TextWrapping="Wrap"
+                                             IsVisible="{Binding !IsPass}" />
+                                </StackPanel>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+
+                  <TextBlock Text="{Binding NetworkCheckCaveat}"
+                             FontSize="{DynamicResource FontSmall}"
+                             Foreground="{DynamicResource TextTertiaryBrush}"
+                             TextWrapping="Wrap" />
+
+                  <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                    <Button Grid.Column="0"
+                            Classes="secondary"
+                            Content="Copy report"
+                            Command="{Binding CopyNetworkReportCommand}" />
+                    <TextBlock Grid.Column="1"
+                               Text="Copied"
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource SuccessBrush}"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding ReportCopied}" />
+                  </Grid>
+                </StackPanel>
               </StackPanel>
               </Border>
 

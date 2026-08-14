@@ -112,6 +112,25 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 - [ ] In der UI erscheinen ausschließlich gemappte, freundliche Meldungen —
       keine Stacktraces, keine rohen Graph-Fehlertexte.
 
+## 4b. Netzwerk-Diagnose (Settings → DIAGNOSTICS)
+
+> Hintergrund: In abgeschotteten Kundennetzen öffnet sich das WAM-Fenster,
+> bleibt aber weiß — die Login-Seite bzw. deren CDN-Assets sind blockiert,
+> während Device-Code (nur Token-Endpoint) funktioniert. Der Netzwerk-Check
+> macht das per Klick nachweisbar.
+
+- [ ] **Offenes Netz:** „Run network check" → alle Zeilen grün, pro konfigurierter
+      Cloud eine Gruppe plus „Update feed (optional)"; Proxy-Angabe plausibel.
+- [ ] „Copy report" legt den Klartext-Report in die Zwischenablage; er enthält
+      Hostnamen, Status, Latenzen, App-/OS-Version — **keine** Tokens, UPNs oder
+      Proxy-Credentials.
+- [ ] **Simulierter Block:** `0.0.0.0 aadcdn.msauth.cn` und `aadcdn.msftauth.cn`
+      in die hosts-Datei → beide CDN-Zeilen rot (DNS/Blocked), die
+      Authority-Zeilen bleiben grün — das Muster des Kundenfalls. Danach
+      hosts-Einträge wieder entfernen.
+- [ ] Während des Laufs dreht der Spinner, der Button ist gesperrt; die App
+      bleibt bedienbar.
+
 ## 5. Packaging, Install & Auto-Update — Phase 5
 
 - [ ] `pwsh ./packaging/velopack/build.ps1 -Version 0.1.0` erzeugt ein Paket.
@@ -188,6 +207,7 @@ Logdateien: `%LocalAppData%\Entra-PIM-Manager\logs\pim-manager-*.log`
 | 2 Read-Pfade        |                        |           |
 | 3 Aktivierung       |                        |           |
 | 4 Tray & UI         |                        |           |
+| 4b Netzwerk-Check   |                        |           |
 | 5 Packaging         |                        |           |
 | 5b In-Place-Upgrade |                        |           |
 | 6 Fehlerpfade       |                        |           |

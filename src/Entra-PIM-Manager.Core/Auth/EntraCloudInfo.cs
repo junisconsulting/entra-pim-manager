@@ -17,6 +17,18 @@ public static class EntraCloudInfo
         _ => "https://graph.microsoft.com/v1.0",
     };
 
+    /// <summary>
+    /// STS authority base URL for <paramref name="cloud"/>, no trailing slash.
+    /// MSAL derives its authority from <see cref="MsalCloudInstance"/>; this
+    /// literal exists for the network diagnostics, which must name the host
+    /// explicitly. Keep the two switches in sync.
+    /// </summary>
+    public static string AuthorityBaseUrl(EntraCloud cloud) => cloud switch
+    {
+        EntraCloud.China => "https://login.partner.microsoftonline.cn",
+        _ => "https://login.microsoftonline.com",
+    };
+
     /// <summary>MSAL cloud instance for <paramref name="cloud"/>.</summary>
     public static AzureCloudInstance MsalCloudInstance(EntraCloud cloud) => cloud switch
     {

@@ -3,6 +3,7 @@ namespace EntraPimManager.AppAvalonia.Tray;
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using EntraPimManager.AppAvalonia.Services;
@@ -69,6 +70,12 @@ public sealed class TrayPopupController
             args.Cancel = true;
             _window.Hide();
         };
+
+        // Clipboard for the settings network-check report. Wired here because
+        // the controller owns both the window (a TopLevel, hence the clipboard)
+        // and the shell VM — the settings VM itself stays free of view types.
+        _viewModel.SettingsPanel.CopyReportRequested += text =>
+            _window.Clipboard?.SetTextAsync(text) ?? Task.CompletedTask;
 
         _viewModel.ActiveCountChanged += (_, _) => UpdateTrayIcon();
         _viewModel.ExpiringChanged += (_, _) => UpdateTrayIcon();
