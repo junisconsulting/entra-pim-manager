@@ -161,12 +161,6 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     public event Action? Closed;
 
     /// <summary>
-    /// Raised by the "Check for updates" button. <see cref="Tray.UpdateController"/>
-    /// subscribes to it; the VM has no direct dependency on the updater.
-    /// </summary>
-    public event Func<Task>? CheckForUpdatesRequested;
-
-    /// <summary>
     /// Raised by "Copy report" with the report text. <see cref="Tray.TrayPopupController"/>
     /// subscribes and forwards to the window's clipboard; the VM has no view dependency.
     /// </summary>
@@ -407,21 +401,6 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to open the log folder at {LogDirectory}", LogDirectory);
-        }
-    }
-
-    /// <summary>
-    /// Asks the updater to check GitHub for a newer release right now and surface
-    /// the prompt if one is found. Backs the "Check for updates" button; the
-    /// actual work happens in <see cref="Tray.UpdateController"/> via
-    /// <see cref="CheckForUpdatesRequested"/>.
-    /// </summary>
-    [RelayCommand]
-    private async Task CheckForUpdatesNow()
-    {
-        if (CheckForUpdatesRequested is { } handler)
-        {
-            await handler.Invoke();
         }
     }
 

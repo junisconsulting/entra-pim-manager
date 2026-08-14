@@ -1569,23 +1569,6 @@
                                 OffContent="" />
                 </Grid>
 
-                <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
-                  <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock Text="Check now"
-                               FontSize="{DynamicResource FontBody}"
-                               Foreground="{DynamicResource TextPrimaryBrush}" />
-                    <TextBlock Text="Manually check for a newer version."
-                               FontSize="{DynamicResource FontSmall}"
-                               Foreground="{DynamicResource TextTertiaryBrush}"
-                               TextWrapping="Wrap" />
-                  </StackPanel>
-                  <Button Grid.Column="1"
-                          Classes="secondary"
-                          Content="Check for updates"
-                          Command="{Binding CheckForUpdatesNowCommand}"
-                          IsEnabled="{Binding AutomaticUpdatesEnabled}"
-                          VerticalAlignment="Center" />
-                </Grid>
               </StackPanel>
               </Border>
 
