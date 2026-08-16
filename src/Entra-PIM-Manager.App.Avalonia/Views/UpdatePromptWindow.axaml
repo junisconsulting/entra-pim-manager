@@ -21,16 +21,21 @@
           Margin="8">
     <StackPanel Margin="16,14" Spacing="9">
 
-      <!-- Header: update glyph + title -->
+      <!-- Header: update glyph + app name, then the version transition. The popup
+           appears unprompted over any other app — it has to identify itself. -->
       <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
         <PathIcon Data="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"
                   Width="16" Height="16"
                   Foreground="{DynamicResource AccentBrush}" />
-        <TextBlock Text="{Binding HeaderText}"
+        <TextBlock Text="Entra PIM Manager"
                    FontSize="{DynamicResource FontSubtitle}"
                    FontWeight="SemiBold"
                    Foreground="{DynamicResource TextPrimaryBrush}" />
       </StackPanel>
+
+      <TextBlock Text="{Binding VersionText}"
+                 FontSize="{DynamicResource FontSmall}"
+                 Foreground="{DynamicResource TextSecondaryBrush}" />
 
       <!-- AVAILABLE -->
       <StackPanel IsVisible="{Binding IsAvailable}" Spacing="9">
@@ -54,13 +59,13 @@
 
       <!-- READY -->
       <StackPanel IsVisible="{Binding IsReady}" Spacing="9">
-        <TextBlock Text="Update downloaded. Restart now to apply it, or it will be applied the next time you start the app."
+        <TextBlock Text="Update downloaded. Only Entra PIM Manager restarts — Windows is not affected, and no other app is closed. Skip it and the update applies the next time you start Entra PIM Manager."
                    FontSize="{DynamicResource FontSmall}"
                    TextWrapping="Wrap"
                    Foreground="{DynamicResource TextSecondaryBrush}" />
         <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
           <Button Classes="ghost" Content="Later" Click="OnLaterClick" />
-          <Button Classes="secondary" Content="Restart now" Click="OnRestartClick" />
+          <Button Classes="secondary" Content="Restart app now" Click="OnRestartClick" />
         </StackPanel>
       </StackPanel>
 
