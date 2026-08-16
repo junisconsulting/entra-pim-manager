@@ -15,10 +15,11 @@ public sealed partial class UpdatePromptViewModel : ObservableObject
     private UpdateStage _stage = UpdateStage.Available;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HeaderText))]
+    [NotifyPropertyChangedFor(nameof(VersionText))]
     private string _newVersion = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VersionText))]
     private string _currentVersion = string.Empty;
 
     /// <summary>Download progress, 0..100. Bound to the progress bar.</summary>
@@ -38,8 +39,14 @@ public sealed partial class UpdatePromptViewModel : ObservableObject
         Error,
     }
 
-    /// <summary>Title line, e.g. <c>"Version 0.3.0 available"</c>.</summary>
-    public string HeaderText => $"Version {NewVersion} available";
+    /// <summary>
+    /// Version line, e.g. <c>"Version 0.5.0 → 0.6.0"</c>. Users see this popup out of
+    /// context, so it names both versions; falls back to the target version alone when
+    /// the running version is unknown (non-Velopack run).
+    /// </summary>
+    public string VersionText => string.IsNullOrEmpty(CurrentVersion)
+        ? $"Version {NewVersion}"
+        : $"Version {CurrentVersion} → {NewVersion}";
 
     /// <summary>True while offering the update before any download has started.</summary>
     public bool IsAvailable => Stage == UpdateStage.Available;
