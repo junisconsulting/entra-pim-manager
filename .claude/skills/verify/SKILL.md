@@ -17,10 +17,11 @@ needs Windows — see "Out of scope".
 
 ```bash
 export DOTNET_ROOT="$HOME/.dotnet"
-export PATH="$HOME/.dotnet:$PATH"
+export PATH="$HOME/.dotnet:$HOME/.dotnet/tools:$PATH"
 ```
 
-`dotnet` is not on the default PATH — the SDK lives at `~/.dotnet` (installed without root). On
+`dotnet` is not on the default PATH — the SDK lives at `~/.dotnet` (installed without root), and
+`vpk` (step 4) is a global dotnet tool in `~/.dotnet/tools`, so both entries are needed. On
 Windows, skip this step and drop `-p:EnableWindowsTargeting=true` from every command below.
 
 ## 1. Build — always
