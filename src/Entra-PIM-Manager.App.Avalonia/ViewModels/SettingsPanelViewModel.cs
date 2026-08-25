@@ -359,7 +359,10 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     /// <summary>
     /// Launches a fresh process from the current executable and shuts the
     /// running one down. Used after <see cref="SaveClientId"/> so the new
-    /// configuration is picked up via <c>appsettings.local.json</c>.
+    /// configuration is picked up via <c>appsettings.local.json</c>. The
+    /// <see cref="Program.RestartArgument"/> makes the replacement wait for
+    /// this process to release the single-instance mutex instead of treating
+    /// it as an already-running instance and exiting.
     /// </summary>
     [RelayCommand]
     private void RestartApp()
@@ -369,7 +372,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             var exePath = Environment.ProcessPath;
             if (!string.IsNullOrEmpty(exePath))
             {
-                Process.Start(new ProcessStartInfo(exePath) { UseShellExecute = true });
+                Process.Start(new ProcessStartInfo(exePath, Program.RestartArgument) { UseShellExecute = true });
             }
         }
         catch (Exception ex)

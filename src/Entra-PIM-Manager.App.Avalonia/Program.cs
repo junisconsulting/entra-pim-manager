@@ -15,6 +15,13 @@ using Velopack;
 /// </summary>
 public static class Program
 {
+    /// <summary>
+    /// Marks a launch as the replacement half of an in-app restart: instead of
+    /// bowing out when the (still exiting) old instance holds the mutex, the new
+    /// process waits for it. Passed by <c>SettingsPanelViewModel.RestartApp</c>.
+    /// </summary>
+    public const string RestartArgument = "--restart";
+
     // Session-scoped (Local namespace) names: one tray instance per interactive
     // login, while a second Windows user on the same machine stays independent.
     private const string SingleInstanceMutexName = "EntraPimManager.SingleInstance";
@@ -42,9 +49,12 @@ public static class Program
             .Run();
 
         // If we can't take the mutex, another instance owns it: wake its window
-        // and bow out without starting a second tray icon.
+        // and bow out without starting a second tray icon. The one exception is
+        // a restart handover, where the owner is the old instance mid-shutdown
+        // — there we wait for it to die instead of exiting (else the restart
+        // ends with no instance running at all).
         _singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out var isPrimaryInstance);
-        if (!isPrimaryInstance)
+        if (!isPrimaryInstance && !TryTakeOverAfterRestart(args))
         {
             SignalExistingInstance();
             return 0;
@@ -65,6 +75,37 @@ public static class Program
             .UsePlatformDetect()
             .WithInterFont()
             .LogToTrace();
+
+    /// <summary>
+    /// On a restart launch, waits for the old instance to exit and release the
+    /// single-instance mutex (it never releases explicitly, so ownership arrives
+    /// as an abandoned mutex when its process dies). Returns true once this
+    /// process owns the mutex and may continue as the primary instance; false
+    /// on a normal (non-restart) launch or if the old instance is still alive
+    /// after the timeout.
+    /// </summary>
+    /// <param name="args">The process command-line arguments.</param>
+    /// <returns>True when this process now owns the single-instance mutex.</returns>
+    private static bool TryTakeOverAfterRestart(string[] args)
+    {
+        if (Array.IndexOf(args, RestartArgument) < 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            // ponytail: 10 s covers any realistic shutdown; on timeout we fall
+            // back to today's behavior (wake the survivor and exit).
+            return _singleInstanceMutex!.WaitOne(TimeSpan.FromSeconds(10));
+        }
+        catch (AbandonedMutexException)
+        {
+            // The expected handover: the old process exited while we waited.
+            // Abandonment still transfers ownership to us.
+            return true;
+        }
+    }
 
     /// <summary>
     /// Creates the named auto-reset event the running instance listens on. Done
