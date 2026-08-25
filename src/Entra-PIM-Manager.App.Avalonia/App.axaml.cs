@@ -231,6 +231,10 @@ public partial class App : Application
 
         Directory.CreateDirectory(AppPaths.LogDirectory);
 
+        // Day-files can reach ~250 MB (MSAL debug volume), so keep only a
+        // week — Serilog deletes older files when it rolls to a new one.
+        const int retainedLogFiles = 7;
+
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .Enrich.FromLogContext()
@@ -239,7 +243,7 @@ public partial class App : Application
                 new CompactJsonFormatter(),
                 Path.Combine(AppPaths.LogDirectory, "entra-pim-manager-.log"),
                 rollingInterval: RollingInterval.Day,
-                retainedFileCountLimit: 14)
+                retainedFileCountLimit: retainedLogFiles)
             .CreateLogger();
 
         builder.Logging.ClearProviders();
