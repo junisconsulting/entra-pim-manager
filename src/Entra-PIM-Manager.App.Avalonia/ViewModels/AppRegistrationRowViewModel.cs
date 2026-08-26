@@ -10,9 +10,9 @@ using EntraPimManager.Core.Configuration;
 /// form below for editing; saving replaces it.
 /// </summary>
 /// <remarks>
-/// The title uses the same wording as the "Sign in with" picker in the add-account
-/// panel ("Contoso · Entra Global"), so the user meets each registration under one
-/// name in both places.
+/// The title is the same name the "Sign in with" picker in the add-account panel
+/// uses ("Contoso"), so the user meets each registration under one name in both
+/// places; the cloud is shown as a chip next to it.
 /// </remarks>
 public sealed class AppRegistrationRowViewModel : ObservableObject
 {
@@ -40,8 +40,14 @@ public sealed class AppRegistrationRowViewModel : ObservableObject
 
     public string? Label { get; }
 
-    /// <summary>Row heading — identical to the entry's label in the "Sign in with" picker.</summary>
-    public string Title => $"{(string.IsNullOrWhiteSpace(Label) ? TenantId : Label)} · {EntraCloudInfo.DisplayName(Cloud)}";
+    /// <summary>Row heading: the label, or the tenant id when none was given.</summary>
+    public string Title => string.IsNullOrWhiteSpace(Label) ? TenantId : Label;
+
+    /// <summary>Short cloud name for the chip ("Global", "China").</summary>
+    public string CloudName => Cloud.ToString();
+
+    /// <summary>Drives the chip colour — Global and China must be told apart at a glance.</summary>
+    public bool IsChina => Cloud == EntraCloud.China;
 
     /// <summary>
     /// A registration only counts as verified once a sign-in through it succeeded
@@ -50,9 +56,7 @@ public sealed class AppRegistrationRowViewModel : ObservableObject
     /// </summary>
     public bool IsVerified => _verifiedClientIds().Contains(ClientId, StringComparer.OrdinalIgnoreCase);
 
-    public string Status => IsVerified
-        ? "Verified — an account signed in successfully with this App Registration."
-        : "Not verified yet — sign in with it to prove the setup.";
+    public string Status => IsVerified ? "Verified" : "Not verified yet — sign in with it once";
 
     /// <summary>Re-raises the derived verification properties after a sign-in.</summary>
     public void NotifyStateChanged()

@@ -1126,7 +1126,7 @@
 
                 <StackPanel Spacing="8"
                             IsVisible="{Binding IsAppRegistrationSectionExpanded}">
-                <TextBlock Text="One entry per tenant you sign in to: the tenant id, the client id of the Entra App Registration to use there, and the cloud. A multi-tenant registration used in several tenants is listed once per tenant with the same client id; a customer's single-tenant registration is an entry with their client id. Only listed tenants can be signed in to. A registration lives in a single cloud — a Global one is unknown in Entra China and vice versa."
+                <TextBlock Text="One entry per tenant: its id, the client id of the App Registration to use there, and the cloud. Only listed tenants can be signed in to."
                            FontSize="{DynamicResource FontSmall}"
                            Foreground="{DynamicResource TextSecondaryBrush}"
                            TextWrapping="Wrap" />
@@ -1160,20 +1160,67 @@
                                   Command="{Binding $parent[ItemsControl].((vm:SettingsPanelViewModel)DataContext).EditRegistrationCommand}"
                                   CommandParameter="{Binding}"
                                   ToolTip.Tip="Click to edit">
-                            <StackPanel Spacing="2" IsHitTestVisible="False">
-                              <TextBlock Text="{Binding Title}"
-                                         FontSize="{DynamicResource FontSmall}"
-                                         FontWeight="Medium"
-                                         Foreground="{DynamicResource TextPrimaryBrush}"
-                                         TextTrimming="CharacterEllipsis" />
-                              <TextBlock Text="{Binding ClientId}"
+                            <StackPanel Spacing="3" IsHitTestVisible="False">
+                              <!-- Name + cloud chip. The chip colour is the one
+                                   thing that separates a Global entry from a
+                                   China one at a glance. -->
+                              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0"
+                                           Text="{Binding Title}"
+                                           FontSize="{DynamicResource FontBody}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                           TextTrimming="CharacterEllipsis"
+                                           VerticalAlignment="Center" />
+                                <Border Grid.Column="1"
+                                        Background="{DynamicResource AccentSoftBrush}"
+                                        CornerRadius="4"
+                                        Padding="6,2"
+                                        VerticalAlignment="Center"
+                                        IsVisible="{Binding !IsChina}">
+                                  <TextBlock Text="{Binding CloudName}"
+                                             FontSize="10"
+                                             FontWeight="Medium"
+                                             Foreground="{DynamicResource AccentTextBrush}" />
+                                </Border>
+                                <Border Grid.Column="1"
+                                        Background="{DynamicResource WarningSoftBrush}"
+                                        CornerRadius="4"
+                                        Padding="6,2"
+                                        VerticalAlignment="Center"
+                                        IsVisible="{Binding IsChina}">
+                                  <TextBlock Text="{Binding CloudName}"
+                                             FontSize="10"
+                                             FontWeight="Medium"
+                                             Foreground="{DynamicResource WarningBrush}" />
+                                </Border>
+                              </Grid>
+                              <TextBlock FontFamily="Consolas, Cascadia Mono, monospace"
                                          FontSize="{DynamicResource FontSmall}"
                                          Foreground="{DynamicResource TextSecondaryBrush}"
-                                         TextTrimming="CharacterEllipsis" />
-                              <TextBlock Text="{Binding Status}"
+                                         TextTrimming="CharacterEllipsis">
+                                <Run Text="Tenant " Foreground="{DynamicResource TextTertiaryBrush}" /><Run Text="{Binding TenantId}" />
+                              </TextBlock>
+                              <TextBlock FontFamily="Consolas, Cascadia Mono, monospace"
                                          FontSize="{DynamicResource FontSmall}"
-                                         Foreground="{DynamicResource TextTertiaryBrush}"
-                                         TextWrapping="Wrap" />
+                                         Foreground="{DynamicResource TextSecondaryBrush}"
+                                         TextTrimming="CharacterEllipsis">
+                                <Run Text="Client " Foreground="{DynamicResource TextTertiaryBrush}" /><Run Text="{Binding ClientId}" />
+                              </TextBlock>
+                              <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,2,0,0">
+                                <Ellipse Width="6" Height="6"
+                                         VerticalAlignment="Center"
+                                         Fill="{DynamicResource SuccessBrush}"
+                                         IsVisible="{Binding IsVerified}" />
+                                <Ellipse Width="6" Height="6"
+                                         VerticalAlignment="Center"
+                                         Fill="{DynamicResource WarningBrush}"
+                                         IsVisible="{Binding !IsVerified}" />
+                                <TextBlock Text="{Binding Status}"
+                                           FontSize="{DynamicResource FontSmall}"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"
+                                           VerticalAlignment="Center" />
+                              </StackPanel>
                             </StackPanel>
                           </Button>
                           <Button Grid.Column="1"
