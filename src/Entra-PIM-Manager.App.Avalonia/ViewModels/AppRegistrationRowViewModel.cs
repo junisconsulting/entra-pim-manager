@@ -1,114 +1,70 @@
 namespace EntraPimManager.AppAvalonia.ViewModels;
 
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Configuration;
 
 /// <summary>
-/// One row of the Settings → APP REGISTRATION section: the client id for a single
-/// sovereign cloud, with its own validation and verification state.
+/// One row of the Settings → APP REGISTRATION list: a single App Registration,
+/// read-only with a remove button. <see cref="TenantId"/> is <c>null</c> for the
+/// cloud-wide (multi-tenant) registration of a cloud and the pinned tenant's GUID
+/// for a single-tenant one. Rows are added through the form below the list;
+/// re-adding the same cloud + tenant replaces the entry — there is no inline edit.
 /// </summary>
 /// <remarks>
-/// There is one row per <see cref="EntraCloud"/> because national clouds are
-/// physically isolated instances — an app registration lives in exactly one of them,
-/// so each cloud needs its own client id and each must prove itself with its own
-/// sign-in. See <c>docs/app-registration-setup.md</c>.
+/// The title uses the same wording as the "Sign in with" picker in the add-account
+/// panel ("Entra Global — any tenant", "Contoso · Entra Global"), so the user meets
+/// each registration under one name in both places.
 /// </remarks>
-public sealed partial class AppRegistrationRowViewModel : ObservableObject
+public sealed class AppRegistrationRowViewModel : ObservableObject
 {
-    private readonly EntraPimManagerOptions _options;
     private readonly Func<string[]> _verifiedClientIds;
-    private readonly Action<EntraCloud, string> _save;
-
-    /// <summary>
-    /// Bound to the row's client id TextBox. Validated as a GUID before
-    /// <see cref="SaveCommand"/> writes it to the local config file; blank is
-    /// accepted too when the cloud is configured, which clears it. Seeded from
-    /// the current effective value when the panel opens.
-    /// </summary>
-    [ObservableProperty]
-    private string _input = string.Empty;
 
     public AppRegistrationRowViewModel(
         EntraCloud cloud,
-        EntraPimManagerOptions options,
-        Func<string[]> verifiedClientIds,
-        Action<EntraCloud, string> save)
+        string? tenantId,
+        string clientId,
+        string? label,
+        Func<string[]> verifiedClientIds)
     {
         Cloud = cloud;
-        _options = options;
+        TenantId = tenantId;
+        ClientId = clientId;
+        Label = label;
         _verifiedClientIds = verifiedClientIds;
-        _save = save;
     }
 
-    /// <summary>The cloud this row configures.</summary>
     public EntraCloud Cloud { get; }
 
-    /// <summary>Row heading, e.g. <c>Entra China (21Vianet)</c>.</summary>
-    public string DisplayName => EntraCloudInfo.DisplayName(Cloud);
+    /// <summary>Pinned tenant, or <c>null</c> for the cloud-wide registration.</summary>
+    public string? TenantId { get; }
+
+    public string ClientId { get; }
+
+    public string? Label { get; }
+
+    public bool IsCloudWide => TenantId is null;
+
+    /// <summary>Row heading — identical to the entry's label in the "Sign in with" picker.</summary>
+    public string Title => IsCloudWide
+        ? $"{EntraCloudInfo.DisplayName(Cloud)} — any tenant"
+        : $"{(string.IsNullOrWhiteSpace(Label) ? TenantId : Label)} · {EntraCloudInfo.DisplayName(Cloud)}";
 
     /// <summary>
-    /// True when <see cref="Input"/> holds a syntactically valid GUID. Drives the
-    /// enabled state of the Save button so the user gets feedback before submitting.
+    /// A registration only counts as verified once a sign-in through it succeeded
+    /// (<see cref="UserSettings.VerifiedClientIds"/>) — a saved GUID proves nothing
+    /// about public client flows, the redirect URI or admin consent.
     /// </summary>
-    public bool IsInputValid => Guid.TryParse(Input, out _);
+    public bool IsVerified => _verifiedClientIds().Contains(ClientId, StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Save is allowed for a GUID, or for a blank input on a configured cloud —
-    /// that is how a registration is removed again (e.g. after losing access to
-    /// the tenant). Blank on an unconfigured cloud is a no-op and stays disabled.
-    /// </summary>
-    public bool CanSave => IsInputValid || (string.IsNullOrWhiteSpace(Input) && !IsMissing);
+    public string Status => IsVerified
+        ? "Verified — an account signed in successfully with this App Registration."
+        : "Not verified yet — sign in with it to prove the setup.";
 
-    /// <summary>
-    /// True when this cloud has no usable client id configured. Drives the inline
-    /// "not configured" hint, and keeps the shipped placeholder out of the TextBox
-    /// — <see cref="EntraPimManagerOptions.ClientIdFor"/> returns null rather than a
-    /// non-GUID value.
-    /// </summary>
-    public bool IsMissing => ConfiguredClientId is null;
-
-    /// <summary>
-    /// True once a sign-in has actually succeeded against this cloud's client id
-    /// (see <see cref="UserSettings.VerifiedClientIds"/>). Only then does the row
-    /// show a green check — a saved GUID alone says nothing about whether the
-    /// registration is usable.
-    /// </summary>
-    public bool IsVerified =>
-        !IsMissing
-        && _verifiedClientIds().Contains(ConfiguredClientId!, StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// True when a client id is configured but no sign-in has proven it yet.
-    /// Drives the neutral "sign in to verify" hint — deliberately not green.
-    /// </summary>
-    public bool IsUnverified => !IsMissing && !IsVerified;
-
-    private string? ConfiguredClientId => _options.ClientIdFor(Cloud);
-
-    /// <summary>Seeds <see cref="Input"/> from the active configuration.</summary>
-    public void Seed()
-    {
-        Input = IsMissing ? string.Empty : ConfiguredClientId!;
-        NotifyStateChanged();
-    }
-
-    /// <summary>Re-raises the derived verification properties.</summary>
+    /// <summary>Re-raises the derived verification properties after a sign-in.</summary>
     public void NotifyStateChanged()
     {
-        OnPropertyChanged(nameof(IsMissing));
         OnPropertyChanged(nameof(IsVerified));
-        OnPropertyChanged(nameof(IsUnverified));
+        OnPropertyChanged(nameof(Status));
     }
-
-    partial void OnInputChanged(string value)
-    {
-        OnPropertyChanged(nameof(IsInputValid));
-        OnPropertyChanged(nameof(CanSave));
-        SaveCommand.NotifyCanExecuteChanged();
-    }
-
-    [RelayCommand(CanExecute = nameof(CanSave))]
-    private void Save() => _save(Cloud, Input.Trim());
 }

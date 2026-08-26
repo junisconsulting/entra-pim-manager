@@ -51,9 +51,9 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 
 - [ ] Nur Global konfiguriert → im „Add account"-Panel ist **keine** Cloud-Auswahl
       sichtbar.
-- [ ] China-ClientId unter **Settings → APP REGISTRATION → Entra China (21Vianet)**
-      speichern → Restart-Banner erscheint; nach Neustart zeigt „Add account" die
-      Cloud-Auswahl mit beiden Einträgen.
+- [ ] China-ClientId unter **Settings → APP REGISTRATION** als Eintrag hinzufügen
+      (Tenant-ID leer, Cloud „Entra China (21Vianet)") → Restart-Banner erscheint;
+      nach Neustart zeigt „Add account" den „Sign in with"-Picker mit beiden Einträgen.
 - [ ] Cloud „Entra China" + **leeres** Tenant-Feld → der Account landet mit
       `"cloud": 1` in `accounts.json` (Regression: bis 0.4.1 wurde still Global
       enrolled).
@@ -79,7 +79,7 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 > (siehe `docs/app-registration-setup.md` §8) — gleiche Redirect-URI, Public
 > Client Flows an, gleiche sechs Scopes, Admin-Consent nur dort.
 
-- [ ] Nur eine tenant-spezifische Registration konfiguriert, Cloud-Zeile leer →
+- [ ] Nur eine tenant-spezifische Registration konfiguriert (kein „any tenant"-Eintrag) →
       „Add account" zeigt **keinen** „Sign in with"-Picker und **kein** Tenant-Feld.
 - [ ] Cloud-Registration **und** tenant-spezifische Registration konfiguriert →
       Picker zeigt „Entra Global — any tenant" und den Label-Eintrag; beim
@@ -93,9 +93,11 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
       App Registration…", **kein** Eintrag in `accounts.json`.
 - [ ] Gepinnten Account entfernen lässt `msal.cache` und den Global-Account
       unberührt — und umgekehrt.
-- [ ] Single-Tenant-ClientId in die **Cloud-Zeile** eingetragen → verständliche
-      Meldung („…single-tenant but is configured as the cloud-wide…"), **kein**
-      roher `AADSTS50194`.
+- [ ] Single-Tenant-ClientId **ohne Tenant-ID** (als „any tenant") eingetragen →
+      verständliche Meldung („…single-tenant but is configured as the cloud-wide…"),
+      **kein** roher `AADSTS50194`.
+- [ ] Label-Feld ist nur aktiv, sobald eine Tenant-ID eingegeben ist; „Add" erst
+      aktiv, wenn die Client-ID eine GUID ist (Tenant-ID leer oder GUID).
 - [ ] Tenant-spezifische Registration per ✕ entfernen → Restart-Banner; nach
       Neustart zeigt die Tenant-Gruppe „Sign-in for this account is no longer
       valid…", und der Account lässt sich in Settings trotzdem entfernen.
@@ -199,8 +201,9 @@ gesetzt, mindestens ein Konto enrolled), dann die neue Version darüber installi
       in die normale Ansicht.
 - [ ] Alle zuvor enrollten Konten sind noch da, in unveränderter Reihenfolge.
 - [ ] Eligibilities und aktive Zuweisungen laden ohne erneute Anmeldung.
-- [ ] Settings → APP REGISTRATION: die ClientId der Vorversion ist vorbefüllt,
-      **nicht** der Platzhalter `YOUR-CLIENT-ID-HERE`.
+- [ ] Settings → APP REGISTRATION: die ClientId der Vorversion erscheint als Eintrag
+      „Entra Global — any tenant" mit Verified-Status, **nicht** der Platzhalter
+      `YOUR-CLIENT-ID-HERE`.
 - [ ] Ein Wert, der nur in der Vorversion existierte (z. B. handgepflegte
       `AllowedTenants`), ist noch wirksam.
 

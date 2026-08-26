@@ -108,17 +108,19 @@ that account is added.
 ## 5. Enter the client id
 
 The normal path requires no file editing: start the app, open **Settings → APP
-REGISTRATION**, and paste the client id from step 1 into the row for its cloud.
-The app saves it to your per-user config at
+REGISTRATION**, and add an entry: leave the tenant id **blank** (that makes it the
+multi-tenant registration serving any tenant in the cloud), paste the client id
+from step 1, pick the cloud → **Add**. The app saves it to your per-user config at
 `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` and applies it on the
 next restart. The shipped `appsettings.json` carries only a placeholder.
 
-Leave a cloud's row blank if you don't use it — that cloud is then simply absent
-from the cloud picker when you add an account. At least one row must be filled in.
+A cloud without an entry is simply absent from the "Sign in with" picker when you
+add an account. At least one registration is required. ✕ removes an entry;
+adding the same cloud (and tenant) again replaces it.
 
 The green **Verified** badge only appears once an account has actually signed in
-with that registration; it is per cloud, because a Global sign-in proves nothing
-about the China registration.
+with that registration; it is per registration, because a Global sign-in proves
+nothing about the China one.
 
 ### Optional: restrict the allowed tenants
 
@@ -209,8 +211,9 @@ So you need **a second App Registration, created inside a China tenant**.
    **China** client id), "Allow public client flows" on, the same six delegated
    Graph scopes, admin consent per China tenant via the `login.partner…` URL in
    step 4.
-2. In the app: **Settings → APP REGISTRATION → Entra China (21Vianet)** → paste
-   the China client id → **Save** → **Restart now**.
+2. In the app: **Settings → APP REGISTRATION** → add an entry with the tenant id
+   blank, the China client id and cloud *Entra China (21Vianet)* → **Add** →
+   **Restart now**.
 3. After the restart, **Settings → ACCOUNTS → "Add account…"** shows a **Cloud**
    dropdown (it is hidden while only one cloud is configured). Pick
    *Entra China (21Vianet)* and sign in.
@@ -257,10 +260,10 @@ account is no longer valid … Remove the account in Settings and add it again"*
    pattern (with *their* client id), "Allow public client flows" on, and the
    same six delegated Graph scopes. Admin consent (step 4) is needed in that
    tenant only — the app cannot be used anywhere else.
-2. In the app: **Settings → APP REGISTRATION → Tenant-specific registrations** →
-   enter the tenant id (GUID), the client id, an optional label (e.g. the
-   customer's name), pick the cloud → **Add** → **Restart now**. Re-adding the
-   same tenant replaces its entry; ✕ removes it.
+2. In the app: **Settings → APP REGISTRATION** → add an entry **with** the tenant
+   id (GUID), the client id, an optional label (e.g. the customer's name), pick
+   the cloud → **Add** → **Restart now**. Re-adding the same tenant replaces its
+   entry; ✕ removes it.
 3. After the restart, **Settings → ACCOUNTS → "Add account…"** shows a
    **Sign in with** picker (it is hidden while only one registration exists).
    Pick the tenant-specific entry — the tenant field disappears, because that
@@ -301,8 +304,8 @@ carry it.
   sign-in lands in a pinned tenant anyway, it is rejected with *"This tenant has
   its own tenant-specific App Registration…"* and nothing is enrolled.
 - **`AADSTS50194`** ("not configured as a multi-tenant application") on sign-in
-  means a single-tenant client id was pasted into a **cloud row**. Remove it
-  there and add it as a tenant-specific registration with its tenant id.
+  means a single-tenant client id was added **without** a tenant id, i.e. as the
+  multi-tenant entry. Remove that entry and add it again with its tenant id.
 - **`AllowedTenants`** stays authoritative — list the pinned tenant there too if
   you use a whitelist.
 - **Caches.** Each tenant-specific registration keeps its own DPAPI-encrypted

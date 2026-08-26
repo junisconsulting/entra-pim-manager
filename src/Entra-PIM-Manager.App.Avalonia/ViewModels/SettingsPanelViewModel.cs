@@ -138,18 +138,21 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     private IReadOnlyList<NetworkCheckGroupViewModel> _networkCheckGroups = [];
 
     /// <summary>
-    /// The "add tenant-specific registration" form. Both ids must parse as GUIDs
-    /// before <see cref="AddTenantRegistrationCommand"/> enables; the label is
-    /// optional. Cleared on every <see cref="Open"/> and after a successful add.
+    /// The "add registration" form. The client id must parse as a GUID before
+    /// <see cref="AddRegistrationCommand"/> enables; the tenant id is either blank
+    /// (cloud-wide, multi-tenant) or a GUID (pinned, single-tenant); the label
+    /// only applies to pinned entries. Cleared on every <see cref="Open"/> and
+    /// after a successful add.
     /// </summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanAddTenantRegistration))]
-    [NotifyCanExecuteChangedFor(nameof(AddTenantRegistrationCommand))]
+    [NotifyPropertyChangedFor(nameof(CanAddRegistration))]
+    [NotifyPropertyChangedFor(nameof(IsNewTenantPinned))]
+    [NotifyCanExecuteChangedFor(nameof(AddRegistrationCommand))]
     private string _newTenantId = string.Empty;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanAddTenantRegistration))]
-    [NotifyCanExecuteChangedFor(nameof(AddTenantRegistrationCommand))]
+    [NotifyPropertyChangedFor(nameof(CanAddRegistration))]
+    [NotifyCanExecuteChangedFor(nameof(AddRegistrationCommand))]
     private string _newClientId = string.Empty;
 
     [ObservableProperty]
@@ -179,14 +182,26 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         _selectedExpiryThreshold = ExpiryThresholdOptions[0];
         _selectedLogLevel = LogLevelOptions[1];
 
-        AppRegistrations = [.. Enum.GetValues<EntraCloud>()
-            .Select(c => new AppRegistrationRowViewModel(
-                c,
-                _options,
-                VerifiedClientIds,
-                SaveClientId))];
-        TenantRegistrations = [.. _options.TenantAppRegistrations
-            .Select(r => new TenantRegistrationRowViewModel(r, VerifiedClientIds))];
+        // Cloud-wide registrations first (Global, China), then the pinned ones in
+        // configuration order — the same order as the "Sign in with" picker.
+        var rows = new List<AppRegistrationRowViewModel>();
+        foreach (var cloud in Enum.GetValues<EntraCloud>())
+        {
+            if (_options.ClientIdFor(cloud) is { } clientId)
+            {
+                rows.Add(new AppRegistrationRowViewModel(cloud, null, clientId, null, VerifiedClientIds));
+            }
+        }
+
+        foreach (var pinned in _options.TenantAppRegistrations)
+        {
+            if (Enum.TryParse<EntraCloud>(pinned.Cloud, ignoreCase: true, out var cloud))
+            {
+                rows.Add(new AppRegistrationRowViewModel(cloud, pinned.TenantId, pinned.ClientId, pinned.Label, VerifiedClientIds));
+            }
+        }
+
+        Registrations = [.. rows];
         _newTenantCloud = CloudOptions[0];
     }
 
@@ -249,35 +264,33 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     public bool CanManageStartMenuShortcut => _shortcuts.IsSupported;
 
     /// <summary>
-    /// One row per sovereign cloud. National clouds are isolated instances, so an
-    /// app registration exists in exactly one of them and each cloud needs its own
-    /// client id — see <see cref="AppRegistrationRowViewModel"/>.
+    /// Every configured App Registration — the cloud-wide one per cloud and the
+    /// tenant-pinned ones — mirrored live as the user adds and removes entries. The
+    /// file is written immediately; the running MSAL layer only picks changes up
+    /// after the restart the banner asks for. See <see cref="AppRegistrationRowViewModel"/>.
     /// </summary>
-    public IReadOnlyList<AppRegistrationRowViewModel> AppRegistrations { get; }
-
-    /// <summary>
-    /// Tenant-specific registrations from the configuration, mirrored live as the
-    /// user adds and removes entries (the file is written immediately; the running
-    /// MSAL layer only picks them up after the restart the banner asks for).
-    /// </summary>
-    public ObservableCollection<TenantRegistrationRowViewModel> TenantRegistrations { get; }
+    public ObservableCollection<AppRegistrationRowViewModel> Registrations { get; }
 
     /// <summary>Cloud choices for the add form, in <see cref="EntraCloud"/> declaration order.</summary>
     public IReadOnlyList<CloudOption> CloudOptions { get; } = [.. Enum.GetValues<EntraCloud>()
         .Select(c => new CloudOption(c, EntraCloudInfo.DisplayName(c)))];
 
-    /// <summary>Add is allowed once both ids of the form parse as GUIDs.</summary>
-    public bool CanAddTenantRegistration => Guid.TryParse(NewTenantId, out _) && Guid.TryParse(NewClientId, out _);
+    /// <summary>Add is allowed once the client id is a GUID and the tenant id is blank or a GUID.</summary>
+    public bool CanAddRegistration =>
+        Guid.TryParse(NewClientId, out _) && (string.IsNullOrWhiteSpace(NewTenantId) || Guid.TryParse(NewTenantId, out _));
 
     /// <summary>
-    /// True when at least one registration of either kind exists and every one of
-    /// them has been proven by a sign-in. Drives the single "Verified" badge in the
-    /// section header. A cloud left unconfigured is a deliberate choice, not a defect.
+    /// True while the form describes a pinned registration. Only those carry a
+    /// label — the cloud-wide entry is named after its cloud — so the label box
+    /// is disabled otherwise rather than silently dropping the input.
     /// </summary>
-    public bool AreAppRegistrationsVerified =>
-        (AppRegistrations.Any(r => !r.IsMissing) || TenantRegistrations.Count > 0)
-        && AppRegistrations.All(r => r.IsMissing || r.IsVerified)
-        && TenantRegistrations.All(r => r.IsVerified);
+    public bool IsNewTenantPinned => !string.IsNullOrWhiteSpace(NewTenantId);
+
+    /// <summary>
+    /// True when at least one registration exists and every one of them has been
+    /// proven by a sign-in. Drives the single "Verified" badge in the section header.
+    /// </summary>
+    public bool AreAppRegistrationsVerified => Registrations.Count > 0 && Registrations.All(r => r.IsVerified);
 
     /// <summary>
     /// Folder holding the rolling Serilog files — the same location
@@ -333,12 +346,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     /// </summary>
     public void NotifyAppRegistrationVerificationChanged()
     {
-        foreach (var row in AppRegistrations)
-        {
-            row.NotifyStateChanged();
-        }
-
-        foreach (var row in TenantRegistrations)
+        foreach (var row in Registrations)
         {
             row.NotifyStateChanged();
         }
@@ -363,14 +371,6 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             AutomaticUpdatesEnabled = current.AutomaticUpdatesEnabled;
             IsAccountsSectionExpanded = current.SettingsAccountsExpanded;
 
-            // Pre-fill each row's input with the current effective value when
-            // it's already a real GUID; otherwise leave it blank so the
-            // placeholder hint shows.
-            foreach (var row in AppRegistrations)
-            {
-                row.Seed();
-            }
-
             NewTenantId = string.Empty;
             NewClientId = string.Empty;
             NewLabel = string.Empty;
@@ -379,13 +379,9 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             ShowRestartPrompt = false;
 
             // A fully proven setup collapses out of the way; as long as any
-            // registration is configured-but-unproven the section stays open so
-            // the next step is visible without hunting for it. A cloud left
-            // entirely unconfigured is a deliberate choice, not an open task —
-            // unless nothing at all is configured yet.
-            IsAppRegistrationSectionExpanded = AppRegistrations.Any(r => r.IsUnverified)
-                || TenantRegistrations.Any(r => !r.IsVerified)
-                || (AppRegistrations.All(r => r.IsMissing) && TenantRegistrations.Count == 0);
+            // registration is configured-but-unproven — or none exists yet — the
+            // section stays open so the next step is visible without hunting for it.
+            IsAppRegistrationSectionExpanded = Registrations.Count == 0 || Registrations.Any(r => !r.IsVerified);
 
             // Pulled live from the registry so a parallel toggle in the tray
             // menu is reflected even mid-session.
@@ -403,66 +399,58 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         IsOpen = true;
     }
 
-    /// <summary>
-    /// Persists a cloud's client id (or a blank, which clears it) to the per-user
-    /// <c>appsettings.local.json</c> and surfaces the restart-required banner. The
-    /// change only takes effect on the next process launch because MSAL's PCA is
-    /// built once per cloud at startup. Invoked by the rows in <see cref="AppRegistrations"/>.
-    /// </summary>
-    private void SaveClientId(EntraCloud cloud, string clientId)
-    {
-        try
-        {
-            LocalConfigStore.SaveClientId(AppPaths.LocalConfigFile, cloud, clientId);
-            ShowRestartPrompt = true;
-            _logger.LogInformation(
-                "App Registration client id {Action} for cloud {Cloud}; awaiting restart.",
-                clientId.Length == 0 ? "cleared" : "saved",
-                cloud);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to save the App Registration client id for cloud {Cloud}", cloud);
-        }
-    }
+    // Two rows occupy the same configuration slot when they share the cloud and
+    // are both cloud-wide, or both pin the same tenant GUID.
+    private static bool IsSameSlot(AppRegistrationRowViewModel row, EntraCloud cloud, string? tenantId)
+        => row.Cloud == cloud
+            && (row.TenantId is null
+                ? tenantId is null
+                : Guid.TryParse(row.TenantId, out var a) && Guid.TryParse(tenantId, out var b) && a == b);
 
     /// <summary>
-    /// Writes the form as a tenant-specific registration to the per-user config
-    /// (replacing an existing entry for the same cloud + tenant), mirrors it in
-    /// <see cref="TenantRegistrations"/> and surfaces the restart banner.
+    /// Writes the form to the per-user <c>appsettings.local.json</c> — a blank
+    /// tenant id becomes the cloud's cloud-wide registration (<c>AppRegistrations:{Cloud}</c>),
+    /// a GUID a tenant-pinned one (<c>TenantAppRegistrations</c>) — replacing an
+    /// existing entry for the same cloud + tenant, mirrors it in <see cref="Registrations"/>
+    /// and surfaces the restart banner. The change only takes effect on the next
+    /// process launch because MSAL's PCAs are built from the startup configuration.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(CanAddTenantRegistration))]
-    private void AddTenantRegistration()
+    [RelayCommand(CanExecute = nameof(CanAddRegistration))]
+    private void AddRegistration()
     {
-        var tenantId = Guid.Parse(NewTenantId.Trim());
-        var registration = new TenantAppRegistration
-        {
-            TenantId = tenantId.ToString(),
-            ClientId = NewClientId.Trim(),
-            Cloud = NewTenantCloud.Cloud.ToString(),
-            Label = string.IsNullOrWhiteSpace(NewLabel) ? null : NewLabel.Trim(),
-        };
+        var cloud = NewTenantCloud.Cloud;
+        var clientId = NewClientId.Trim();
+        var tenantId = IsNewTenantPinned ? Guid.Parse(NewTenantId.Trim()).ToString() : null;
+        var label = tenantId is not null && !string.IsNullOrWhiteSpace(NewLabel) ? NewLabel.Trim() : null;
 
         try
         {
-            LocalConfigStore.SaveTenantRegistration(AppPaths.LocalConfigFile, registration);
+            if (tenantId is null)
+            {
+                LocalConfigStore.SaveClientId(AppPaths.LocalConfigFile, cloud, clientId);
+            }
+            else
+            {
+                LocalConfigStore.SaveTenantRegistration(
+                    AppPaths.LocalConfigFile,
+                    new TenantAppRegistration { TenantId = tenantId, ClientId = clientId, Cloud = cloud.ToString(), Label = label });
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to save the tenant-specific App Registration for tenant {TenantId}", registration.TenantId);
+            _logger.LogError(ex, "Failed to save the App Registration for cloud {Cloud}, tenant {TenantId}", cloud, tenantId);
             return;
         }
 
-        var row = new TenantRegistrationRowViewModel(registration, VerifiedClientIds);
-        var existing = TenantRegistrations.FirstOrDefault(r =>
-            r.Cloud == row.Cloud && Guid.TryParse(r.TenantId, out var t) && t == tenantId);
+        var row = new AppRegistrationRowViewModel(cloud, tenantId, clientId, label, VerifiedClientIds);
+        var existing = Registrations.FirstOrDefault(r => IsSameSlot(r, cloud, tenantId));
         if (existing is not null)
         {
-            TenantRegistrations[TenantRegistrations.IndexOf(existing)] = row;
+            Registrations[Registrations.IndexOf(existing)] = row;
         }
         else
         {
-            TenantRegistrations.Add(row);
+            Registrations.Add(row);
         }
 
         NewTenantId = string.Empty;
@@ -471,19 +459,21 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         ShowRestartPrompt = true;
         OnPropertyChanged(nameof(AreAppRegistrationsVerified));
         _logger.LogInformation(
-            "Tenant-specific App Registration saved for tenant {TenantId} in cloud {Cloud}; awaiting restart.",
-            registration.TenantId,
-            row.Cloud);
+            "App Registration saved for cloud {Cloud}, tenant {TenantId}; awaiting restart.",
+            cloud,
+            tenantId ?? "<any>");
     }
 
     /// <summary>
-    /// Removes a tenant-specific registration from the per-user config and the
-    /// list. An account already enrolled in that tenant keeps its entry; after the
-    /// restart it resolves to the cloud-wide registration (or none) and its group
-    /// asks the user to remove and re-add it.
+    /// Removes a registration from the per-user config and the list — a cloud-wide
+    /// one by blanking its cloud entry (so the shipped placeholder cannot shine
+    /// through), a pinned one by dropping its list entry. Accounts already enrolled
+    /// through it keep their entries; after the restart they resolve to whatever
+    /// registration remains (or none) and their group asks the user to remove and
+    /// re-add them.
     /// </summary>
     [RelayCommand]
-    private void RemoveTenantRegistration(TenantRegistrationRowViewModel? row)
+    private void RemoveRegistration(AppRegistrationRowViewModel? row)
     {
         if (row is null)
         {
@@ -492,21 +482,28 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
         try
         {
-            LocalConfigStore.RemoveTenantRegistration(AppPaths.LocalConfigFile, row.Cloud, row.TenantId);
+            if (row.TenantId is null)
+            {
+                LocalConfigStore.SaveClientId(AppPaths.LocalConfigFile, row.Cloud, string.Empty);
+            }
+            else
+            {
+                LocalConfigStore.RemoveTenantRegistration(AppPaths.LocalConfigFile, row.Cloud, row.TenantId);
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to remove the tenant-specific App Registration for tenant {TenantId}", row.TenantId);
+            _logger.LogError(ex, "Failed to remove the App Registration for cloud {Cloud}, tenant {TenantId}", row.Cloud, row.TenantId);
             return;
         }
 
-        TenantRegistrations.Remove(row);
+        Registrations.Remove(row);
         ShowRestartPrompt = true;
         OnPropertyChanged(nameof(AreAppRegistrationsVerified));
         _logger.LogInformation(
-            "Tenant-specific App Registration removed for tenant {TenantId} in cloud {Cloud}; awaiting restart.",
-            row.TenantId,
-            row.Cloud);
+            "App Registration removed for cloud {Cloud}, tenant {TenantId}; awaiting restart.",
+            row.Cloud,
+            row.TenantId ?? "<any>");
     }
 
     /// <summary>

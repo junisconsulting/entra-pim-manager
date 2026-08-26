@@ -1076,13 +1076,14 @@
             <StackPanel Spacing="10">
 
               <!-- =========== APP REGISTRATION =========== -->
-              <!-- One client id per sovereign cloud. National clouds are isolated
-                   instances, so an App Registration exists in exactly one of them
-                   and each cloud needs its own. Saved into
+              <!-- One list of every App Registration: per cloud at most one
+                   cloud-wide (multi-tenant) entry, plus any number pinned to a
+                   single tenant. National clouds are isolated instances, so a
+                   registration exists in exactly one of them. Saved into
                    %LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json
                    (outside the install dir so it survives Velopack updates) and
-                   takes effect on the next process start — MSAL's PCA is built
-                   once per cloud at startup. -->
+                   takes effect on the next process start — MSAL's PCAs are built
+                   from the startup configuration. -->
               <Border Classes="settings-card">
               <StackPanel Spacing="8">
                 <!-- Header doubles as the collapse toggle. The green check is
@@ -1140,95 +1141,23 @@
 
                 <StackPanel Spacing="8"
                             IsVisible="{Binding IsAppRegistrationSectionExpanded}">
-                <TextBlock Text="Client id of your Entra App Registration, one per cloud. A registration lives in a single cloud — a Global one is unknown in Entra China and vice versa. Leave a cloud blank if you don't use it, or if you only use tenant-specific registrations in it (below)."
+                <TextBlock Text="Each entry is one Entra App Registration. Leave the tenant id blank for a multi-tenant registration — it serves any tenant in that cloud (one per cloud). Enter a tenant id to pin a customer's single-tenant registration to that tenant; it then takes precedence there and appears as its own entry under Sign in with. A registration lives in a single cloud — a Global one is unknown in Entra China and vice versa."
                            FontSize="{DynamicResource FontSmall}"
                            Foreground="{DynamicResource TextSecondaryBrush}"
                            TextWrapping="Wrap" />
 
-                <!-- One row per EntraCloud. Everything below is per-registration:
-                     each cloud has its own client id, its own Save, and its own
-                     verification state — a sign-in only proves the cloud it ran
-                     against. -->
-                <ItemsControl ItemsSource="{Binding AppRegistrations}">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                      <StackPanel Spacing="12" />
-                    </ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:AppRegistrationRowViewModel">
-                      <StackPanel Spacing="6">
-                        <TextBlock Text="{Binding DisplayName}"
-                                   FontSize="{DynamicResource FontSmall}"
-                                   FontWeight="Medium"
-                                   Foreground="{DynamicResource TextPrimaryBrush}" />
-
-                        <!-- Input + save row. The button enables only when the
-                             input parses as a GUID (CanExecute on SaveCommand). -->
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                          <TextBox Grid.Column="0"
-                                   Text="{Binding Input}"
-                                   PlaceholderText="00000000-0000-0000-0000-000000000000"
-                                   FontSize="{DynamicResource FontBody}" />
-                          <Button Grid.Column="1"
-                                  Classes="primary"
-                                  Content="Save"
-                                  Command="{Binding SaveCommand}" />
-                        </Grid>
-
-                        <!-- Configured but unproven. Deliberately neutral, not
-                             green: a saved GUID says nothing about whether the
-                             registration itself works. Only a sign-in settles that. -->
-                        <Border IsVisible="{Binding IsUnverified}"
-                                Background="{DynamicResource Surface1Brush}"
-                                BorderBrush="{DynamicResource BorderSubtleBrush}"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Padding="10,8">
-                          <TextBlock Text="Configured. Add an account in this cloud to verify the setup — signing in is what confirms the client id, public client flows, redirect URI and admin consent."
-                                     FontSize="{DynamicResource FontSmall}"
-                                     Foreground="{DynamicResource TextSecondaryBrush}"
-                                     TextWrapping="Wrap" />
-                        </Border>
-
-                        <!-- Verified. Shown inside the body too, so expanding the
-                             collapsed card still explains why it is checked. -->
-                        <Border IsVisible="{Binding IsVerified}"
-                                Background="{DynamicResource SuccessSoftBrush}"
-                                CornerRadius="6"
-                                Padding="10,8">
-                          <TextBlock Text="Verified — an account signed in successfully with this App Registration."
-                                     FontSize="{DynamicResource FontSmall}"
-                                     Foreground="{DynamicResource TextPrimaryBrush}"
-                                     TextWrapping="Wrap" />
-                        </Border>
-                      </StackPanel>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
-                <!-- Tenant-specific registrations: a customer's own single-tenant
-                     app, pinned to its tenant. Takes precedence over the cloud
-                     row for that tenant. Rows are read-only; re-adding a tenant
-                     replaces its entry. -->
-                <TextBlock Text="Tenant-specific registrations"
-                           FontSize="{DynamicResource FontSmall}"
-                           FontWeight="Medium"
-                           Foreground="{DynamicResource TextPrimaryBrush}"
-                           Margin="0,8,0,0" />
-                <TextBlock Text="For a customer whose App Registration is single-tenant. Pinned to its tenant id, it is used instead of the cloud-wide registration for that tenant and appears as its own entry under Sign in with."
-                           FontSize="{DynamicResource FontSmall}"
-                           Foreground="{DynamicResource TextSecondaryBrush}"
-                           TextWrapping="Wrap" />
-
-                <ItemsControl ItemsSource="{Binding TenantRegistrations}">
+                <!-- One row per registration, read-only: title in the same
+                     wording as the "Sign in with" picker, client id, verification
+                     state, remove. Re-adding the same cloud + tenant replaces the
+                     entry — see SettingsPanelViewModel.AddRegistration. -->
+                <ItemsControl ItemsSource="{Binding Registrations}">
                   <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                       <StackPanel Spacing="8" />
                     </ItemsPanelTemplate>
                   </ItemsControl.ItemsPanel>
                   <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:TenantRegistrationRowViewModel">
+                    <DataTemplate x:DataType="vm:AppRegistrationRowViewModel">
                       <Border Background="{DynamicResource Surface1Brush}"
                               BorderBrush="{DynamicResource BorderSubtleBrush}"
                               BorderThickness="1"
@@ -1255,7 +1184,7 @@
                                   Classes="ghost"
                                   Padding="10,6"
                                   VerticalAlignment="Top"
-                                  Command="{Binding $parent[ItemsControl].((vm:SettingsPanelViewModel)DataContext).RemoveTenantRegistrationCommand}"
+                                  Command="{Binding $parent[ItemsControl].((vm:SettingsPanelViewModel)DataContext).RemoveRegistrationCommand}"
                                   CommandParameter="{Binding}"
                                   ToolTip.Tip="Remove this registration">
                             <TextBlock Text="✕"
@@ -1271,11 +1200,13 @@
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <!-- Add form. "Add" enables once both ids parse as GUIDs
-                     (CanExecute on AddTenantRegistrationCommand). -->
+                <!-- Add form. "Add" enables once the client id is a GUID and the
+                     tenant id is blank or a GUID (CanExecute on AddRegistrationCommand).
+                     The label only applies to a pinned entry — the cloud-wide one
+                     is named after its cloud — so the box follows IsNewTenantPinned. -->
                 <StackPanel Spacing="6">
                   <TextBox Text="{Binding NewTenantId}"
-                           PlaceholderText="Tenant id — 00000000-0000-0000-0000-000000000000"
+                           PlaceholderText="Tenant id — leave blank for any tenant in the cloud"
                            FontSize="{DynamicResource FontBody}" />
                   <TextBox Text="{Binding NewClientId}"
                            PlaceholderText="Client id — 00000000-0000-0000-0000-000000000000"
@@ -1284,6 +1215,7 @@
                     <TextBox Grid.Column="0"
                              Text="{Binding NewLabel}"
                              PlaceholderText="Label (optional)"
+                             IsEnabled="{Binding IsNewTenantPinned}"
                              FontSize="{DynamicResource FontBody}" />
                     <ComboBox Grid.Column="1"
                               ItemsSource="{Binding CloudOptions}"
@@ -1298,7 +1230,7 @@
                     <Button Grid.Column="2"
                             Classes="primary"
                             Content="Add"
-                            Command="{Binding AddTenantRegistrationCommand}" />
+                            Command="{Binding AddRegistrationCommand}" />
                   </Grid>
                 </StackPanel>
 
