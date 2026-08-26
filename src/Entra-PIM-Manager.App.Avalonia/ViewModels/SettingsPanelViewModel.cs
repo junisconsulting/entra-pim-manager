@@ -92,6 +92,14 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     private bool _automaticUpdatesEnabled;
 
     /// <summary>
+    /// Bound to the log-detail ComboBox in DIAGNOSTICS. Applied live through
+    /// the Serilog level switch (App subscribes to the settings Changed
+    /// event), so no restart is needed.
+    /// </summary>
+    [ObservableProperty]
+    private LogLevelOption _selectedLogLevel;
+
+    /// <summary>
     /// Whether the ACCOUNTS section is expanded. Persisted in
     /// <see cref="UserSettings.SettingsAccountsExpanded"/>; defaults to
     /// expanded so first-run users see the section is there.
@@ -148,6 +156,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         _selectedTheme = ThemeOptions[0];
         _selectedDuration = DurationOptions[0];
         _selectedExpiryThreshold = ExpiryThresholdOptions[0];
+        _selectedLogLevel = LogLevelOptions[1];
 
         AppRegistrations = [.. Enum.GetValues<EntraCloud>()
             .Select(c => new AppRegistrationRowViewModel(
@@ -195,6 +204,14 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         new ExpiryThresholdOption(5, "5 minutes"),
         new ExpiryThresholdOption(10, "10 minutes"),
         new ExpiryThresholdOption(15, "15 minutes"),
+    };
+
+    /// <summary>Log-detail choices presented in the ComboBox. Index 1 (Normal) is the default.</summary>
+    public IReadOnlyList<LogLevelOption> LogLevelOptions { get; } = new[]
+    {
+        new LogLevelOption(LogLevelPreference.Debug, "Debug (verbose)"),
+        new LogLevelOption(LogLevelPreference.Information, "Normal"),
+        new LogLevelOption(LogLevelPreference.Warning, "Warnings only"),
     };
 
     /// <summary>X-offset for the slide-in transform — mirrors the other panels.</summary>
@@ -293,6 +310,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         {
             var current = _userSettings.Current;
             SelectedTheme = ThemeOptions.FirstOrDefault(o => o.Value == current.Theme) ?? ThemeOptions[0];
+            SelectedLogLevel = LogLevelOptions.FirstOrDefault(o => o.Value == current.LogLevel) ?? LogLevelOptions[1];
             SelectedDuration = DurationOptions.FirstOrDefault(o => o.Hours == current.DefaultDurationHours)
                 ?? DurationOptions[0];
             SelectedExpiryThreshold = ExpiryThresholdOptions.FirstOrDefault(o => o.Minutes == current.ExpiryWarningMinutes)
@@ -560,6 +578,16 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         SchedulePersist();
     }
 
+    partial void OnSelectedLogLevelChanged(LogLevelOption value)
+    {
+        if (_suppressPersist)
+        {
+            return;
+        }
+
+        SchedulePersist();
+    }
+
     partial void OnIsAccountsSectionExpandedChanged(bool value)
     {
         if (_suppressPersist)
@@ -605,6 +633,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             ExpiryWarningMinutes = SelectedExpiryThreshold.Minutes,
             SettingsAccountsExpanded = IsAccountsSectionExpanded,
             AutomaticUpdatesEnabled = AutomaticUpdatesEnabled,
+            LogLevel = SelectedLogLevel.Value,
         };
 
         try
@@ -619,6 +648,12 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
     /// <summary>ComboBox row: pairs the <see cref="ThemePreference"/> value with the label shown to the user.</summary>
     public sealed record ThemeOption(ThemePreference Value, string Label)
+    {
+        public override string ToString() => Label;
+    }
+
+    /// <summary>ComboBox row: pairs the <see cref="LogLevelPreference"/> value with the label shown to the user.</summary>
+    public sealed record LogLevelOption(LogLevelPreference Value, string Label)
     {
         public override string ToString() => Label;
     }

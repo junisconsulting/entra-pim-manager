@@ -545,12 +545,13 @@ public sealed class MsalAuthService : IAuthService, IDisposable
             return;
         }
 
+        // MSAL's Info level is wire-protocol chatter — hundreds of megabytes
+        // per day-file. From this app's perspective that is debug detail: it
+        // only reaches the log when the user selects Debug in Settings.
         var mappedLevel = level switch
         {
             MsalLogLevel.Error => LogLevel.Error,
             MsalLogLevel.Warning => LogLevel.Warning,
-            MsalLogLevel.Info => LogLevel.Information,
-            MsalLogLevel.Verbose => LogLevel.Debug,
             _ => LogLevel.Debug,
         };
 

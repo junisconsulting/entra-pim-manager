@@ -24,6 +24,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Serilog;
+using Serilog.Core;
+using Serilog.Events;
 using Serilog.Formatting.Compact;
 
 /// <summary>
@@ -34,6 +36,11 @@ using Serilog.Formatting.Compact;
 /// </summary>
 public partial class App : Application
 {
+    // Serilog's minimum level, adjustable at runtime: seeded to Information
+    // (covers the window before user settings are loaded), then driven by the
+    // persisted LogLevel preference — no restart needed when it changes.
+    private static readonly LoggingLevelSwitch LogLevelSwitch = new(LogEventLevel.Information);
+
     private IHost? _host;
     private TrayPopupController? _popupController;
     private ExpiryAlertController? _expiryAlertController;
@@ -99,6 +106,8 @@ public partial class App : Application
         var userSettings = Services.GetRequiredService<IUserSettingsService>();
         userSettings.LoadAsync().GetAwaiter().GetResult();
         RequestedThemeVariant = ThemeMapper.ToVariant(userSettings.Current.Theme);
+        ApplyLogLevel(userSettings.Current.LogLevel);
+        userSettings.Changed += settings => ApplyLogLevel(settings.LogLevel);
 
         SyncAutostartMenuCheck(this, Services);
 
@@ -193,6 +202,19 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// Maps the persisted preference onto the Serilog level switch. Takes
+    /// effect immediately for all sinks — called at startup and on every
+    /// settings save.
+    /// </summary>
+    private static void ApplyLogLevel(LogLevelPreference level) =>
+        LogLevelSwitch.MinimumLevel = level switch
+        {
+            LogLevelPreference.Debug => LogEventLevel.Debug,
+            LogLevelPreference.Warning => LogEventLevel.Warning,
+            _ => LogEventLevel.Information,
+        };
+
     private static void SyncAutostartMenuCheck(Application app, IServiceProvider services)
     {
         if (services.GetService(typeof(IAutostartService)) is not IAutostartService autostart)
@@ -236,7 +258,7 @@ public partial class App : Application
         const int retainedLogFiles = 7;
 
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Debug()
+            .MinimumLevel.ControlledBy(LogLevelSwitch)
             .Enrich.FromLogContext()
             .WriteTo.Console()
             .WriteTo.File(

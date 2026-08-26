@@ -330,6 +330,42 @@ public sealed class UserSettingsServiceTests : IDisposable
         Assert.False(second.Current.ExpandedTenants!["tenant-2"]);
     }
 
+    [Fact]
+    public async Task LoadAsync_LegacyFileWithoutLogLevel_DefaultsToInformation()
+    {
+        // Backwards-compat: a settings.json written before the log-level
+        // setting has no LogLevel field. It must default to Information so
+        // existing installs stop writing the MSAL debug volume after upgrading.
+        const string legacyJson = """
+            {
+              "Theme": "System",
+              "DefaultDurationHours": 1.0,
+              "ExpiryWarningEnabled": true,
+              "ExpiryWarningMinutes": 5
+            }
+            """;
+        await File.WriteAllTextAsync(_filePath, legacyJson);
+        var store = CreateStore();
+
+        await store.LoadAsync();
+
+        Assert.Equal(LogLevelPreference.Information, store.Current.LogLevel);
+    }
+
+    [Fact]
+    public async Task SaveAsync_PersistsLogLevel()
+    {
+        var verbose = UserSettings.Default with { LogLevel = LogLevelPreference.Debug };
+
+        var first = CreateStore();
+        await first.SaveAsync(verbose);
+
+        var second = CreateStore();
+        await second.LoadAsync();
+
+        Assert.Equal(LogLevelPreference.Debug, second.Current.LogLevel);
+    }
+
     private UserSettingsService CreateStore()
         => new(_filePath, NullLogger<UserSettingsService>.Instance);
 }

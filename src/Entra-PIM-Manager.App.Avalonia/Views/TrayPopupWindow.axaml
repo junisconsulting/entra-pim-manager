@@ -1580,6 +1580,29 @@
                            FontWeight="Medium"
                            Foreground="{DynamicResource TextTertiaryBrush}" />
 
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalAlignment="Center">
+                  <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="Log detail"
+                               FontSize="{DynamicResource FontBody}"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <TextBlock Text="Applies immediately. Debug records full sign-in detail for troubleshooting — log files grow large."
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <ComboBox Grid.Column="1"
+                            ItemsSource="{Binding LogLevelOptions}"
+                            SelectedItem="{Binding SelectedLogLevel}"
+                            MinWidth="130"
+                            VerticalAlignment="Center">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="vm:SettingsPanelViewModel+LogLevelOption">
+                        <TextBlock Text="{Binding Label}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+                </Grid>
+
                 <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
                   <StackPanel Grid.Column="0" VerticalAlignment="Center">
                     <TextBlock Text="Log files"

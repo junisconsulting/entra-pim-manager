@@ -46,6 +46,12 @@ namespace EntraPimManager.Core.Configuration;
 /// registration, and each must prove itself separately. <c>null</c> until the
 /// first successful enrollment.
 /// </param>
+/// <param name="LogLevel">
+/// Minimum level for the rolling log files. Applied live via the Serilog
+/// level switch — no restart needed. Old settings files without the field
+/// deserialize to the constructor default (Information), which is the
+/// intended behaviour.
+/// </param>
 public sealed record UserSettings(
     ThemePreference Theme,
     double DefaultDurationHours,
@@ -59,7 +65,8 @@ public sealed record UserSettings(
     // ponytail: the pre-0.4.2 `VerifiedClientId` string is deliberately not migrated.
     // The badge falls back to "configured, not verified" once and heals itself on the
     // next sign-in; custom deserialization for a display flag is not worth carrying.
-    string[]? VerifiedClientIds = null)
+    string[]? VerifiedClientIds = null,
+    LogLevelPreference LogLevel = LogLevelPreference.Information)
 {
     /// <summary>Defaults applied when no settings file exists or the file is unreadable.</summary>
     public static UserSettings Default { get; } = new(
