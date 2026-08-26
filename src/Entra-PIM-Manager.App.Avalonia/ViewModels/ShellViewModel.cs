@@ -142,6 +142,17 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         _settingsPanel = settingsPanel;
         _logger = logger;
 
+        // A label the admin gave a tenant in Settings beats the directory's
+        // display name everywhere a tenant is named. Seeding the cache is
+        // enough: every row reads it first and only asks Graph on a miss.
+        foreach (var registration in _options.TenantAppRegistrations)
+        {
+            if (!string.IsNullOrWhiteSpace(registration.Label) && Guid.TryParse(registration.TenantId, out var tenant))
+            {
+                _tenantNameCache[tenant.ToString()] = registration.Label.Trim();
+            }
+        }
+
         _refreshTimer = new DispatcherTimer { Interval = RefreshInterval };
         _refreshTimer.Tick += async (_, _) => await RefreshAsync();
         _countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };

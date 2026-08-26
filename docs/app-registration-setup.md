@@ -110,7 +110,8 @@ that account is added.
 The normal path requires no file editing: start the app, open **Settings → APP
 REGISTRATION**, and add an entry: the **tenant id**, the **client id** from
 step 1, the **cloud**, and an optional **label** (e.g. the customer's name — it
-names the entry in the sign-in picker) → **Add**. The app saves it to your
+names the entry in the sign-in picker and replaces the directory's display name
+wherever the tenant is shown) → **Add**. The app saves it to your
 per-user config at `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json`
 and applies it on the next restart (**Restart now** in the banner). Repeat for
 every tenant you sign in to — with the same client id for every tenant a

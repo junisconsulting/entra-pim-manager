@@ -6,7 +6,8 @@
   "EntraPimManager": {
     // One entry per tenant you sign in to: the tenant's id, the client id of the
     // App Registration to use there, the sovereign cloud ("Global" or "China";
-    // defaults to "Global") and an optional label for the sign-in picker.
+    // defaults to "Global") and an optional label shown instead of the tenant's
+    // display name.
     //
     // A multi-tenant App Registration used in several tenants is listed once per
     // tenant with the same client id. A customer's single-tenant registration is
