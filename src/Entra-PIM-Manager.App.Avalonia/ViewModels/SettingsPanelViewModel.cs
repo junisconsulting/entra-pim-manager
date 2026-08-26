@@ -353,10 +353,10 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Persists a cloud's client id to the per-user <c>appsettings.local.json</c>
-    /// and surfaces the restart-required banner. The new value only takes effect
-    /// on the next process launch because MSAL's PCA is built once per cloud at
-    /// startup. Invoked by the rows in <see cref="AppRegistrations"/>.
+    /// Persists a cloud's client id (or a blank, which clears it) to the per-user
+    /// <c>appsettings.local.json</c> and surfaces the restart-required banner. The
+    /// change only takes effect on the next process launch because MSAL's PCA is
+    /// built once per cloud at startup. Invoked by the rows in <see cref="AppRegistrations"/>.
     /// </summary>
     private void SaveClientId(EntraCloud cloud, string clientId)
     {
@@ -365,7 +365,8 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             LocalConfigStore.SaveClientId(AppPaths.LocalConfigFile, cloud, clientId);
             ShowRestartPrompt = true;
             _logger.LogInformation(
-                "App Registration client id saved for cloud {Cloud}; awaiting restart.",
+                "App Registration client id {Action} for cloud {Cloud}; awaiting restart.",
+                clientId.Length == 0 ? "cleared" : "saved",
                 cloud);
         }
         catch (Exception ex)

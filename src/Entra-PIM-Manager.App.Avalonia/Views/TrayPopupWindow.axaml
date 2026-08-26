@@ -1213,7 +1213,7 @@
                         Padding="10,8">
                   <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                     <TextBlock Grid.Column="0"
-                               Text="Saved. Restart the app to apply the new client id."
+                               Text="Saved. Restart the app to apply the change."
                                FontSize="{DynamicResource FontSmall}"
                                TextWrapping="Wrap"
                                VerticalAlignment="Center" />

@@ -14,14 +14,17 @@ public static class LocalConfigStore
     /// <summary>
     /// Stores <paramref name="clientId"/> as the App Registration for
     /// <paramref name="cloud"/> in the configuration file at <paramref name="configFilePath"/>.
-    /// Every other key — <c>AllowedTenants</c>, the other clouds' registrations, the
-    /// legacy <c>ClientId</c> — is preserved. The file and its parent directory are
-    /// created if they don't exist yet.
+    /// A blank value clears the registration: it is written as <c>""</c> rather than
+    /// removed, so the shipped placeholder cannot shine through the merged
+    /// configuration, and for Global the legacy <c>ClientId</c> is blanked too —
+    /// otherwise the old id would come back through that fallback. Every other key
+    /// — <c>AllowedTenants</c>, the other clouds' registrations — is preserved. The
+    /// file and its parent directory are created if they don't exist yet.
     /// </summary>
     public static void SaveClientId(string configFilePath, EntraCloud cloud, string clientId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(configFilePath);
-        ArgumentException.ThrowIfNullOrWhiteSpace(clientId);
+        ArgumentNullException.ThrowIfNull(clientId);
 
         Directory.CreateDirectory(Path.GetDirectoryName(configFilePath)!);
 
@@ -48,7 +51,12 @@ public static class LocalConfigStore
             section["AppRegistrations"] = registrations;
         }
 
-        registrations[cloud.ToString()] = clientId;
+        registrations[cloud.ToString()] = clientId.Trim();
+
+        if (cloud == EntraCloud.Global && clientId.Trim().Length == 0 && section.ContainsKey("ClientId"))
+        {
+            section["ClientId"] = string.Empty;
+        }
 
         File.WriteAllText(
             configFilePath,

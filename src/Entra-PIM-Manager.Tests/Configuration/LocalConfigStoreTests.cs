@@ -90,6 +90,40 @@ public sealed class LocalConfigStoreTests : IDisposable
     }
 
     [Fact]
+    public void SaveClientId_Blank_ClearsTheCloudAndTheLegacyGlobalFallback()
+    {
+        // Clearing Global must also blank the legacy singular ClientId: it is
+        // still read as the Global fallback, so leaving it would bring the old
+        // id straight back after the restart.
+        const string existing = """
+            {
+              "EntraPimManager": {
+                "ClientId": "8f3a1c2e-0000-4000-8000-00000000000a"
+              }
+            }
+            """;
+        Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
+        File.WriteAllText(_filePath, existing);
+        LocalConfigStore.SaveClientId(_filePath, EntraCloud.Global, GlobalId);
+        LocalConfigStore.SaveClientId(_filePath, EntraCloud.China, ChinaId);
+
+        LocalConfigStore.SaveClientId(_filePath, EntraCloud.Global, "  ");
+
+        var section = JsonDocument.Parse(File.ReadAllText(_filePath)).RootElement.GetProperty("EntraPimManager");
+        Assert.Equal(string.Empty, ReadRegistration("Global"));
+        Assert.Equal(string.Empty, section.GetProperty("ClientId").GetString());
+        Assert.Equal(ChinaId, ReadRegistration("China"));
+
+        var options = new EntraPimManagerOptions
+        {
+            ClientId = section.GetProperty("ClientId").GetString()!,
+            AppRegistrations = ReadSection().Deserialize<Dictionary<string, string>>()!,
+        };
+        Assert.Null(options.ClientIdFor(EntraCloud.Global));
+        Assert.Equal(ChinaId, options.ClientIdFor(EntraCloud.China));
+    }
+
+    [Fact]
     public void SaveClientId_WritesWhatEntraPimManagerOptionsReadsBack()
     {
         // Guards the contract between the writer and the binder: the nested key

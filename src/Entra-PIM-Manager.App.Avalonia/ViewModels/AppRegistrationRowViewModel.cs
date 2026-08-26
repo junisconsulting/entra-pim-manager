@@ -23,7 +23,8 @@ public sealed partial class AppRegistrationRowViewModel : ObservableObject
 
     /// <summary>
     /// Bound to the row's client id TextBox. Validated as a GUID before
-    /// <see cref="SaveCommand"/> writes it to the local config file. Seeded from
+    /// <see cref="SaveCommand"/> writes it to the local config file; blank is
+    /// accepted too when the cloud is configured, which clears it. Seeded from
     /// the current effective value when the panel opens.
     /// </summary>
     [ObservableProperty]
@@ -52,6 +53,13 @@ public sealed partial class AppRegistrationRowViewModel : ObservableObject
     /// enabled state of the Save button so the user gets feedback before submitting.
     /// </summary>
     public bool IsInputValid => Guid.TryParse(Input, out _);
+
+    /// <summary>
+    /// Save is allowed for a GUID, or for a blank input on a configured cloud —
+    /// that is how a registration is removed again (e.g. after losing access to
+    /// the tenant). Blank on an unconfigured cloud is a no-op and stays disabled.
+    /// </summary>
+    public bool CanSave => IsInputValid || (string.IsNullOrWhiteSpace(Input) && !IsMissing);
 
     /// <summary>
     /// True when this cloud has no usable client id configured. Drives the inline
@@ -97,9 +105,10 @@ public sealed partial class AppRegistrationRowViewModel : ObservableObject
     partial void OnInputChanged(string value)
     {
         OnPropertyChanged(nameof(IsInputValid));
+        OnPropertyChanged(nameof(CanSave));
         SaveCommand.NotifyCanExecuteChanged();
     }
 
-    [RelayCommand(CanExecute = nameof(IsInputValid))]
+    [RelayCommand(CanExecute = nameof(CanSave))]
     private void Save() => _save(Cloud, Input.Trim());
 }
