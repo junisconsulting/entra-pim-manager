@@ -79,7 +79,10 @@ The version is derived, never typed: next patch above the latest tag, plus a `-l
 prerelease suffix. Each build therefore installs over the previous test build, while the next real
 release (`0.x.y` without suffix) still upgrades over any local build. This is purely mechanical —
 which digit the *real* next release bumps is decided by the rules in the `release` skill, "Choose
-the version".
+the version". One exception, seen 2026-08-26: once a local build has been installed under a
+*higher* base (e.g. `0.7.0-local.*` while the latest tag is still `v0.6.1`), keep that base for
+every further local build — Velopack will not install `0.6.2-local.*` over `0.7.0-local.*`, so set
+`VERSION` by hand instead of running the formula.
 
 ```bash
 BASE=$(git describe --tags --abbrev=0 | sed 's/^v//')
