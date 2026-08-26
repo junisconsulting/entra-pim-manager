@@ -102,6 +102,11 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
       Neustart zeigt die Tenant-Gruppe „Sign-in for this account is no longer
       valid…", und der Account lässt sich in Settings trotzdem entfernen.
 - [ ] Gleichen Tenant erneut hinzufügen (anderer Label) → ein Eintrag, nicht zwei.
+- [ ] Eintrag anklicken → Formular vorbelegt, Überschrift „Editing …", Button
+      „Save"; Label ändern → Save → Eintrag aktualisiert, kein Duplikat. „Cancel"
+      leert das Formular wieder.
+- [ ] Beim Editieren die Tenant-ID ändern → Save → alter Eintrag weg, neuer da,
+      `appsettings.local.json` enthält nur den neuen.
 - [ ] **Verified**-Badge erst, wenn Cloud-Registration **und** tenant-spezifische
       Registration je eine erfolgreiche Anmeldung hatten.
 - [ ] In-Place-Upgrade von der Vorversion mit bestehendem Global-Account: kein

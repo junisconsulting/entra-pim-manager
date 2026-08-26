@@ -115,8 +115,8 @@ from step 1, pick the cloud → **Add**. The app saves it to your per-user confi
 next restart. The shipped `appsettings.json` carries only a placeholder.
 
 A cloud without an entry is simply absent from the "Sign in with" picker when you
-add an account. At least one registration is required. ✕ removes an entry;
-adding the same cloud (and tenant) again replaces it.
+add an account. At least one registration is required. Click an entry to edit
+it (the form below switches to **Save**); ✕ removes it.
 
 The green **Verified** badge only appears once an account has actually signed in
 with that registration; it is per registration, because a Global sign-in proves
@@ -262,8 +262,8 @@ account is no longer valid … Remove the account in Settings and add it again"*
    tenant only — the app cannot be used anywhere else.
 2. In the app: **Settings → APP REGISTRATION** → add an entry **with** the tenant
    id (GUID), the client id, an optional label (e.g. the customer's name), pick
-   the cloud → **Add** → **Restart now**. Re-adding the same tenant replaces its
-   entry; ✕ removes it.
+   the cloud → **Add** → **Restart now**. Click the entry to change it later
+   (new client id after a re-registration, a different label); ✕ removes it.
 3. After the restart, **Settings → ACCOUNTS → "Add account…"** shows a
    **Sign in with** picker (it is hidden while only one registration exists).
    Pick the tenant-specific entry — the tenant field disappears, because that

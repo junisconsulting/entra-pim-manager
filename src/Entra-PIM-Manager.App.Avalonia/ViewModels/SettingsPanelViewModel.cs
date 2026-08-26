@@ -60,6 +60,13 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     /// </summary>
     private IAccountsHost? _accountsHost;
 
+    /// <summary>
+    /// The registration row currently loaded into the form, or <c>null</c> while
+    /// the form adds a new one. Saving replaces this row — and drops its old
+    /// configuration slot first if the edit moved it to another cloud or tenant.
+    /// </summary>
+    private AppRegistrationRowViewModel? _editing;
+
     [ObservableProperty]
     private bool _isOpen;
 
@@ -138,22 +145,31 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     private IReadOnlyList<NetworkCheckGroupViewModel> _networkCheckGroups = [];
 
     /// <summary>
-    /// The "add registration" form. The client id must parse as a GUID before
-    /// <see cref="AddRegistrationCommand"/> enables; the tenant id is either blank
-    /// (cloud-wide, multi-tenant) or a GUID (pinned, single-tenant); the label
-    /// only applies to pinned entries. Cleared on every <see cref="Open"/> and
-    /// after a successful add.
+    /// The registration form — adds a new entry, or edits the row loaded via
+    /// <see cref="EditRegistrationCommand"/>. The client id must parse as a GUID
+    /// before <see cref="SaveRegistrationCommand"/> enables; the tenant id is
+    /// either blank (cloud-wide, multi-tenant) or a GUID (pinned, single-tenant);
+    /// the label only applies to pinned entries. Cleared on every <see cref="Open"/>,
+    /// on cancel and after a successful save.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanAddRegistration))]
     [NotifyPropertyChangedFor(nameof(IsNewTenantPinned))]
-    [NotifyCanExecuteChangedFor(nameof(AddRegistrationCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveRegistrationCommand))]
     private string _newTenantId = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanAddRegistration))]
-    [NotifyCanExecuteChangedFor(nameof(AddRegistrationCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SaveRegistrationCommand))]
     private string _newClientId = string.Empty;
+
+    /// <summary>
+    /// Title of the row being edited, shown above the form; <c>null</c> while adding.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsEditing))]
+    [NotifyPropertyChangedFor(nameof(SubmitLabel))]
+    private string? _editingTitle;
 
     [ObservableProperty]
     private string _newLabel = string.Empty;
@@ -286,6 +302,12 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     /// </summary>
     public bool IsNewTenantPinned => !string.IsNullOrWhiteSpace(NewTenantId);
 
+    /// <summary>True while the form edits an existing row rather than adding one.</summary>
+    public bool IsEditing => EditingTitle is not null;
+
+    /// <summary>Caption of the form's submit button.</summary>
+    public string SubmitLabel => IsEditing ? "Save" : "Add";
+
     /// <summary>
     /// True when at least one registration exists and every one of them has been
     /// proven by a sign-in. Drives the single "Verified" badge in the section header.
@@ -371,11 +393,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             AutomaticUpdatesEnabled = current.AutomaticUpdatesEnabled;
             IsAccountsSectionExpanded = current.SettingsAccountsExpanded;
 
-            NewTenantId = string.Empty;
-            NewClientId = string.Empty;
-            NewLabel = string.Empty;
-            NewTenantCloud = CloudOptions[0];
-
+            ClearForm();
             ShowRestartPrompt = false;
 
             // A fully proven setup collapses out of the way; as long as any
@@ -407,6 +425,45 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
                 ? tenantId is null
                 : Guid.TryParse(row.TenantId, out var a) && Guid.TryParse(tenantId, out var b) && a == b);
 
+    // A cloud-wide entry is cleared by blanking its cloud key (so the shipped
+    // placeholder cannot shine through the merged configuration); a pinned one
+    // is dropped from the list.
+    private static void RemoveFromConfig(AppRegistrationRowViewModel row)
+    {
+        if (row.TenantId is null)
+        {
+            LocalConfigStore.SaveClientId(AppPaths.LocalConfigFile, row.Cloud, string.Empty);
+        }
+        else
+        {
+            LocalConfigStore.RemoveTenantRegistration(AppPaths.LocalConfigFile, row.Cloud, row.TenantId);
+        }
+    }
+
+    /// <summary>
+    /// Loads a row into the form so it can be changed in place — a new client id
+    /// after the customer re-registered, a nicer label, a moved tenant. Saving then
+    /// replaces the row instead of adding a second one.
+    /// </summary>
+    [RelayCommand]
+    private void EditRegistration(AppRegistrationRowViewModel? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        _editing = row;
+        NewTenantId = row.TenantId ?? string.Empty;
+        NewClientId = row.ClientId;
+        NewLabel = row.Label ?? string.Empty;
+        NewTenantCloud = CloudOptions.First(o => o.Cloud == row.Cloud);
+        EditingTitle = row.Title;
+    }
+
+    [RelayCommand]
+    private void CancelEdit() => ClearForm();
+
     /// <summary>
     /// Writes the form to the per-user <c>appsettings.local.json</c> — a blank
     /// tenant id becomes the cloud's cloud-wide registration (<c>AppRegistrations:{Cloud}</c>),
@@ -416,7 +473,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     /// process launch because MSAL's PCAs are built from the startup configuration.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanAddRegistration))]
-    private void AddRegistration()
+    private void SaveRegistration()
     {
         var cloud = NewTenantCloud.Cloud;
         var clientId = NewClientId.Trim();
@@ -425,6 +482,14 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
         try
         {
+            // An edit that moved the entry to another cloud or tenant would leave
+            // its old slot behind — drop that first so the file never holds both.
+            if (_editing is { } moved && !IsSameSlot(moved, cloud, tenantId))
+            {
+                RemoveFromConfig(moved);
+                Registrations.Remove(moved);
+            }
+
             if (tenantId is null)
             {
                 LocalConfigStore.SaveClientId(AppPaths.LocalConfigFile, cloud, clientId);
@@ -453,9 +518,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             Registrations.Add(row);
         }
 
-        NewTenantId = string.Empty;
-        NewClientId = string.Empty;
-        NewLabel = string.Empty;
+        ClearForm();
         ShowRestartPrompt = true;
         OnPropertyChanged(nameof(AreAppRegistrationsVerified));
         _logger.LogInformation(
@@ -482,14 +545,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
         try
         {
-            if (row.TenantId is null)
-            {
-                LocalConfigStore.SaveClientId(AppPaths.LocalConfigFile, row.Cloud, string.Empty);
-            }
-            else
-            {
-                LocalConfigStore.RemoveTenantRegistration(AppPaths.LocalConfigFile, row.Cloud, row.TenantId);
-            }
+            RemoveFromConfig(row);
         }
         catch (Exception ex)
         {
@@ -498,6 +554,11 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         }
 
         Registrations.Remove(row);
+        if (row == _editing)
+        {
+            ClearForm();
+        }
+
         ShowRestartPrompt = true;
         OnPropertyChanged(nameof(AreAppRegistrationsVerified));
         _logger.LogInformation(
@@ -745,6 +806,16 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     }
 
     private string[] VerifiedClientIds() => _userSettings.Current.VerifiedClientIds ?? [];
+
+    private void ClearForm()
+    {
+        _editing = null;
+        EditingTitle = null;
+        NewTenantId = string.Empty;
+        NewClientId = string.Empty;
+        NewLabel = string.Empty;
+        NewTenantCloud = CloudOptions[0];
+    }
 
     private void SchedulePersist()
     {
