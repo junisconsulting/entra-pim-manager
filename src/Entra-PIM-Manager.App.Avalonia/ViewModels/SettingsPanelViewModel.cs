@@ -146,15 +146,12 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
     /// <summary>
     /// The registration form — adds a new entry, or edits the row loaded via
-    /// <see cref="EditRegistrationCommand"/>. The client id must parse as a GUID
-    /// before <see cref="SaveRegistrationCommand"/> enables; the tenant id is
-    /// either blank (cloud-wide, multi-tenant) or a GUID (pinned, single-tenant);
-    /// the label only applies to pinned entries. Cleared on every <see cref="Open"/>,
-    /// on cancel and after a successful save.
+    /// <see cref="EditRegistrationCommand"/>. Both ids must parse as GUIDs before
+    /// <see cref="SaveRegistrationCommand"/> enables; the label is optional.
+    /// Cleared on every <see cref="Open"/>, on cancel and after a successful save.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanAddRegistration))]
-    [NotifyPropertyChangedFor(nameof(IsNewTenantPinned))]
     [NotifyCanExecuteChangedFor(nameof(SaveRegistrationCommand))]
     private string _newTenantId = string.Empty;
 
@@ -198,22 +195,14 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         _selectedExpiryThreshold = ExpiryThresholdOptions[0];
         _selectedLogLevel = LogLevelOptions[1];
 
-        // Cloud-wide registrations first (Global, China), then the pinned ones in
-        // configuration order — the same order as the "Sign in with" picker.
+        // Configuration order — the same order as the "Sign in with" picker. The
+        // validator has already rejected unknown cloud names at startup.
         var rows = new List<AppRegistrationRowViewModel>();
-        foreach (var cloud in Enum.GetValues<EntraCloud>())
+        foreach (var entry in _options.TenantAppRegistrations)
         {
-            if (_options.ClientIdFor(cloud) is { } clientId)
+            if (Enum.TryParse<EntraCloud>(entry.Cloud, ignoreCase: true, out var cloud))
             {
-                rows.Add(new AppRegistrationRowViewModel(cloud, null, clientId, null, VerifiedClientIds));
-            }
-        }
-
-        foreach (var pinned in _options.TenantAppRegistrations)
-        {
-            if (Enum.TryParse<EntraCloud>(pinned.Cloud, ignoreCase: true, out var cloud))
-            {
-                rows.Add(new AppRegistrationRowViewModel(cloud, pinned.TenantId, pinned.ClientId, pinned.Label, VerifiedClientIds));
+                rows.Add(new AppRegistrationRowViewModel(cloud, entry.TenantId, entry.ClientId, entry.Label, VerifiedClientIds));
             }
         }
 
@@ -280,27 +269,19 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     public bool CanManageStartMenuShortcut => _shortcuts.IsSupported;
 
     /// <summary>
-    /// Every configured App Registration — the cloud-wide one per cloud and the
-    /// tenant-pinned ones — mirrored live as the user adds and removes entries. The
-    /// file is written immediately; the running MSAL layer only picks changes up
-    /// after the restart the banner asks for. See <see cref="AppRegistrationRowViewModel"/>.
+    /// Every configured App Registration, one per tenant, mirrored live as the user
+    /// adds, edits and removes entries. The file is written immediately; the running
+    /// MSAL layer only picks changes up after the restart the banner asks for. See
+    /// <see cref="AppRegistrationRowViewModel"/>.
     /// </summary>
     public ObservableCollection<AppRegistrationRowViewModel> Registrations { get; }
 
-    /// <summary>Cloud choices for the add form, in <see cref="EntraCloud"/> declaration order.</summary>
+    /// <summary>Cloud choices for the form, in <see cref="EntraCloud"/> declaration order.</summary>
     public IReadOnlyList<CloudOption> CloudOptions { get; } = [.. Enum.GetValues<EntraCloud>()
         .Select(c => new CloudOption(c, EntraCloudInfo.DisplayName(c)))];
 
-    /// <summary>Add is allowed once the client id is a GUID and the tenant id is blank or a GUID.</summary>
-    public bool CanAddRegistration =>
-        Guid.TryParse(NewClientId, out _) && (string.IsNullOrWhiteSpace(NewTenantId) || Guid.TryParse(NewTenantId, out _));
-
-    /// <summary>
-    /// True while the form describes a pinned registration. Only those carry a
-    /// label — the cloud-wide entry is named after its cloud — so the label box
-    /// is disabled otherwise rather than silently dropping the input.
-    /// </summary>
-    public bool IsNewTenantPinned => !string.IsNullOrWhiteSpace(NewTenantId);
+    /// <summary>Save is allowed once both ids of the form parse as GUIDs.</summary>
+    public bool CanAddRegistration => Guid.TryParse(NewTenantId, out _) && Guid.TryParse(NewClientId, out _);
 
     /// <summary>True while the form edits an existing row rather than adding one.</summary>
     public bool IsEditing => EditingTitle is not null;
@@ -417,28 +398,10 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         IsOpen = true;
     }
 
-    // Two rows occupy the same configuration slot when they share the cloud and
-    // are both cloud-wide, or both pin the same tenant GUID.
-    private static bool IsSameSlot(AppRegistrationRowViewModel row, EntraCloud cloud, string? tenantId)
-        => row.Cloud == cloud
-            && (row.TenantId is null
-                ? tenantId is null
-                : Guid.TryParse(row.TenantId, out var a) && Guid.TryParse(tenantId, out var b) && a == b);
-
-    // A cloud-wide entry is cleared by blanking its cloud key (so the shipped
-    // placeholder cannot shine through the merged configuration); a pinned one
-    // is dropped from the list.
-    private static void RemoveFromConfig(AppRegistrationRowViewModel row)
-    {
-        if (row.TenantId is null)
-        {
-            LocalConfigStore.SaveClientId(AppPaths.LocalConfigFile, row.Cloud, string.Empty);
-        }
-        else
-        {
-            LocalConfigStore.RemoveTenantRegistration(AppPaths.LocalConfigFile, row.Cloud, row.TenantId);
-        }
-    }
+    // Two rows occupy the same configuration slot when they pin the same tenant
+    // in the same cloud.
+    private static bool IsSameSlot(AppRegistrationRowViewModel row, EntraCloud cloud, Guid tenantId)
+        => row.Cloud == cloud && Guid.TryParse(row.TenantId, out var t) && t == tenantId;
 
     /// <summary>
     /// Loads a row into the form so it can be changed in place — a new client id
@@ -454,7 +417,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         }
 
         _editing = row;
-        NewTenantId = row.TenantId ?? string.Empty;
+        NewTenantId = row.TenantId;
         NewClientId = row.ClientId;
         NewLabel = row.Label ?? string.Empty;
         NewTenantCloud = CloudOptions.First(o => o.Cloud == row.Cloud);
@@ -465,9 +428,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     private void CancelEdit() => ClearForm();
 
     /// <summary>
-    /// Writes the form to the per-user <c>appsettings.local.json</c> — a blank
-    /// tenant id becomes the cloud's cloud-wide registration (<c>AppRegistrations:{Cloud}</c>),
-    /// a GUID a tenant-pinned one (<c>TenantAppRegistrations</c>) — replacing an
+    /// Writes the form to the per-user <c>appsettings.local.json</c>, replacing an
     /// existing entry for the same cloud + tenant, mirrors it in <see cref="Registrations"/>
     /// and surfaces the restart banner. The change only takes effect on the next
     /// process launch because MSAL's PCAs are built from the startup configuration.
@@ -477,8 +438,8 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     {
         var cloud = NewTenantCloud.Cloud;
         var clientId = NewClientId.Trim();
-        var tenantId = IsNewTenantPinned ? Guid.Parse(NewTenantId.Trim()).ToString() : null;
-        var label = tenantId is not null && !string.IsNullOrWhiteSpace(NewLabel) ? NewLabel.Trim() : null;
+        var tenantId = Guid.Parse(NewTenantId.Trim());
+        var label = string.IsNullOrWhiteSpace(NewLabel) ? null : NewLabel.Trim();
 
         try
         {
@@ -486,20 +447,13 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             // its old slot behind — drop that first so the file never holds both.
             if (_editing is { } moved && !IsSameSlot(moved, cloud, tenantId))
             {
-                RemoveFromConfig(moved);
+                LocalConfigStore.RemoveTenantRegistration(AppPaths.LocalConfigFile, moved.Cloud, moved.TenantId);
                 Registrations.Remove(moved);
             }
 
-            if (tenantId is null)
-            {
-                LocalConfigStore.SaveClientId(AppPaths.LocalConfigFile, cloud, clientId);
-            }
-            else
-            {
-                LocalConfigStore.SaveTenantRegistration(
-                    AppPaths.LocalConfigFile,
-                    new TenantAppRegistration { TenantId = tenantId, ClientId = clientId, Cloud = cloud.ToString(), Label = label });
-            }
+            LocalConfigStore.SaveTenantRegistration(
+                AppPaths.LocalConfigFile,
+                new TenantAppRegistration { TenantId = tenantId.ToString(), ClientId = clientId, Cloud = cloud.ToString(), Label = label });
         }
         catch (Exception ex)
         {
@@ -507,7 +461,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             return;
         }
 
-        var row = new AppRegistrationRowViewModel(cloud, tenantId, clientId, label, VerifiedClientIds);
+        var row = new AppRegistrationRowViewModel(cloud, tenantId.ToString(), clientId, label, VerifiedClientIds);
         var existing = Registrations.FirstOrDefault(r => IsSameSlot(r, cloud, tenantId));
         if (existing is not null)
         {
@@ -524,16 +478,14 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         _logger.LogInformation(
             "App Registration saved for cloud {Cloud}, tenant {TenantId}; awaiting restart.",
             cloud,
-            tenantId ?? "<any>");
+            tenantId);
     }
 
     /// <summary>
-    /// Removes a registration from the per-user config and the list — a cloud-wide
-    /// one by blanking its cloud entry (so the shipped placeholder cannot shine
-    /// through), a pinned one by dropping its list entry. Accounts already enrolled
-    /// through it keep their entries; after the restart they resolve to whatever
-    /// registration remains (or none) and their group asks the user to remove and
-    /// re-add them.
+    /// Removes a registration from the per-user config and the list. Accounts
+    /// already enrolled through it keep their entries; after the restart they have
+    /// no registration to authenticate with and their group asks the user to remove
+    /// them (or to add the entry again).
     /// </summary>
     [RelayCommand]
     private void RemoveRegistration(AppRegistrationRowViewModel? row)
@@ -545,7 +497,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
         try
         {
-            RemoveFromConfig(row);
+            LocalConfigStore.RemoveTenantRegistration(AppPaths.LocalConfigFile, row.Cloud, row.TenantId);
         }
         catch (Exception ex)
         {
@@ -564,12 +516,12 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         _logger.LogInformation(
             "App Registration removed for cloud {Cloud}, tenant {TenantId}; awaiting restart.",
             row.Cloud,
-            row.TenantId ?? "<any>");
+            row.TenantId);
     }
 
     /// <summary>
     /// Launches a fresh process from the current executable and shuts the
-    /// running one down. Used after <see cref="SaveClientId"/> so the new
+    /// running one down. Used after <see cref="SaveRegistration"/> so the new
     /// configuration is picked up via <c>appsettings.local.json</c>. The
     /// <see cref="Program.RestartArgument"/> makes the replacement wait for
     /// this process to release the single-instance mutex instead of treating

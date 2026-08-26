@@ -73,7 +73,10 @@ public sealed class NetworkDiagnosticsServiceTests
         Action<ConcurrentDictionary<string, string>>? seedIssuers = null,
         EntraPimManagerOptions? options = null)
     {
-        options ??= new EntraPimManagerOptions { AppRegistrations = { ["Global"] = GlobalId } };
+        options ??= new EntraPimManagerOptions
+        {
+            TenantAppRegistrations = { new() { TenantId = "7b1c4d2e-0000-4000-8000-0000000000aa", ClientId = GlobalId } },
+        };
         return new NetworkDiagnosticsService(
             Options.Create(options),
             NullLogger<NetworkDiagnosticsService>.Instance,

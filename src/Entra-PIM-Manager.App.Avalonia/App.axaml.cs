@@ -242,17 +242,45 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// Folds a pre-0.7.0 per-cloud configuration into per-tenant entries before the
+    /// host binds it — see <see cref="LegacyRegistrationMigration"/>. Never blocks
+    /// startup: a failure here leaves the legacy file in place and is logged.
+    /// </summary>
+    private static void MigrateLegacyRegistrations()
+    {
+        try
+        {
+            var result = LegacyRegistrationMigration.Run(AppPaths.LocalConfigFile, AppPaths.AccountsFile, AppPaths.DataDirectory);
+            foreach (var entry in result.Migrated)
+            {
+                Log.Information(
+                    "Migrated legacy client id {ClientId} to a tenant entry for {TenantId} ({Cloud})",
+                    entry.ClientId,
+                    entry.TenantId,
+                    entry.Cloud);
+            }
+
+            foreach (var (cloud, clientId) in result.Dropped)
+            {
+                Log.Warning(
+                    "Legacy client id {ClientId} for {Cloud} had no enrolled or whitelisted tenant and was removed — add it under Settings → App Registration together with its tenant id",
+                    clientId,
+                    cloud);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Migrating the legacy App Registration configuration failed; the file was left unchanged");
+        }
+    }
+
     private static IHost BuildHost()
     {
         var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
         {
             ContentRootPath = AppContext.BaseDirectory,
         });
-
-        builder.Configuration
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
-            .AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: false)
-            .AddJsonFile(AppPaths.LocalConfigFile, optional: true, reloadOnChange: false);
 
         Directory.CreateDirectory(AppPaths.LogDirectory);
 
@@ -270,6 +298,15 @@ public partial class App : Application
                 rollingInterval: RollingInterval.Day,
                 retainedFileCountLimit: retainedLogFiles)
             .CreateLogger();
+
+        // After the logger (so the outcome is recorded) and before the JSON
+        // files are added — ConfigurationManager reads them right there.
+        MigrateLegacyRegistrations();
+
+        builder.Configuration
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+            .AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: false)
+            .AddJsonFile(AppPaths.LocalConfigFile, optional: true, reloadOnChange: false);
 
         builder.Logging.ClearProviders();
         builder.Services.AddSerilog();

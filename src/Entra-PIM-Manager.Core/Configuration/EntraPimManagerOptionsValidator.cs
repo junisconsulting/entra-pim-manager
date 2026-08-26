@@ -4,18 +4,12 @@ using EntraPimManager.Core.Auth;
 using Microsoft.Extensions.Options;
 
 /// <summary>
-/// Validates <see cref="EntraPimManagerOptions"/> shape — but is deliberately
-/// lenient on the app registrations: a missing or placeholder client id must NOT
-/// crash startup. The first-run UI guides the user to enter a real one, so
-/// that check is enforced softly in
-/// <see cref="ViewModels.ShellViewModel"/> via the <c>NeedsConfiguration</c>
-/// state instead. The one thing rejected here is an unknown cloud name — that is
-/// invisible from the UI, because the affected row silently never picks the value up.
-/// <para/>
-/// <see cref="EntraPimManagerOptions.TenantAppRegistrations"/> is held to a stricter
-/// standard: an entry only exists because someone added it, there is no shipped
-/// placeholder, and a malformed tenant id would silently never match — so every
-/// field is checked and duplicates are rejected.
+/// Validates <see cref="EntraPimManagerOptions"/> shape. An empty registration list
+/// must NOT fail: the first-run UI guides the user to add one, so that state is
+/// handled softly in <c>ShellViewModel.NeedsConfiguration</c>. Every entry that
+/// does exist is checked strictly — there is no shipped placeholder, an entry only
+/// exists because someone added it, and a malformed tenant id would silently never
+/// match a sign-in while a misspelled cloud is invisible from the UI.
 /// </summary>
 public sealed class EntraPimManagerOptionsValidator : IValidateOptions<EntraPimManagerOptions>
 {
@@ -27,23 +21,6 @@ public sealed class EntraPimManagerOptionsValidator : IValidateOptions<EntraPimM
         if (options.Scopes is null || options.Scopes.Length == 0)
         {
             failures.Add($"{EntraPimManagerOptions.SectionName}:Scopes must contain at least one delegated Graph scope.");
-        }
-
-        // Only the cloud NAME is validated, never the client id. The shipped
-        // appsettings.json carries a "YOUR-CLIENT-ID-HERE" placeholder, and the
-        // Settings UI can leave a row blank — both must boot into the first-run CTA
-        // rather than fail ValidateOnStart, which shuts the app down. Unusable ids
-        // are filtered out by EntraPimManagerOptions.ConfiguredClouds instead.
-        // A misspelled cloud, by contrast, is invisible from the UI: the row simply
-        // never picks the value up. Fail loudly on that one.
-        foreach (var cloudName in options.AppRegistrations.Keys)
-        {
-            if (!Enum.TryParse<EntraCloud>(cloudName, ignoreCase: true, out _))
-            {
-                var known = string.Join(", ", Enum.GetNames<EntraCloud>());
-                failures.Add(
-                    $"{EntraPimManagerOptions.SectionName}:AppRegistrations has an unknown cloud '{cloudName}'. Known clouds: {known}.");
-            }
         }
 
         var seenTenants = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -73,18 +50,6 @@ public sealed class EntraPimManagerOptionsValidator : IValidateOptions<EntraPimM
             if (cloudKnown && tenantKnown && !seenTenants.Add($"{cloud}|{tenantId}"))
             {
                 failures.Add($"{prefix} duplicates an earlier entry for tenant {tenantId} in {cloud}; only the first would ever be used.");
-            }
-        }
-
-        if (options.AllowedTenants is { Length: > 0 } allowedTenants)
-        {
-            foreach (var tenant in allowedTenants)
-            {
-                if (!Guid.TryParse(tenant, out _))
-                {
-                    failures.Add(
-                        $"{EntraPimManagerOptions.SectionName}:AllowedTenants contains a non-GUID value: '{tenant}'.");
-                }
             }
         }
 

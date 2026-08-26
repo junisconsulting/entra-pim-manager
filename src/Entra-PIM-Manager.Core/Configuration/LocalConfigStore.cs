@@ -7,51 +7,17 @@ using EntraPimManager.Core.Auth;
 /// <summary>
 /// Writes the user-entered configuration to <see cref="AppPaths.LocalConfigFile"/>.
 /// That location is outside the Velopack-versioned install directory, so it survives
-/// updates.
+/// updates. Every write is a read-modify-write that preserves unrelated keys.
 /// </summary>
 public static class LocalConfigStore
 {
     private const string TenantRegistrationsKey = "TenantAppRegistrations";
 
     /// <summary>
-    /// Stores <paramref name="clientId"/> as the App Registration for
-    /// <paramref name="cloud"/> in the configuration file at <paramref name="configFilePath"/>.
-    /// A blank value clears the registration: it is written as <c>""</c> rather than
-    /// removed, so the shipped placeholder cannot shine through the merged
-    /// configuration, and for Global the legacy <c>ClientId</c> is blanked too —
-    /// otherwise the old id would come back through that fallback. Every other key
-    /// — <c>AllowedTenants</c>, the other clouds' registrations — is preserved. The
-    /// file and its parent directory are created if they don't exist yet.
-    /// </summary>
-    public static void SaveClientId(string configFilePath, EntraCloud cloud, string clientId)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(configFilePath);
-        ArgumentNullException.ThrowIfNull(clientId);
-
-        var root = LoadRoot(configFilePath);
-        var section = SectionOf(root);
-
-        if (section["AppRegistrations"] is not JsonObject registrations)
-        {
-            registrations = new JsonObject();
-            section["AppRegistrations"] = registrations;
-        }
-
-        registrations[cloud.ToString()] = clientId.Trim();
-
-        if (cloud == EntraCloud.Global && clientId.Trim().Length == 0 && section.ContainsKey("ClientId"))
-        {
-            section["ClientId"] = string.Empty;
-        }
-
-        WriteRoot(configFilePath, root);
-    }
-
-    /// <summary>
     /// Adds <paramref name="registration"/> to <c>TenantAppRegistrations</c>, replacing an
     /// existing entry for the same (cloud, tenant) so the list can never hold two
     /// registrations for one tenant. The cloud is written in its canonical enum spelling;
-    /// a blank label is omitted. All other keys are preserved.
+    /// a blank label is omitted. The file and its parent directory are created if needed.
     /// </summary>
     public static void SaveTenantRegistration(string configFilePath, TenantAppRegistration registration)
     {
@@ -68,35 +34,15 @@ public static class LocalConfigStore
             throw new ArgumentException($"TenantId '{registration.TenantId}' is not a GUID.", nameof(registration));
         }
 
-        var entry = new JsonObject
-        {
-            ["TenantId"] = tenantId.ToString(),
-            ["ClientId"] = registration.ClientId.Trim(),
-            ["Cloud"] = cloud.ToString(),
-        };
-        if (!string.IsNullOrWhiteSpace(registration.Label))
-        {
-            entry["Label"] = registration.Label.Trim();
-        }
-
         var root = LoadRoot(configFilePath);
         var list = TenantRegistrationsOf(SectionOf(root));
-        var existing = IndexOf(list, cloud, tenantId);
-        if (existing >= 0)
-        {
-            list[existing] = entry;
-        }
-        else
-        {
-            list.Add(entry);
-        }
-
+        Upsert(list, cloud, tenantId, registration.ClientId, registration.Label);
         WriteRoot(configFilePath, root);
     }
 
     /// <summary>
     /// Removes the <c>TenantAppRegistrations</c> entry for (<paramref name="cloud"/>,
-    /// <paramref name="tenantId"/>). No-op when there is none. All other keys are preserved.
+    /// <paramref name="tenantId"/>). No-op when there is none.
     /// </summary>
     public static void RemoveTenantRegistration(string configFilePath, EntraCloud cloud, string tenantId)
     {
@@ -118,7 +64,7 @@ public static class LocalConfigStore
         WriteRoot(configFilePath, root);
     }
 
-    private static JsonObject LoadRoot(string configFilePath)
+    internal static JsonObject LoadRoot(string configFilePath)
     {
         if (!File.Exists(configFilePath))
         {
@@ -129,7 +75,7 @@ public static class LocalConfigStore
         return (JsonNode.Parse(stream) as JsonObject) ?? new JsonObject();
     }
 
-    private static void WriteRoot(string configFilePath, JsonObject root)
+    internal static void WriteRoot(string configFilePath, JsonObject root)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(configFilePath)!);
         File.WriteAllText(
@@ -137,7 +83,7 @@ public static class LocalConfigStore
             root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    private static JsonObject SectionOf(JsonObject root)
+    internal static JsonObject SectionOf(JsonObject root)
     {
         if (root[EntraPimManagerOptions.SectionName] is not JsonObject section)
         {
@@ -148,7 +94,7 @@ public static class LocalConfigStore
         return section;
     }
 
-    private static JsonArray TenantRegistrationsOf(JsonObject section)
+    internal static JsonArray TenantRegistrationsOf(JsonObject section)
     {
         if (section[TenantRegistrationsKey] is not JsonArray list)
         {
@@ -159,7 +105,32 @@ public static class LocalConfigStore
         return list;
     }
 
-    private static int IndexOf(JsonArray list, EntraCloud cloud, Guid tenantId)
+    /// <summary>Adds or replaces the entry for (cloud, tenant).</summary>
+    internal static void Upsert(JsonArray list, EntraCloud cloud, Guid tenantId, string clientId, string? label)
+    {
+        var entry = new JsonObject
+        {
+            ["TenantId"] = tenantId.ToString(),
+            ["ClientId"] = clientId.Trim(),
+            ["Cloud"] = cloud.ToString(),
+        };
+        if (!string.IsNullOrWhiteSpace(label))
+        {
+            entry["Label"] = label.Trim();
+        }
+
+        var existing = IndexOf(list, cloud, tenantId);
+        if (existing >= 0)
+        {
+            list[existing] = entry;
+        }
+        else
+        {
+            list.Add(entry);
+        }
+    }
+
+    internal static int IndexOf(JsonArray list, EntraCloud cloud, Guid tenantId)
     {
         for (var i = 0; i < list.Count; i++)
         {

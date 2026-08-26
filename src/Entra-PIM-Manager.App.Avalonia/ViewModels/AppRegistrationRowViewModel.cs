@@ -5,16 +5,14 @@ using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Configuration;
 
 /// <summary>
-/// One row of the Settings → APP REGISTRATION list: a single App Registration,
-/// read-only with a remove button. <see cref="TenantId"/> is <c>null</c> for the
-/// cloud-wide (multi-tenant) registration of a cloud and the pinned tenant's GUID
-/// for a single-tenant one. Rows are added through the form below the list;
-/// re-adding the same cloud + tenant replaces the entry — there is no inline edit.
+/// One row of the Settings → APP REGISTRATION list: a single App Registration pinned
+/// to its tenant, read-only with a remove button. Clicking the row loads it into the
+/// form below for editing; saving replaces it.
 /// </summary>
 /// <remarks>
 /// The title uses the same wording as the "Sign in with" picker in the add-account
-/// panel ("Entra Global — any tenant", "Contoso · Entra Global"), so the user meets
-/// each registration under one name in both places.
+/// panel ("Contoso · Entra Global"), so the user meets each registration under one
+/// name in both places.
 /// </remarks>
 public sealed class AppRegistrationRowViewModel : ObservableObject
 {
@@ -22,7 +20,7 @@ public sealed class AppRegistrationRowViewModel : ObservableObject
 
     public AppRegistrationRowViewModel(
         EntraCloud cloud,
-        string? tenantId,
+        string tenantId,
         string clientId,
         string? label,
         Func<string[]> verifiedClientIds)
@@ -36,19 +34,14 @@ public sealed class AppRegistrationRowViewModel : ObservableObject
 
     public EntraCloud Cloud { get; }
 
-    /// <summary>Pinned tenant, or <c>null</c> for the cloud-wide registration.</summary>
-    public string? TenantId { get; }
+    public string TenantId { get; }
 
     public string ClientId { get; }
 
     public string? Label { get; }
 
-    public bool IsCloudWide => TenantId is null;
-
     /// <summary>Row heading — identical to the entry's label in the "Sign in with" picker.</summary>
-    public string Title => IsCloudWide
-        ? $"{EntraCloudInfo.DisplayName(Cloud)} — any tenant"
-        : $"{(string.IsNullOrWhiteSpace(Label) ? TenantId : Label)} · {EntraCloudInfo.DisplayName(Cloud)}";
+    public string Title => $"{(string.IsNullOrWhiteSpace(Label) ? TenantId : Label)} · {EntraCloudInfo.DisplayName(Cloud)}";
 
     /// <summary>
     /// A registration only counts as verified once a sign-in through it succeeded

@@ -191,39 +191,37 @@ public sealed class PimErrorMapperTests
     }
 
     [Fact]
-    public void MapException_Aadsts50194_PointsAtTheTenantSpecificList()
+    public void MapException_TenantMismatch_PointsAtTheEntry()
     {
-        // A single-tenant app pasted into a cloud row is sent to /organizations.
-        var msal = new MsalServiceException(
-            "invalid_request",
-            "AADSTS50194: Application 'x' is not configured as a multi-tenant application.");
+        var msal = new MsalServiceException("tenant_mismatch", "detail for the log");
 
         var mapped = PimErrorMapper.MapException(msal);
 
         Assert.Equal(ErrorSeverity.Fatal, mapped.Severity);
-        Assert.Contains("Tenant-specific registrations", mapped.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void MapException_RegistrationMismatch_TellsTheUserToPickTheTenantTarget()
-    {
-        var msal = new MsalServiceException("registration_mismatch", "detail for the log");
-
-        var mapped = PimErrorMapper.MapException(msal);
-
-        Assert.Equal(ErrorSeverity.Fatal, mapped.Severity);
-        Assert.Contains("Sign in with", mapped.Message, StringComparison.Ordinal);
+        Assert.Contains("tenant id", mapped.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("detail for the log", mapped.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void MapException_Aadsts700016_MentionsTheTenantAsWellAsTheCloud()
+    public void MapException_AppRegistrationMissing_PointsAtSettings()
+    {
+        var msal = new MsalServiceException("app_registration_missing", "No App Registration is configured for tenant x in Entra Global.");
+
+        var mapped = PimErrorMapper.MapException(msal);
+
+        Assert.Equal(ErrorSeverity.Fatal, mapped.Severity);
+        Assert.Contains("Settings → App Registration", mapped.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MapException_Aadsts700016_PointsAtTheEntryAndConsent()
     {
         var msal = new MsalServiceException("unauthorized_client", "AADSTS700016: Application not found in the directory");
 
         var mapped = PimErrorMapper.MapException(msal);
 
-        Assert.Contains("cloud or tenant", mapped.Message, StringComparison.Ordinal);
+        Assert.Contains("unknown in the selected tenant", mapped.Message, StringComparison.Ordinal);
+        Assert.Contains("admin consent", mapped.Message, StringComparison.Ordinal);
     }
 
     [Fact]

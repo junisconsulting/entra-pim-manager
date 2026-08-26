@@ -907,8 +907,8 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         // A completed sign-in is the only real proof the App Registration is
         // set up correctly — it exercises the client id, public client flows,
         // the broker redirect URI and admin consent in one go. Record it against
-        // the registration that was signed into (cloud-wide or tenant-pinned);
-        // the other registrations are separate and prove nothing here.
+        // the registration of the tenant that was signed into; the other
+        // registrations are separate and prove nothing here.
         MarkAppRegistrationVerified([added]);
 
         await RefreshAsync();
@@ -929,7 +929,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     {
         var verified = _userSettings.Current.VerifiedClientIds ?? [];
         var added = accounts
-            .Select(a => _options.RegistrationFor(a.Cloud, a.TenantId)?.ClientId)
+            .Select(a => _options.ClientIdFor(a.Cloud, a.TenantId))
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(id => !verified.Contains(id!, StringComparer.OrdinalIgnoreCase))

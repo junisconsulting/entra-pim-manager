@@ -14,7 +14,7 @@ using MsalLogLevel = Microsoft.Identity.Client.LogLevel;
 /// MSAL-based implementation of <see cref="IAuthService"/> using the Windows WAM
 /// broker. One <see cref="IPublicClientApplication"/> per App Registration is created
 /// lazily — the registration for an enrollment is derived from its (cloud, tenant) via
-/// <see cref="EntraPimManagerOptions.RegistrationFor"/> on every call. All token
+/// <see cref="EntraPimManagerOptions.ClientIdFor"/> on every call. All token
 /// operations are serialized through a semaphore. Enrolled accounts are persisted via
 /// <see cref="IAccountStore"/> so the UI can render the account list without
 /// unlocking the MSAL cache.
@@ -63,27 +63,20 @@ public sealed class MsalAuthService : IAuthService, IDisposable
 
     /// <inheritdoc />
     public Task<SignedInAccount> AddAccountAsync(
-        string? tenantIdOrDomain,
+        string tenantId,
         EntraCloud cloud,
         CancellationToken ct = default)
-        => AddAccountCoreAsync(
-            string.IsNullOrWhiteSpace(tenantIdOrDomain) ? null : tenantIdOrDomain.Trim(),
-            cloud,
-            ct);
+        => AddAccountCoreAsync(RequireTenantGuid(tenantId), cloud, ct);
 
     /// <inheritdoc />
     public Task<SignedInAccount> AddAccountViaDeviceCodeAsync(
-        string? tenantIdOrDomain,
+        string tenantId,
         EntraCloud cloud,
         Func<DeviceCodeChallenge, Task> onChallenge,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(onChallenge);
-        return AddAccountViaDeviceCodeCoreAsync(
-            string.IsNullOrWhiteSpace(tenantIdOrDomain) ? null : tenantIdOrDomain.Trim(),
-            cloud,
-            onChallenge,
-            ct);
+        return AddAccountViaDeviceCodeCoreAsync(RequireTenantGuid(tenantId), cloud, onChallenge, ct);
     }
 
     /// <inheritdoc />
@@ -108,14 +101,13 @@ public sealed class MsalAuthService : IAuthService, IDisposable
 
             // The MSAL account lives in the cache of the registration this
             // enrollment resolves to. If that registration is gone from the
-            // configuration (a tenant registration removed, or the cloud row
-            // cleared), there is no PCA to purge from — and refusing to remove
-            // the enrollment would leave the user stuck with a dead entry.
-            var registration = _options.RegistrationFor(cloud, tenantId);
-            if (registration is null)
+            // configuration, there is no PCA to purge from — and refusing to
+            // remove the enrollment would leave the user stuck with a dead entry.
+            var clientId = _options.ClientIdFor(cloud, tenantId);
+            if (clientId is null)
             {
                 _logger.LogInformation(
-                    "Account removed without cache purge — no App Registration resolves for tenant {TenantId} in cloud {Cloud} (oid {ObjectId})",
+                    "Account removed without cache purge — no App Registration for tenant {TenantId} in cloud {Cloud} (oid {ObjectId})",
                     tenantId,
                     cloud,
                     objectId);
@@ -132,15 +124,12 @@ public sealed class MsalAuthService : IAuthService, IDisposable
             var stillInUse = remaining.Any(a =>
                 a.AuthMethod == authMethod
                 && string.Equals(a.ObjectId, objectId, StringComparison.OrdinalIgnoreCase)
-                && string.Equals(
-                    _options.RegistrationFor(a.Cloud, a.TenantId)?.ClientId,
-                    registration.Value.ClientId,
-                    StringComparison.OrdinalIgnoreCase));
+                && string.Equals(_options.ClientIdFor(a.Cloud, a.TenantId), clientId, StringComparison.OrdinalIgnoreCase));
             if (!stillInUse)
             {
                 var pca = authMethod == AuthMethod.DeviceCode
-                    ? await EnsureDeviceCodePcaAsync(cloud, registration.Value, ct).ConfigureAwait(false)
-                    : await EnsurePcaAsync(cloud, registration.Value, ct).ConfigureAwait(false);
+                    ? await EnsureDeviceCodePcaAsync(clientId, cloud, ct).ConfigureAwait(false)
+                    : await EnsurePcaAsync(clientId, cloud, ct).ConfigureAwait(false);
                 var msalAccount = await FindMsalAccountAsync(pca, objectId).ConfigureAwait(false);
                 if (msalAccount is not null)
                 {
@@ -192,17 +181,17 @@ public sealed class MsalAuthService : IAuthService, IDisposable
             var enrollment = await _accountStore.GetByIdAsync(objectId, tenantId, ct).ConfigureAwait(false);
             var authMethod = enrollment?.AuthMethod ?? AuthMethod.Broker;
 
-            var registration = RequireRegistration(cloud, tenantId);
+            var clientId = RequireClientId(cloud, tenantId);
             var pca = authMethod == AuthMethod.DeviceCode
-                ? await EnsureDeviceCodePcaAsync(cloud, registration, ct).ConfigureAwait(false)
-                : await EnsurePcaAsync(cloud, registration, ct).ConfigureAwait(false);
+                ? await EnsureDeviceCodePcaAsync(clientId, cloud, ct).ConfigureAwait(false)
+                : await EnsurePcaAsync(clientId, cloud, ct).ConfigureAwait(false);
             var account = await FindMsalAccountAsync(pca, objectId).ConfigureAwait(false);
 
             if (account is null)
             {
                 throw new MsalUiRequiredException(
                     MsalError.UserNullError,
-                    $"No MSAL account for oid '{objectId}' in cloud '{cloud}' under client id '{registration.ClientId}'. The account must be re-enrolled.");
+                    $"No MSAL account for oid '{objectId}' in cloud '{cloud}' under client id '{clientId}'. The account must be re-enrolled.");
             }
 
             return authMethod == AuthMethod.DeviceCode
@@ -229,168 +218,57 @@ public sealed class MsalAuthService : IAuthService, IDisposable
             a => string.Equals(a.HomeAccountId?.ObjectId, objectId, StringComparison.OrdinalIgnoreCase));
     }
 
-    // A cloud-wide registration is multi-tenant: /organizations within its
-    // sovereign cloud, the target tenant chosen per request with .WithTenantId.
-    // A tenant registration is single-tenant: Entra refuses it on /organizations
-    // (AADSTS50194), so its authority names the tenant. The per-request
-    // .WithTenantId stays uniform — with the same GUID it is a no-op.
-    private static PublicClientApplicationBuilder WithAuthority(
-        PublicClientApplicationBuilder builder,
-        EntraCloud cloud,
-        (string ClientId, string? TenantId) registration)
-        => registration.TenantId is null
-            ? builder.WithAuthority(EntraCloudInfo.MsalCloudInstance(cloud), AadAuthorityAudience.AzureAdMultipleOrgs)
-            : builder.WithAuthority(EntraCloudInfo.MsalCloudInstance(cloud), registration.TenantId);
-
-    // The cloud-wide registration keeps the file names from before tenant
-    // registrations existed, so an upgrade needs no re-sign-in. A tenant
-    // registration gets a file of its own, named by client id: GetAccountsAsync
-    // and RemoveAsync work per cache, and one registration must never see —
-    // or purge — another one's accounts.
-    private static string CacheFileFor(EntraCloud cloud, (string ClientId, string? TenantId) registration)
-    {
-        if (registration.TenantId is not null)
-        {
-            return $"msal-{registration.ClientId}.cache";
-        }
-
-        return cloud switch
-        {
-            EntraCloud.China => "msal-china.cache",
-            _ => TokenCacheFactory.DefaultCacheFileName,
-        };
-    }
-
-    // Dedicated cache files for the broker-less device-code PCAs. These store
-    // refresh tokens (the broker caches do not), so they must never share a file
-    // with CacheFileFor.
-    private static string DeviceCodeCacheFileFor(EntraCloud cloud, (string ClientId, string? TenantId) registration)
-    {
-        if (registration.TenantId is not null)
-        {
-            return $"msal-devicecode-{registration.ClientId}.cache";
-        }
-
-        return cloud switch
-        {
-            EntraCloud.China => "msal-devicecode-china.cache",
-            _ => "msal-devicecode.cache",
-        };
-    }
+    // Every registration is pinned to a tenant, so a sign-in always names one.
+    // Canonical GUID formatting keeps the persisted enrollment comparable with
+    // the configuration entry regardless of how the user typed it.
+    private static string RequireTenantGuid(string tenantId)
+        => Guid.TryParse(tenantId, out var parsed)
+            ? parsed.ToString()
+            : throw new ArgumentException($"Tenant id '{tenantId}' is not a GUID.", nameof(tenantId));
 
     /// <summary>
-    /// The App Registration for <paramref name="tenantIdOrDomain"/> in <paramref name="cloud"/>
-    /// (see <see cref="EntraPimManagerOptions.RegistrationFor"/>), or a mapped error.
-    /// National clouds are isolated instances: a Global client id does not exist in the
-    /// 21Vianet directory, so sending it there yields an opaque <c>AADSTS700016</c>.
-    /// Failing here instead names the missing registration and points at Settings.
+    /// Client id pinned to <paramref name="tenantId"/> in <paramref name="cloud"/>, or a
+    /// mapped error naming the missing registration and pointing at Settings.
     /// </summary>
-    private (string ClientId, string? TenantId) RequireRegistration(EntraCloud cloud, string? tenantIdOrDomain)
-    {
-        if (_options.RegistrationFor(cloud, tenantIdOrDomain) is { } registration)
-        {
-            return registration;
-        }
-
-        var scope = tenantIdOrDomain is null
-            ? EntraCloudInfo.DisplayName(cloud)
-            : $"tenant {tenantIdOrDomain} in {EntraCloudInfo.DisplayName(cloud)}";
-        throw new MsalServiceException(
-            "app_registration_missing",
-            $"No App Registration is configured for {scope}.");
-    }
-
-    /// <summary>
-    /// Rejects a sign-in that went through one registration but landed in a tenant
-    /// that resolves to another — the enrollment would otherwise be routed to that
-    /// other registration's PCA on every later call, whose cache has never seen the
-    /// account. Happens when the user picks the cloud-wide target and the account's
-    /// home tenant (or a hand-typed domain) is a pinned tenant. The just-cached
-    /// account is dropped so it doesn't linger, exactly like the whitelist path.
-    /// </summary>
-    private void EnsureRegistrationMatches(
-        string tenantId,
-        string clientIdUsed,
-        EntraCloud cloud,
-        IAccount account,
-        IPublicClientApplication pca)
-    {
-        var expected = _options.RegistrationFor(cloud, tenantId)?.ClientId;
-        if (string.Equals(expected, clientIdUsed, StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        _logger.LogWarning(
-            "Sign-in rejected: tenant {TenantId} (cloud {Cloud}) resolves to client id {ExpectedClientId} but was signed in through {UsedClientId} (oid {ObjectId})",
-            tenantId,
-            cloud,
-            expected,
-            clientIdUsed,
-            account.HomeAccountId?.ObjectId);
-
-        _ = pca.RemoveAsync(account);
-
-        throw new MsalServiceException(
-            "registration_mismatch",
-            $"Tenant {tenantId} has its own App Registration; the sign-in used a different one.");
-    }
+    private string RequireClientId(EntraCloud cloud, string tenantId)
+        => _options.ClientIdFor(cloud, tenantId)
+            ?? throw new MsalServiceException(
+                "app_registration_missing",
+                $"No App Registration is configured for tenant {tenantId} in {EntraCloudInfo.DisplayName(cloud)}.");
 
     private async Task<SignedInAccount> AddAccountCoreAsync(
-        string? tenantIdOrDomain,
+        string tenantId,
         EntraCloud cloud,
         CancellationToken ct)
     {
         await _authLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var registration = RequireRegistration(cloud, tenantIdOrDomain);
-            var pca = await EnsurePcaAsync(cloud, registration, ct).ConfigureAwait(false);
+            var clientId = RequireClientId(cloud, tenantId);
+            var pca = await EnsurePcaAsync(clientId, cloud, ct).ConfigureAwait(false);
 
             // Explicit sign-in always surfaces the WAM account picker (no
             // .WithAccount, no OperatingSystemAccount, Prompt.SelectAccount).
-            // See memory: auth-no-sso-always-picker.
-            var interactive = pca.AcquireTokenInteractive(_options.Scopes)
+            // See memory: auth-no-sso-always-picker. The request goes to the
+            // entry's tenant — what a single-tenant app requires and a multi-
+            // tenant app accepts. The IAccount.HomeAccountId still reflects the
+            // chosen identity's HOME tenant; AuthenticationResult.TenantId carries
+            // the target.
+            var result = await pca.AcquireTokenInteractive(_options.Scopes)
                 .WithPrompt(Prompt.SelectAccount)
-                .WithParentActivityOrWindow(_windowTracker.GetCurrentWindowHandle());
+                .WithTenantId(tenantId)
+                .WithParentActivityOrWindow(_windowTracker.GetCurrentWindowHandle())
+                .ExecuteAsync(ct)
+                .ConfigureAwait(false);
 
-            // When a tenant override is requested, MSAL drives the user to that
-            // tenant's authority. The IAccount.HomeAccountId still reflects the
-            // chosen identity's HOME tenant; only AuthenticationResult.TenantId
-            // carries the target.
-            if (tenantIdOrDomain is not null)
-            {
-                interactive = interactive.WithTenantId(tenantIdOrDomain);
-            }
-
-            var result = await interactive.ExecuteAsync(ct).ConfigureAwait(false);
-
-            // The enrollment lives in the *target* tenant, not the home one —
-            // that's what subsequent silent token requests must address.
-            var tenantId = result.TenantId
-                ?? result.Account.HomeAccountId?.TenantId
-                ?? string.Empty;
-            var objectId = result.Account.HomeAccountId?.ObjectId ?? string.Empty;
-
-            EnsureRegistrationMatches(tenantId, registration.ClientId, cloud, result.Account, pca);
-            EnforceTenantWhitelist(tenantId, result.Account, cloud, pca);
-
-            var account = new SignedInAccount(
-                ObjectId: objectId,
-                TenantId: tenantId,
-                Username: result.Account.Username,
-                DisplayName: result.ClaimsPrincipal?.FindFirst("name")?.Value,
-                AddedAt: DateTimeOffset.UtcNow,
-                Cloud: cloud);
-
+            var account = ToEnrollment(result, tenantId, cloud, AuthMethod.Broker, pca);
             await _accountStore.UpsertAsync(account, ct).ConfigureAwait(false);
             _logger.LogInformation(
-                "Account enrolled (oid {ObjectId}, tenant {TenantId}, cloud {Cloud}, client id {ClientId}{TenantOverride})",
+                "Account enrolled (oid {ObjectId}, tenant {TenantId}, cloud {Cloud}, client id {ClientId})",
                 account.ObjectId,
                 account.TenantId,
                 cloud,
-                registration.ClientId,
-                tenantIdOrDomain is null ? string.Empty : $", override {tenantIdOrDomain}");
+                clientId);
             return account;
         }
         finally
@@ -400,7 +278,7 @@ public sealed class MsalAuthService : IAuthService, IDisposable
     }
 
     private async Task<SignedInAccount> AddAccountViaDeviceCodeCoreAsync(
-        string? tenantIdOrDomain,
+        string tenantId,
         EntraCloud cloud,
         Func<DeviceCodeChallenge, Task> onChallenge,
         CancellationToken ct)
@@ -408,63 +286,80 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         await _authLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var registration = RequireRegistration(cloud, tenantIdOrDomain);
-            var pca = await EnsureDeviceCodePcaAsync(cloud, registration, ct).ConfigureAwait(false);
+            var clientId = RequireClientId(cloud, tenantId);
+            var pca = await EnsureDeviceCodePcaAsync(clientId, cloud, ct).ConfigureAwait(false);
 
-            var builder = pca.AcquireTokenWithDeviceCode(
-                _options.Scopes,
-                deviceCodeResult =>
-                {
-                    // MSAL invokes this once, before it starts polling. Hand the
-                    // user-facing instructions to the UI. The user code is
-                    // single-use and short-lived — never log it.
-                    var challenge = new DeviceCodeChallenge(
-                        UserCode: deviceCodeResult.UserCode,
-                        VerificationUri: deviceCodeResult.VerificationUrl,
-                        Message: deviceCodeResult.Message,
-                        ExpiresOn: deviceCodeResult.ExpiresOn);
-                    return onChallenge(challenge);
-                });
+            var result = await pca.AcquireTokenWithDeviceCode(
+                    _options.Scopes,
+                    deviceCodeResult =>
+                    {
+                        // MSAL invokes this once, before it starts polling. Hand the
+                        // user-facing instructions to the UI. The user code is
+                        // single-use and short-lived — never log it.
+                        var challenge = new DeviceCodeChallenge(
+                            UserCode: deviceCodeResult.UserCode,
+                            VerificationUri: deviceCodeResult.VerificationUrl,
+                            Message: deviceCodeResult.Message,
+                            ExpiresOn: deviceCodeResult.ExpiresOn);
+                        return onChallenge(challenge);
+                    })
+                .WithTenantId(tenantId)
+                .ExecuteAsync(ct)
+                .ConfigureAwait(false);
 
-            // Same tenant-targeting semantics as the broker path.
-            if (tenantIdOrDomain is not null)
-            {
-                builder = builder.WithTenantId(tenantIdOrDomain);
-            }
-
-            var result = await builder.ExecuteAsync(ct).ConfigureAwait(false);
-
-            var tenantId = result.TenantId
-                ?? result.Account.HomeAccountId?.TenantId
-                ?? string.Empty;
-            var objectId = result.Account.HomeAccountId?.ObjectId ?? string.Empty;
-
-            EnsureRegistrationMatches(tenantId, registration.ClientId, cloud, result.Account, pca);
-            EnforceTenantWhitelist(tenantId, result.Account, cloud, pca);
-
-            var account = new SignedInAccount(
-                ObjectId: objectId,
-                TenantId: tenantId,
-                Username: result.Account.Username,
-                DisplayName: result.ClaimsPrincipal?.FindFirst("name")?.Value,
-                AddedAt: DateTimeOffset.UtcNow,
-                Cloud: cloud,
-                AuthMethod: AuthMethod.DeviceCode);
-
+            var account = ToEnrollment(result, tenantId, cloud, AuthMethod.DeviceCode, pca);
             await _accountStore.UpsertAsync(account, ct).ConfigureAwait(false);
             _logger.LogInformation(
-                "Account enrolled via device code (oid {ObjectId}, tenant {TenantId}, cloud {Cloud}, client id {ClientId}{TenantOverride})",
+                "Account enrolled via device code (oid {ObjectId}, tenant {TenantId}, cloud {Cloud}, client id {ClientId})",
                 account.ObjectId,
                 account.TenantId,
                 cloud,
-                registration.ClientId,
-                tenantIdOrDomain is null ? string.Empty : $", override {tenantIdOrDomain}");
+                clientId);
             return account;
         }
         finally
         {
             _authLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Builds the enrollment from a sign-in result after checking that Entra issued
+    /// the token for the tenant that was asked for. With <c>.WithTenantId</c> on the
+    /// request that is always the case; the guard exists so a surprise can never
+    /// persist an enrollment whose tenant has no registration. The just-cached
+    /// account is dropped then so it doesn't linger.
+    /// </summary>
+    private SignedInAccount ToEnrollment(
+        AuthenticationResult result,
+        string requestedTenantId,
+        EntraCloud cloud,
+        AuthMethod authMethod,
+        IPublicClientApplication pca)
+    {
+        var issuedTenantId = result.TenantId ?? result.Account.HomeAccountId?.TenantId ?? string.Empty;
+        if (!Guid.TryParse(issuedTenantId, out var issued) || issued != Guid.Parse(requestedTenantId))
+        {
+            _logger.LogWarning(
+                "Sign-in rejected: requested tenant {RequestedTenantId} but the token was issued for {IssuedTenantId} (cloud {Cloud}, oid {ObjectId})",
+                requestedTenantId,
+                issuedTenantId,
+                cloud,
+                result.Account.HomeAccountId?.ObjectId);
+            _ = pca.RemoveAsync(result.Account);
+            throw new MsalServiceException(
+                "tenant_mismatch",
+                $"The sign-in landed in tenant {issuedTenantId} instead of {requestedTenantId}.");
+        }
+
+        return new SignedInAccount(
+            ObjectId: result.Account.HomeAccountId?.ObjectId ?? string.Empty,
+            TenantId: requestedTenantId,
+            Username: result.Account.Username,
+            DisplayName: result.ClaimsPrincipal?.FindFirst("name")?.Value,
+            AddedAt: DateTimeOffset.UtcNow,
+            Cloud: cloud,
+            AuthMethod: authMethod);
     }
 
     private async Task<AuthenticationResult> AcquireForDeviceCodeAccountAsync(
@@ -538,51 +433,23 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         }
     }
 
-    private void EnforceTenantWhitelist(
-        string tenantId,
-        IAccount account,
-        EntraCloud cloud,
-        IPublicClientApplication pca)
+    private async Task<IPublicClientApplication> EnsurePcaAsync(string clientId, EntraCloud cloud, CancellationToken ct)
     {
-        if (_options.AllowedTenants is not { Length: > 0 } whitelist)
-        {
-            return;
-        }
-
-        if (whitelist.Any(t => string.Equals(t, tenantId, StringComparison.OrdinalIgnoreCase)))
-        {
-            return;
-        }
-
-        _logger.LogWarning(
-            "Sign-in rejected: tenant {TenantId} (cloud {Cloud}) is not in the AllowedTenants whitelist (oid {ObjectId})",
-            tenantId,
-            cloud,
-            account.HomeAccountId?.ObjectId);
-
-        // Remove the just-cached account so it doesn't linger. Use the PCA that
-        // actually cached it (broker vs. device-code) — they hold separate caches.
-        _ = pca.RemoveAsync(account);
-
-        throw new MsalServiceException(
-            "tenant_not_allowed",
-            $"The signed-in tenant ({tenantId}) is not in the AllowedTenants whitelist.");
-    }
-
-    private async Task<IPublicClientApplication> EnsurePcaAsync(
-        EntraCloud cloud,
-        (string ClientId, string? TenantId) registration,
-        CancellationToken ct)
-    {
-        if (_pcas.TryGetValue(registration.ClientId, out var existing))
+        if (_pcas.TryGetValue(clientId, out var existing))
         {
             return existing;
         }
 
         ct.ThrowIfCancellationRequested();
-        var clientId = registration.ClientId;
 
-        var pca = WithAuthority(PublicClientApplicationBuilder.Create(clientId), cloud, registration)
+        var pca = PublicClientApplicationBuilder
+            .Create(clientId)
+
+            // Work-or-school authority of the sovereign cloud. Every request
+            // names its tenant via .WithTenantId, so a single-tenant registration
+            // (which Entra refuses on /organizations, AADSTS50194) works exactly
+            // like a multi-tenant one used in several tenants.
+            .WithAuthority(EntraCloudInfo.MsalCloudInstance(cloud), AadAuthorityAudience.AzureAdMultipleOrgs)
             .WithRedirectUri($"ms-appx-web://microsoft.aad.brokerplugin/{clientId}")
             .WithBroker(new BrokerOptions(BrokerOptions.OperatingSystems.Windows)
             {
@@ -602,37 +469,35 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         // Register the cache. MSAL holds the helper alive through the cache
         // callbacks, so we don't need to root it ourselves.
         await _cacheFactory
-            .RegisterAsync(pca.UserTokenCache, CacheFileFor(cloud, registration), ct)
+            .RegisterAsync(pca.UserTokenCache, $"msal-{clientId}.cache", ct)
             .ConfigureAwait(false);
         _pcas[clientId] = pca;
         return pca;
     }
 
-    private async Task<IPublicClientApplication> EnsureDeviceCodePcaAsync(
-        EntraCloud cloud,
-        (string ClientId, string? TenantId) registration,
-        CancellationToken ct)
+    private async Task<IPublicClientApplication> EnsureDeviceCodePcaAsync(string clientId, EntraCloud cloud, CancellationToken ct)
     {
-        if (_deviceCodePcas.TryGetValue(registration.ClientId, out var existing))
+        if (_deviceCodePcas.TryGetValue(clientId, out var existing))
         {
             return existing;
         }
 
         ct.ThrowIfCancellationRequested();
-        var clientId = registration.ClientId;
 
         // Broker-LESS public client for the device-code escape hatch. No
         // .WithBroker (device code is incompatible with WAM) and no redirect URI
         // (device code doesn't use one). Unlike the broker PCA — where WAM owns
         // the refresh tokens — this PCA persists its own RTs, so it MUST have a
         // dedicated cache file that never collides with the broker caches.
-        var pca = WithAuthority(PublicClientApplicationBuilder.Create(clientId), cloud, registration)
+        var pca = PublicClientApplicationBuilder
+            .Create(clientId)
+            .WithAuthority(EntraCloudInfo.MsalCloudInstance(cloud), AadAuthorityAudience.AzureAdMultipleOrgs)
             .WithClientName("Entra-PIM-Manager")
             .WithLogging(OnMsalLog, MsalLogLevel.Info, enablePiiLogging: false)
             .Build();
 
         await _cacheFactory
-            .RegisterAsync(pca.UserTokenCache, DeviceCodeCacheFileFor(cloud, registration), ct)
+            .RegisterAsync(pca.UserTokenCache, $"msal-devicecode-{clientId}.cache", ct)
             .ConfigureAwait(false);
         _deviceCodePcas[clientId] = pca;
         return pca;

@@ -7,9 +7,9 @@ using Microsoft.Identity.Client;
 using Microsoft.Identity.Client.Extensions.Msal;
 
 /// <summary>
-/// Creates and registers the MSAL token cache. On Windows the cache file is
-/// DPAPI-encrypted and scoped to the current user at
-/// <c>%LocalAppData%\junis\Entra-PIM-Manager\msal.cache</c>. A corrupted cache is detected
+/// Creates and registers MSAL token caches. On Windows each cache file is
+/// DPAPI-encrypted and scoped to the current user under
+/// <c>%LocalAppData%\junis\Entra-PIM-Manager\</c>. A corrupted cache is detected
 /// and rebuilt rather than blocking startup.
 /// </summary>
 /// <remarks>
@@ -19,9 +19,6 @@ using Microsoft.Identity.Client.Extensions.Msal;
 [ExcludeFromCodeCoverage]
 public sealed class TokenCacheFactory
 {
-    /// <summary>Default cache file name — used by the Global cloud PCA.</summary>
-    public const string DefaultCacheFileName = "msal.cache";
-
     private readonly ILogger<TokenCacheFactory> _logger;
 
     public TokenCacheFactory(ILogger<TokenCacheFactory> logger)
@@ -33,23 +30,20 @@ public sealed class TokenCacheFactory
     /// <summary>Directory holding the encrypted token cache files (non-roaming).</summary>
     public string CacheDirectory { get; }
 
-    /// <summary>Full path of the default (Global cloud) encrypted token cache file.</summary>
-    public string CacheFilePath => Path.Combine(CacheDirectory, DefaultCacheFileName);
-
     /// <summary>
-    /// Attaches a DPAPI-encrypted persistent cache to <paramref name="tokenCache"/>
-    /// using <paramref name="cacheFileName"/> (defaults to <see cref="DefaultCacheFileName"/>).
-    /// The returned helper must be kept alive for the lifetime of the cache.
+    /// Attaches a DPAPI-encrypted persistent cache stored as <paramref name="cacheFileName"/>
+    /// to <paramref name="tokenCache"/>. The returned helper must be kept alive for the
+    /// lifetime of the cache.
     /// </summary>
     /// <remarks>
     /// Each PCA — one per App Registration — needs its own cache file so accounts
     /// and tokens of different registrations and STS authorities don't collide in
-    /// one binary blob: <c>msal-china.cache</c> for the China cloud-wide PCA,
-    /// <c>msal-{clientId}.cache</c> for a tenant-pinned one.
+    /// one binary blob: <c>msal-{clientId}.cache</c> for the broker PCA and
+    /// <c>msal-devicecode-{clientId}.cache</c> for the broker-less one.
     /// </remarks>
     public async Task<MsalCacheHelper> RegisterAsync(
         ITokenCache tokenCache,
-        string cacheFileName = DefaultCacheFileName,
+        string cacheFileName,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(tokenCache);
@@ -80,11 +74,8 @@ public sealed class TokenCacheFactory
         return helper;
     }
 
-    /// <summary>
-    /// Deletes a named encrypted cache file if it exists. Defaults to the
-    /// Global cloud cache for backwards compatibility with single-cloud callers.
-    /// </summary>
-    public void DeleteCacheFile(string cacheFileName = DefaultCacheFileName)
+    /// <summary>Deletes a named encrypted cache file if it exists.</summary>
+    public void DeleteCacheFile(string cacheFileName)
     {
         var path = Path.Combine(CacheDirectory, cacheFileName);
         if (File.Exists(path))

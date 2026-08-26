@@ -9,28 +9,26 @@ using Microsoft.Identity.Client;
 /// <remarks>
 /// Multi-account: the service supports several enrolled identities at once,
 /// each addressed by the (oid, tenantId, cloud) tuple of a
-/// <see cref="SignedInAccount"/>.
+/// <see cref="SignedInAccount"/>. Which App Registration a (cloud, tenant) pair
+/// authenticates against is decided by
+/// <see cref="Configuration.EntraPimManagerOptions.ClientIdFor"/> — a tenant
+/// without a registration cannot be enrolled.
 /// </remarks>
 public interface IAuthService
 {
     /// <summary>
-    /// Drives an interactive WAM sign-in in <paramref name="cloud"/>, persists the
-    /// result to the <see cref="IAccountStore"/>, and returns it. A null or blank
-    /// <paramref name="tenantIdOrDomain"/> enrolls the chosen identity's home tenant;
-    /// a value targets a specific guest/secondary tenant within that cloud.
+    /// Drives an interactive WAM sign-in to <paramref name="tenantId"/> in
+    /// <paramref name="cloud"/> through the registration pinned to that tenant,
+    /// persists the result to the <see cref="IAccountStore"/>, and returns it.
     /// </summary>
     /// <remarks>
-    /// The returned <see cref="SignedInAccount"/> carries the requested tenant's id
-    /// and cloud; the underlying MSAL <c>IAccount</c> is the user's home identity,
-    /// reused across tenant enrollments that share an App Registration. Which
-    /// registration a (cloud, tenant) pair authenticates against is decided by
-    /// <see cref="Configuration.EntraPimManagerOptions.RegistrationFor"/>: a registration
-    /// pinned to that tenant wins over the cloud-wide one. A sign-in that lands in a
-    /// tenant with a pinned registration while using another one is rejected with
-    /// <c>registration_mismatch</c>.
+    /// The returned <see cref="SignedInAccount"/> carries the tenant's id and cloud;
+    /// the underlying MSAL <c>IAccount</c> is the user's home identity, reused across
+    /// tenant enrollments that share a registration. Fails with
+    /// <c>app_registration_missing</c> when no registration is pinned to the tenant.
     /// </remarks>
     Task<SignedInAccount> AddAccountAsync(
-        string? tenantIdOrDomain,
+        string tenantId,
         EntraCloud cloud,
         CancellationToken ct = default);
 
@@ -51,7 +49,7 @@ public interface IAuthService
     /// so token renewal stays on the broker-less path.
     /// </remarks>
     Task<SignedInAccount> AddAccountViaDeviceCodeAsync(
-        string? tenantIdOrDomain,
+        string tenantId,
         EntraCloud cloud,
         Func<DeviceCodeChallenge, Task> onChallenge,
         CancellationToken ct = default);

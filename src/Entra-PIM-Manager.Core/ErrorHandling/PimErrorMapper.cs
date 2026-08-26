@@ -158,10 +158,10 @@ public static class PimErrorMapper
         }
 
         // MsalAuthService found no cached MSAL account for this enrollment. The
-        // realistic cause is an App Registration change (a tenant-specific
-        // registration added or removed for this tenant), which moves the
-        // enrollment to a different MSAL client whose cache has never seen it.
-        // Only a fresh sign-in can repair that — say so instead of "see the log".
+        // realistic cause is an App Registration change (the tenant's entry got
+        // a different client id), which moves the enrollment to a different MSAL
+        // client whose cache has never seen it. Only a fresh sign-in can repair
+        // that — say so instead of "see the log".
         if (exception is MsalUiRequiredException { ErrorCode: MsalError.UserNullError })
         {
             return "Sign-in for this account is no longer valid (its App Registration may have changed). Remove the account in Settings and add it again.";
@@ -194,46 +194,35 @@ public static class PimErrorMapper
     /// </summary>
     private static UserFacingError MapMsal(MsalServiceException msal)
     {
-        // Raised by MsalAuthService before it can even build a PCA: the selected
-        // cloud has no app registration configured. National clouds are isolated,
-        // so each one needs its own registration — the message names the cloud.
+        // Raised by MsalAuthService before it can even build a PCA: no App
+        // Registration is pinned to the tenant (typically an enrollment whose
+        // entry was removed from Settings). The message names tenant and cloud.
         if (msal.ErrorCode == "app_registration_missing")
         {
             return Error(
                 ErrorSeverity.Fatal,
-                $"{msal.Message} Open Settings → App Registration and enter the client id for that cloud.");
+                $"{msal.Message} Open Settings → App Registration and add an entry for that tenant.");
         }
 
-        // Raised by MsalAuthService when a sign-in through the cloud-wide
-        // registration lands in a tenant that has its own pinned registration.
-        // The enrollment was discarded; the user has to pick the right target.
-        if (msal.ErrorCode == "registration_mismatch")
+        // Raised by MsalAuthService when Entra issued the token for a different
+        // tenant than the entry asked for. Should not happen with .WithTenantId;
+        // the enrollment was discarded rather than persisted under the wrong entry.
+        if (msal.ErrorCode == "tenant_mismatch")
         {
             return Error(
                 ErrorSeverity.Fatal,
-                "This tenant has its own tenant-specific App Registration. In Add account, pick that entry under \"Sign in with\" instead of the cloud-wide one.");
+                "The sign-in ended up in a different tenant than the selected entry. Check the entry's tenant id in Settings → App Registration and try again.");
         }
 
         // AADSTS700016: the client id is unknown in the directory it was sent to.
         // Either a cloud mismatch — a Global client id cannot exist in the 21Vianet
-        // directory (and vice versa) — or a single-tenant client id sent to a
-        // tenant other than the one it was registered in.
+        // directory (and vice versa) — or a single-tenant client id paired with
+        // the wrong tenant id, or the tenant simply never consented to the app.
         if (msal.Message.Contains("AADSTS700016", StringComparison.Ordinal))
         {
             return Error(
                 ErrorSeverity.Fatal,
-                "This app registration is unknown in the selected cloud or tenant. Each cloud (Global, China) needs its own app registration, and a single-tenant registration only works in its own tenant — check the client id in Settings → App Registration.");
-        }
-
-        // AADSTS50194: a single-tenant app was sent to the /organizations authority.
-        // That happens when the customer's single-tenant client id is pasted into a
-        // cloud row, which the app treats as multi-tenant; it belongs in the
-        // tenant-specific list together with its tenant id.
-        if (msal.Message.Contains("AADSTS50194", StringComparison.Ordinal))
-        {
-            return Error(
-                ErrorSeverity.Fatal,
-                "This App Registration is single-tenant but is configured as the cloud-wide registration. Add it under Settings → App Registration → Tenant-specific registrations together with its tenant id.");
+                "This app registration is unknown in the selected tenant. Check the entry's tenant id, client id and cloud in Settings → App Registration, and that admin consent was granted in that tenant.");
         }
 
         // AADSTS7000218: the token endpoint demanded a client secret/assertion,

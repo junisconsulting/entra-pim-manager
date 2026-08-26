@@ -5,6 +5,9 @@ using Microsoft.Extensions.Options;
 
 public sealed class EntraPimManagerOptionsValidatorTests
 {
+    private const string TenantA = "7b1c4d2e-0000-4000-8000-0000000000aa";
+    private const string AppId = "8f3a1c2e-0000-4000-8000-0000000000a1";
+
     [Fact]
     public void Validate_WithCompleteConfiguration_Succeeds()
     {
@@ -16,91 +19,14 @@ public sealed class EntraPimManagerOptionsValidatorTests
     }
 
     [Fact]
-    public void Validate_WithPlaceholderClientId_Succeeds()
-    {
-        // ClientId is intentionally lenient: the first-run UI catches an
-        // empty or non-GUID ClientId via ShellViewModel.NeedsConfiguration
-        // so the app starts and prompts the user to configure it.
-        var validator = new EntraPimManagerOptionsValidator();
-        var options = ValidOptions();
-        options.ClientId = "YOUR-CLIENT-ID-HERE";
-
-        var result = validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
-    public void Validate_WithEmptyClientId_Succeeds()
-    {
-        var validator = new EntraPimManagerOptionsValidator();
-        var options = ValidOptions();
-        options.ClientId = string.Empty;
-
-        var result = validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
-    public void Validate_WithPerCloudRegistrations_Succeeds()
-    {
-        var validator = new EntraPimManagerOptionsValidator();
-        var options = ValidOptions();
-        options.AppRegistrations = new()
-        {
-            ["Global"] = "8f3a1c2e-0000-4000-8000-000000000001",
-            ["China"] = "8f3a1c2e-0000-4000-8000-000000000002",
-        };
-
-        var result = validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
-    public void Validate_WithUnknownCloudName_Fails()
-    {
-        // A typo here would silently leave that cloud unconfigured, and the user
-        // has no way to see it from the UI — so fail loudly at startup instead.
-        var validator = new EntraPimManagerOptionsValidator();
-        var options = ValidOptions();
-        options.AppRegistrations = new() { ["Chnia"] = "8f3a1c2e-0000-4000-8000-000000000002" };
-
-        var result = validator.Validate(name: null, options);
-
-        Assert.False(result.Succeeded);
-        Assert.Contains("Chnia", result.FailureMessage, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData("YOUR-CLIENT-ID-HERE")]
-    [InlineData("")]
-    public void Validate_WithUnusableRegistrationValue_Succeeds(string clientId)
-    {
-        // Same leniency as the legacy ClientId, and for the same reason: the
-        // shipped appsettings.json carries the placeholder, and a cloud the user
-        // doesn't use stays blank. ValidateOnStart failing here would shut the app
-        // down (App.axaml.cs) instead of showing the first-run CTA. Unusable values
-        // are filtered by ConfiguredClouds, not rejected here.
-        var validator = new EntraPimManagerOptionsValidator();
-        var options = ValidOptions();
-        options.AppRegistrations = new() { ["Global"] = clientId };
-
-        var result = validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
     public void Validate_ShippedAppSettingsShape_Succeeds()
     {
-        // Guards first-run end to end: this is verbatim what
-        // src/Entra-PIM-Manager.App.Avalonia/appsettings.json ships.
+        // Guards first-run end to end: the shipped appsettings.json carries only
+        // the scopes. An empty list must boot into the first-run CTA, not fail
+        // ValidateOnStart (which shuts the app down).
         var validator = new EntraPimManagerOptionsValidator();
         var options = ValidOptions();
-        options.ClientId = string.Empty;
-        options.AppRegistrations = new() { ["Global"] = "YOUR-CLIENT-ID-HERE", ["China"] = string.Empty };
+        options.TenantAppRegistrations = [];
 
         var result = validator.Validate(name: null, options);
 
@@ -121,60 +47,13 @@ public sealed class EntraPimManagerOptionsValidatorTests
     }
 
     [Fact]
-    public void Validate_WithEmptyAllowedTenants_Succeeds()
+    public void Validate_WithUnknownCloud_Fails()
     {
+        // A typo here would silently leave that entry unusable, and the user has
+        // no way to see it from the UI — so fail loudly at startup instead.
         var validator = new EntraPimManagerOptionsValidator();
         var options = ValidOptions();
-        options.AllowedTenants = [];
-
-        var result = validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
-    public void Validate_WithValidAllowedTenants_Succeeds()
-    {
-        var validator = new EntraPimManagerOptionsValidator();
-        var options = ValidOptions();
-        options.AllowedTenants = ["11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"];
-
-        var result = validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
-    public void Validate_WithNonGuidAllowedTenant_Fails()
-    {
-        var validator = new EntraPimManagerOptionsValidator();
-        var options = ValidOptions();
-        options.AllowedTenants = ["not-a-guid"];
-
-        var result = validator.Validate(name: null, options);
-
-        Assert.True(result.Failed);
-        Assert.Contains(result.Failures, f => f.Contains("AllowedTenants", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void Validate_WithTenantRegistration_Succeeds()
-    {
-        var validator = new EntraPimManagerOptionsValidator();
-        var options = ValidOptions();
-        options.TenantAppRegistrations = [Pinned("7b1c4d2e-0000-4000-8000-0000000000aa", "8f3a1c2e-0000-4000-8000-0000000000a1", "global")];
-
-        var result = validator.Validate(name: null, options);
-
-        Assert.True(result.Succeeded);
-    }
-
-    [Fact]
-    public void Validate_WithUnknownCloudInTenantRegistration_Fails()
-    {
-        var validator = new EntraPimManagerOptionsValidator();
-        var options = ValidOptions();
-        options.TenantAppRegistrations = [Pinned("7b1c4d2e-0000-4000-8000-0000000000aa", "8f3a1c2e-0000-4000-8000-0000000000a1", "Chnia")];
+        options.TenantAppRegistrations = [Pinned(TenantA, AppId, "Chnia")];
 
         var result = validator.Validate(name: null, options);
 
@@ -183,14 +62,14 @@ public sealed class EntraPimManagerOptionsValidatorTests
     }
 
     [Theory]
-    [InlineData("not-a-guid", "8f3a1c2e-0000-4000-8000-0000000000a1", "TenantId")]
-    [InlineData("7b1c4d2e-0000-4000-8000-0000000000aa", "YOUR-CLIENT-ID-HERE", "ClientId")]
-    [InlineData("7b1c4d2e-0000-4000-8000-0000000000aa", "", "ClientId")]
-    public void Validate_WithNonGuidTenantRegistrationField_Fails(string tenantId, string clientId, string field)
+    [InlineData("not-a-guid", AppId, "TenantId")]
+    [InlineData(TenantA, "YOUR-CLIENT-ID-HERE", "ClientId")]
+    [InlineData(TenantA, "", "ClientId")]
+    public void Validate_WithNonGuidField_Fails(string tenantId, string clientId, string field)
     {
-        // Unlike the cloud rows there is no shipped placeholder and no "leave blank"
-        // case here — an entry only exists because someone added it, and a malformed
-        // tenant id would silently never match a sign-in.
+        // There is no shipped placeholder and no "leave blank" case — an entry
+        // only exists because someone added it, and a malformed tenant id would
+        // silently never match a sign-in.
         var validator = new EntraPimManagerOptionsValidator();
         var options = ValidOptions();
         options.TenantAppRegistrations = [Pinned(tenantId, clientId, "Global")];
@@ -202,16 +81,16 @@ public sealed class EntraPimManagerOptionsValidatorTests
     }
 
     [Fact]
-    public void Validate_WithDuplicateTenantRegistration_Fails()
+    public void Validate_WithDuplicateTenant_Fails()
     {
-        // RegistrationFor takes the first match; a second entry for the same tenant
+        // ClientIdFor takes the first match; a second entry for the same tenant
         // would be dead configuration that looks alive.
         var validator = new EntraPimManagerOptionsValidator();
         var options = ValidOptions();
         options.TenantAppRegistrations =
         [
-            Pinned("7b1c4d2e-0000-4000-8000-0000000000aa", "8f3a1c2e-0000-4000-8000-0000000000a1", "Global"),
-            Pinned("7B1C4D2E-0000-4000-8000-0000000000AA", "8f3a1c2e-0000-4000-8000-0000000000a2", "global"),
+            Pinned(TenantA, AppId, "Global"),
+            Pinned(TenantA.ToUpperInvariant(), "8f3a1c2e-0000-4000-8000-0000000000a2", "global"),
         ];
 
         var result = validator.Validate(name: null, options);
@@ -222,7 +101,7 @@ public sealed class EntraPimManagerOptionsValidatorTests
 
     private static EntraPimManagerOptions ValidOptions() => new()
     {
-        ClientId = "22222222-2222-2222-2222-222222222222",
+        TenantAppRegistrations = [Pinned(TenantA, AppId, "Global")],
         Scopes = ["User.Read"],
     };
 

@@ -3,16 +3,15 @@ namespace EntraPimManager.Core.Configuration;
 using EntraPimManager.Core.Auth;
 
 /// <summary>
-/// An App Registration pinned to exactly one tenant — the single-tenant counterpart
-/// of the cloud-wide, multi-tenant registration in
-/// <see cref="EntraPimManagerOptions.AppRegistrations"/>. Bound from one element of
-/// <c>EntraPimManager:TenantAppRegistrations</c>.
+/// One App Registration the app may sign in with, pinned to one tenant. Bound from
+/// one element of <c>EntraPimManager:TenantAppRegistrations</c>.
 /// </summary>
 /// <remarks>
-/// Exists for customers whose security policy forbids consenting to a foreign
-/// multi-tenant app: they register their own single-tenant app and hand over its
-/// client id. A tenant registration takes precedence over the cloud registration
-/// for its tenant — see <see cref="EntraPimManagerOptions.RegistrationFor"/>.
+/// The registration in Entra may be multi-tenant (consented in several tenants) or
+/// single-tenant (a customer's own app) — the app does not care: it always sends the
+/// request to the entry's tenant, which is what a single-tenant app requires and a
+/// multi-tenant app accepts. One multi-tenant app used in three tenants is three
+/// entries with the same client id.
 /// <para/>
 /// <see cref="Cloud"/> is a string rather than <see cref="EntraCloud"/> so that a
 /// hand-edited typo is reported by <see cref="EntraPimManagerOptionsValidator"/>
@@ -20,10 +19,10 @@ using EntraPimManager.Core.Auth;
 /// </remarks>
 public sealed class TenantAppRegistration
 {
-    /// <summary>Tenant (directory) id this registration belongs to. Always a GUID.</summary>
+    /// <summary>Tenant (directory) id this registration signs in to. Always a GUID.</summary>
     public string TenantId { get; set; } = string.Empty;
 
-    /// <summary>Application (client) id of the single-tenant registration.</summary>
+    /// <summary>Application (client) id of the registration.</summary>
     public string ClientId { get; set; } = string.Empty;
 
     /// <summary>Sovereign cloud the tenant lives in, as an <see cref="EntraCloud"/> name.</summary>

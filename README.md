@@ -12,8 +12,8 @@ A Windows tray application for activating Microsoft Entra Privileged Identity Ma
 
 - One-click activation of Entra PIM eligibilities from the system tray
 - Multi-tenant: sign in with multiple admin accounts; eligibilities and active assignments are grouped per tenant
+- One App Registration entry per tenant — a multi-tenant registration reused across tenants, a customer's own single-tenant registration, or a mix
 - Multi-cloud: Global and Entra China (21Vianet) side by side, each with its own App Registration
-- Multi-registration: a customer's own single-tenant App Registration can be pinned to its tenant and used alongside the multi-tenant one
 - WAM-broker authentication (no embedded WebView, no in-app password prompts), with a device-code fallback for tenants whose federated IdP forces seamless SSO onto the wrong account
 - Activation form with justification, ticket reference, and a duration slider in 0.5 h steps (bounded by the per-role policy maximum)
 - Live watchdog — the list refreshes automatically when assignments are activated, deactivated, or expire
@@ -43,17 +43,17 @@ Setup steps: [docs/app-registration-setup.md](docs/app-registration-setup.md).
 
 In short:
 
-1. Create a multi-tenant App Registration in your Entra portal.
+1. Create an App Registration in your Entra portal — multi-tenant if it should serve several tenants, single-tenant if it lives in exactly one.
 2. Add the WAM redirect URI `ms-appx-web://microsoft.aad.brokerplugin/{client-id}` and enable public client flows.
 3. Grant delegated Graph permissions: `User.Read`, `RoleEligibilitySchedule.Read.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`, `RoleManagementPolicy.Read.Directory`, `PrivilegedAccess.ReadWrite.AzureADGroup`, `Group.Read.All`.
 4. Grant admin consent in every tenant where Entra PIM Manager will be used.
-5. Launch the app, open **Settings → APP REGISTRATION**, and add the client id as an entry for its cloud (tenant id left blank — it then serves any tenant in that cloud). It is saved to your per-user config at `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` and applied on the next restart — the shipped `appsettings.json` only carries a placeholder.
+5. Launch the app, open **Settings → APP REGISTRATION**, and add one entry per tenant: tenant id, client id, cloud, optional label. A multi-tenant registration is listed once per tenant with the same client id; only listed tenants can be signed in to. Entries are saved to your per-user config at `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` and applied on the next restart — the shipped `appsettings.json` only carries the scopes.
 
-> **Entra China (21Vianet)?** National clouds are physically isolated instances of Entra, so a Global App Registration does not exist there — a Global client id sent to `login.partner.microsoftonline.cn` fails with `AADSTS700016`. Repeat steps 1–4 in [portal.azure.cn](https://portal.azure.cn) and add that client id as an entry with cloud **Entra China**. Both clouds then work side by side; the cloud picker appears in "Add account…" as soon as more than one is configured.
+> **Entra China (21Vianet)?** National clouds are physically isolated instances of Entra, so a Global App Registration does not exist there — a Global client id sent to `login.partner.microsoftonline.cn` fails with `AADSTS700016`. Repeat steps 1–4 in [portal.azure.cn](https://portal.azure.cn) and add that tenant's entry with cloud **Entra China**. Both clouds then work side by side; "Add account…" lists every entry under "Sign in with".
 >
-> **A customer that insists on a single-tenant App Registration?** Add it under **Settings → APP REGISTRATION** as an entry with its tenant id; it then takes precedence over the multi-tenant one for that tenant and appears as its own entry in the "Sign in with" picker. Details in [docs/app-registration-setup.md §8](docs/app-registration-setup.md#8-tenant-specific-single-tenant-registrations).
+> **Upgrading from 0.6.x?** The per-cloud client ids are folded into per-tenant entries automatically at first start (one per enrolled tenant, no re-sign-in). A client id without any enrolled tenant cannot be migrated and has to be added again with its tenant id — see [docs/app-registration-setup.md §8](docs/app-registration-setup.md#8-upgrading-from-06x).
 >
-> Running from source instead of an installer? Copy `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` to `appsettings.local.json` and fill in `AppRegistrations` — a developer convenience that avoids retyping the ids in the UI on every run.
+> Running from source instead of an installer? Copy `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` to `appsettings.local.json` and fill in `TenantAppRegistrations` — a developer convenience that avoids retyping the ids in the UI on every run.
 
 ## Build from source
 

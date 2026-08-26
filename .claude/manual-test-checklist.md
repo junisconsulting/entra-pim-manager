@@ -49,14 +49,13 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 > PIM-Endpoints auf `microsoftgraph.chinacloudapi.cn` existieren, ist nicht
 > dokumentiert. Schlägt er fehl, ist der Rest hinfällig.
 
-- [ ] Nur Global konfiguriert → im „Add account"-Panel ist **keine** Cloud-Auswahl
-      sichtbar.
-- [ ] China-ClientId unter **Settings → APP REGISTRATION** als Eintrag hinzufügen
-      (Tenant-ID leer, Cloud „Entra China (21Vianet)") → Restart-Banner erscheint;
-      nach Neustart zeigt „Add account" den „Sign in with"-Picker mit beiden Einträgen.
-- [ ] Cloud „Entra China" + **leeres** Tenant-Feld → der Account landet mit
-      `"cloud": 1` in `accounts.json` (Regression: bis 0.4.1 wurde still Global
-      enrolled).
+- [ ] Nur ein Global-Eintrag konfiguriert → im „Add account"-Panel ist **kein**
+      „Sign in with"-Picker sichtbar.
+- [ ] China-Eintrag unter **Settings → APP REGISTRATION** hinzufügen (Tenant-ID des
+      China-Tenants, China-ClientId, Cloud „Entra China (21Vianet)") → Restart-Banner
+      erscheint; nach Neustart zeigt „Add account" den Picker mit beiden Einträgen.
+- [ ] China-Eintrag im Picker wählen → der Account landet mit `"cloud": 1` in
+      `accounts.json`.
 - [ ] Log prüfen: die MSAL-Authority beim China-Sign-in ist
       `login.partner.microsoftonline.cn`, nicht `login.microsoftonline.com`.
 - [ ] **Eligibilities des China-Tenants werden gelistet** (Directory-Rollen und/oder
@@ -64,7 +63,8 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 - [ ] Aktivierung **und** Deaktivierung einer China-Rolle erfolgreich.
 - [ ] Global- und China-Account gleichzeitig enrolled: beide Tenant-Gruppen
       erscheinen, Wechsel zwischen ihnen ohne erneute Anmeldung.
-- [ ] Getrennte Cache-Dateien vorhanden: `msal.cache` **und** `msal-china.cache`.
+- [ ] Getrennte Cache-Dateien vorhanden: `msal-{global-client-id}.cache` **und**
+      `msal-{china-client-id}.cache`.
 - [ ] China-Account entfernen lässt den Global-Account und dessen Cache unberührt.
 - [ ] Device-Code-Pfad für China (Advanced) funktioniert — Fallback, falls WAM
       gegen 21Vianet nicht greift.
@@ -73,44 +73,46 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 - [ ] Settings zeigt das grüne **Verified**-Badge erst, wenn **beide** konfigurierten
       Registrations je eine erfolgreiche Anmeldung hatten.
 
-## 1c. Tenant-spezifische (Single-Tenant) App Registration
+## 1c. App Registrations pro Tenant — ab 0.7.0
 
-> Voraussetzung: eine **Single-Tenant** App Registration in einem Test-Tenant
-> (siehe `docs/app-registration-setup.md` §8) — gleiche Redirect-URI, Public
-> Client Flows an, gleiche sechs Scopes, Admin-Consent nur dort.
+> Voraussetzung: zusätzlich zur Multi-Tenant-Registration eine **Single-Tenant**
+> App Registration in einem zweiten Test-Tenant (siehe
+> `docs/app-registration-setup.md` §1) — gleiche Redirect-URI, Public Client
+> Flows an, gleiche sechs Scopes, Admin-Consent nur dort.
 
-- [ ] Nur eine tenant-spezifische Registration konfiguriert (kein „any tenant"-Eintrag) →
-      „Add account" zeigt **keinen** „Sign in with"-Picker und **kein** Tenant-Feld.
-- [ ] Cloud-Registration **und** tenant-spezifische Registration konfiguriert →
-      Picker zeigt „Entra Global — any tenant" und den Label-Eintrag; beim
-      Label-Eintrag verschwindet das Tenant-Feld.
-- [ ] Sign-in über den tenant-spezifischen Eintrag: Eligibilities werden gelistet,
-      `msal-{client-id}.cache` entsteht, Log zeigt die Authority
-      `login.microsoftonline.com/{tenant-id}` (nicht `/organizations`).
+- [ ] Settings → APP REGISTRATION: „Add" erst aktiv, wenn Tenant-ID **und**
+      Client-ID GUIDs sind; Label optional.
+- [ ] Zwei Einträge mit **derselben** Multi-Tenant-ClientId für zwei Tenants →
+      beide erscheinen im „Sign in with"-Picker; Sign-in in beide funktioniert,
+      eine gemeinsame `msal-{client-id}.cache`.
+- [ ] Eintrag mit der Single-Tenant-ClientId → Sign-in über diesen Eintrag:
+      Eligibilities werden gelistet, eigene `msal-{client-id}.cache` entsteht, Log
+      zeigt eine Request-Authority mit `/{tenant-id}` (nicht `/organizations`).
 - [ ] Aktivierung **und** Deaktivierung einer Rolle über diesen Account erfolgreich.
-- [ ] „Entra Global — any tenant" + leeres Tenant-Feld, Anmeldung mit einem Konto
-      **im gepinnten Tenant** → Meldung „This tenant has its own tenant-specific
-      App Registration…", **kein** Eintrag in `accounts.json`.
-- [ ] Gepinnten Account entfernen lässt `msal.cache` und den Global-Account
-      unberührt — und umgekehrt.
-- [ ] Single-Tenant-ClientId **ohne Tenant-ID** (als „any tenant") eingetragen →
-      verständliche Meldung („…single-tenant but is configured as the cloud-wide…"),
-      **kein** roher `AADSTS50194`.
-- [ ] Label-Feld ist nur aktiv, sobald eine Tenant-ID eingegeben ist; „Add" erst
-      aktiv, wenn die Client-ID eine GUID ist (Tenant-ID leer oder GUID).
-- [ ] Tenant-spezifische Registration per ✕ entfernen → Restart-Banner; nach
-      Neustart zeigt die Tenant-Gruppe „Sign-in for this account is no longer
-      valid…", und der Account lässt sich in Settings trotzdem entfernen.
+- [ ] Im WAM-Picker ein Konto wählen, das **nicht** Mitglied/Gast des gewählten
+      Tenants ist → verständliche Sign-in-Meldung, **kein** Eintrag in
+      `accounts.json`.
+- [ ] Account entfernen, dessen ClientId noch von einem anderen Enrollment genutzt
+      wird → dessen Cache bleibt; letztes Enrollment einer ClientId entfernen →
+      MSAL-Account wird gepurgt.
+- [ ] Eintrag per ✕ entfernen → Restart-Banner; nach Neustart zeigt die
+      Tenant-Gruppe „Sign-in for this account is no longer valid…", und der Account
+      lässt sich in Settings trotzdem entfernen.
 - [ ] Gleichen Tenant erneut hinzufügen (anderer Label) → ein Eintrag, nicht zwei.
 - [ ] Eintrag anklicken → Formular vorbelegt, Überschrift „Editing …", Button
       „Save"; Label ändern → Save → Eintrag aktualisiert, kein Duplikat. „Cancel"
       leert das Formular wieder.
 - [ ] Beim Editieren die Tenant-ID ändern → Save → alter Eintrag weg, neuer da,
       `appsettings.local.json` enthält nur den neuen.
-- [ ] **Verified**-Badge erst, wenn Cloud-Registration **und** tenant-spezifische
-      Registration je eine erfolgreiche Anmeldung hatten.
-- [ ] In-Place-Upgrade von der Vorversion mit bestehendem Global-Account: kein
-      erneuter Sign-in nötig (Cache-Dateinamen unverändert).
+- [ ] **Verified**-Badge erst, wenn **jeder** Eintrag eine erfolgreiche Anmeldung
+      hatte.
+- [ ] **Upgrade von 0.6.x** (Global-ClientId + enrollte Accounts): nach dem ersten
+      Start je Tenant ein Eintrag mit der alten ClientId, Log meldet „Migrated
+      legacy client id…", `msal.cache` wurde zu `msal-{client-id}.cache`, **kein**
+      erneuter Sign-in nötig; `AppRegistrations`/`AllowedTenants` sind aus
+      `appsettings.local.json` verschwunden.
+- [ ] **Upgrade von 0.6.x ohne Accounts** (nur ClientId): Log-Warnung „…had no
+      enrolled or whitelisted tenant and was removed…", First-Run-CTA erscheint.
 
 ## 2. Read-Pfade (Eligibilities & Active Assignments) — Phase 2
 
@@ -206,11 +208,12 @@ gesetzt, mindestens ein Konto enrolled), dann die neue Version darüber installi
       in die normale Ansicht.
 - [ ] Alle zuvor enrollten Konten sind noch da, in unveränderter Reihenfolge.
 - [ ] Eligibilities und aktive Zuweisungen laden ohne erneute Anmeldung.
-- [ ] Settings → APP REGISTRATION: die ClientId der Vorversion erscheint als Eintrag
-      „Entra Global — any tenant" mit Verified-Status, **nicht** der Platzhalter
-      `YOUR-CLIENT-ID-HERE`.
-- [ ] Ein Wert, der nur in der Vorversion existierte (z. B. handgepflegte
-      `AllowedTenants`), ist noch wirksam.
+- [ ] Settings → APP REGISTRATION: die ClientId der Vorversion erscheint als ein
+      Eintrag pro enrolltem Tenant (Titel = Tenant-ID · Cloud) mit Verified-Status
+      (siehe auch §1c, Upgrade-Punkte).
+- [ ] Handgepflegte `AllowedTenants` der Vorversion sind zu Einträgen geworden
+      (ein Eintrag je Tenant mit der Global-ClientId) und der Key ist aus der
+      Datei verschwunden (§1c, Upgrade-Punkte).
 
 ## 6. Fehlerpfade & Hardening — Phase 6
 

@@ -2,43 +2,41 @@
 
 > This guide describes the one-time setup of an Entra App Registration
 > that Entra PIM Manager needs in order to authenticate against Microsoft Graph.
-> Requires an Entra administrator for the admin consent **in the home tenant**
-> and in every additional tenant in which Entra PIM Manager will be used.
+> Requires an Entra administrator for the admin consent in every tenant in which
+> Entra PIM Manager will be used.
 >
-> Entra PIM Manager is multi-tenant: **one** App Registration covers any number of
-> tenants **within one cloud**. Account selection happens interactively in the WAM
-> picker. An optional `AllowedTenants` whitelist in the local configuration locks
-> the app down to a known set of tenant GUIDs (e.g. group subsidiaries); without a
-> whitelist, all tenants in which admin consent was granted are allowed.
->
-> **A tenant that refuses the multi-tenant app?** A customer's own **single-tenant**
-> registration can be added alongside, pinned to that tenant — see
-> [§8](#8-tenant-specific-single-tenant-registrations).
+> The app is configured **per tenant**: every tenant you sign in to gets one
+> entry — the tenant's id, the client id of the App Registration to use there,
+> and the cloud. One **multi-tenant** registration used in several tenants is
+> simply listed once per tenant with the same client id; a customer who insists
+> on their own **single-tenant** registration is an entry with their client id.
+> The list is also the whitelist: a tenant without an entry cannot be signed in to.
 >
 > **Using Entra China (21Vianet) too?** National clouds are physically isolated
 > instances of Entra, so a Global App Registration does not exist there. Work
 > through this guide once per cloud and see [§7](#7-sovereign-clouds-entra-china-21vianet)
-> for what differs.
+> for what differs. **Upgrading from 0.6.x?** See [§8](#8-upgrading-from-06x).
 
-## 1. Create the App Registration in the home tenant
+## 1. Create the App Registration
 
 1. [Entra portal](https://entra.microsoft.com) → **Identity → Applications →
    App registrations → New registration**.
 2. **Name**: `Entra PIM Manager`.
-3. **Supported account types**: **Accounts in any organizational directory
-   (Any Microsoft Entra ID tenant — Multitenant)**.
-   - Important: not "Single tenant", not "... and personal Microsoft accounts".
-     (A single-tenant registration is possible, but it is a *tenant-specific*
-     one and is entered differently — [§8](#8-tenant-specific-single-tenant-registrations).)
+3. **Supported account types**:
+   - **Accounts in any organizational directory (Multitenant)** when the same
+     registration should serve several tenants (the usual case for an MSP or a
+     group: register once in the home tenant, consent per tenant — step 4).
+   - **Accounts in this organizational directory only (Single tenant)** for a
+     registration that lives and is used in exactly one tenant — e.g. a customer
+     who will not consent to a foreign app and registers their own.
+   - Never "... and personal Microsoft accounts".
 4. **Redirect URI**: leave empty for now — it is set as a platform in step 2.
 5. **Register**.
 
 Note from the overview:
 
-- **Application (client) ID** → the client id for this cloud
-
-(A `TenantId` is no longer entered into the app configuration — the tenant
-of each enrolled account is determined from the WAM result at sign-in.)
+- **Application (client) ID** → the client id
+- **Directory (tenant) ID** → the tenant id of the tenant you registered in
 
 ## 2. Platform & redirect URI (WAM broker)
 
@@ -46,7 +44,7 @@ of each enrolled account is determined from the WAM result at sign-in.)
    applications**.
 2. Add a custom redirect URI:
 
-   ```
+   ```text
    ms-appx-web://microsoft.aad.brokerplugin/{client-id}
    ```
 
@@ -80,17 +78,19 @@ add the following scopes:
 
 **API permissions → Grant admin consent for \<home tenant\>**.
 
-For **every additional tenant** in which Entra PIM Manager will be used, an
-admin in that tenant must grant consent separately:
+For a multi-tenant registration, **every additional tenant** in which Entra PIM
+Manager will be used needs its own consent by an admin of that tenant:
 
-```
+```text
 https://login.microsoftonline.com/{external-tenant-id}/adminconsent
     ?client_id={pim-manager-client-id}
     &redirect_uri=ms-appx-web://microsoft.aad.brokerplugin/{pim-manager-client-id}
 ```
 
 Replace `{external-tenant-id}` and `{pim-manager-client-id}`. The admin in that
-tenant follows the link, signs in, and confirms the permissions once.
+tenant follows the link, signs in, and confirms the permissions once. A
+single-tenant registration needs consent in its own tenant only — it cannot be
+used anywhere else.
 
 The host above is the **Global** authority. Consent for a tenant in another
 cloud runs against that cloud's own authority and its own client id — for
@@ -105,71 +105,70 @@ https://login.partner.microsoftonline.cn/{external-tenant-id}/adminconsent
 Without admin consent in the respective tenant, the first Graph call fails when
 that account is added.
 
-## 5. Enter the client id
+## 5. Enter the registration in the app
 
 The normal path requires no file editing: start the app, open **Settings → APP
-REGISTRATION**, and add an entry: leave the tenant id **blank** (that makes it the
-multi-tenant registration serving any tenant in the cloud), paste the client id
-from step 1, pick the cloud → **Add**. The app saves it to your per-user config at
-`%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` and applies it on the
-next restart. The shipped `appsettings.json` carries only a placeholder.
+REGISTRATION**, and add an entry: the **tenant id**, the **client id** from
+step 1, the **cloud**, and an optional **label** (e.g. the customer's name — it
+names the entry in the sign-in picker) → **Add**. The app saves it to your
+per-user config at `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json`
+and applies it on the next restart (**Restart now** in the banner). Repeat for
+every tenant you sign in to — with the same client id for every tenant a
+multi-tenant registration is consented in.
 
-A cloud without an entry is simply absent from the "Sign in with" picker when you
-add an account. At least one registration is required. Click an entry to edit
-it (the form below switches to **Save**); ✕ removes it.
+Click an entry to edit it (the form switches to **Save**; changing the tenant id
+or cloud moves the entry); ✕ removes it. An account that was enrolled through a
+removed entry keeps its place in the list but can no longer sign in — its group
+says so; remove the account or add the entry again.
 
 The green **Verified** badge only appears once an account has actually signed in
-with that registration; it is per registration, because a Global sign-in proves
-nothing about the China one.
+with that entry; it is per registration, because a sign-in with one client id
+proves nothing about another.
 
-### Optional: restrict the allowed tenants
+### Configuration shape
 
-`AllowedTenants` is not exposed in the UI — to lock the app down to a known set
-of tenant GUIDs, edit the per-user config file directly and add the array
-alongside the registrations the UI already wrote:
+The UI writes this; the entries can also be hand-edited:
 
 ```json
 {
   "EntraPimManager": {
-    "AppRegistrations": {
-      "Global": "00000000-0000-0000-0000-000000000000",
-      "China": "00000000-0000-0000-0000-000000000000"
-    },
-    "AllowedTenants": [
-      "11111111-1111-1111-1111-111111111111",
-      "22222222-2222-2222-2222-222222222222"
+    "TenantAppRegistrations": [
+      {
+        "TenantId": "11111111-1111-1111-1111-111111111111",
+        "ClientId": "22222222-2222-2222-2222-222222222222",
+        "Cloud": "Global",
+        "Label": "Contoso"
+      }
     ]
   }
 }
 ```
 
-Empty array or omitted entry = unrestricted (any tenant with admin consent may
-be enrolled). Tenant GUIDs are unique across clouds, so one flat list covers both.
-A tenant with a tenant-specific registration ([§8](#8-tenant-specific-single-tenant-registrations))
-is **not** implicitly allowed — list it here too when using a whitelist.
-
-A bare `"ClientId"` from a pre-0.4.2 configuration is still read, as the **Global**
-registration. `AppRegistrations:Global` wins if both are present.
+`Cloud` defaults to `Global`; `Label` is optional. Keep the list in **one** file:
+.NET's configuration overlays arrays index by index, so the same key in two
+files merges entry-wise. The shipped `appsettings.json` deliberately carries
+only the scopes.
 
 ### Running from source
 
 When launching from a source build instead of an installer, you can skip the UI
-and provide the value directly: copy
+and provide the entries directly: copy
 `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` to
 `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json` and fill in
-`AppRegistrations`. Both this file and the per-user one are in `.gitignore` —
+`TenantAppRegistrations`. Both this file and the per-user one are in `.gitignore` —
 **never commit either**.
 
 ## 6. Verification
 
 1. **Start the app and open Settings → ACCOUNTS → "Add account…".** A slide-in
-   opens with an optional tenant field and a primary **Sign in** button.
-2. **Leave the tenant field blank and click Sign in** → the WAM picker appears;
-   pick your admin account in the home tenant. It then appears in
+   opens with a **Sign in with** picker (hidden while only one entry exists) and
+   a primary **Sign in** button.
+2. **Pick the entry and click Sign in** → the WAM picker appears; choose an
+   account that is a member or guest of that tenant. The account then appears in
    `%LocalAppData%\junis\Entra-PIM-Manager\accounts.json` and in the UI.
-3. **Add a second account in another tenant** → open "Add account…" again, enter
-   that tenant's id or domain, and sign in. This requires admin consent in the
-   second tenant (step 4 of this guide).
+3. **Add the same identity in another tenant** → open "Add account…" again, pick
+   that tenant's entry, and sign in. This requires admin consent in the second
+   tenant (step 4 of this guide).
 4. **Federated IdP signs you in as the wrong account?** Use **Advanced → Sign in
    with device code** in the same panel and complete sign-in on another device
    (e.g. your phone). Note: device-code flow runs broker-less, so a Conditional
@@ -179,6 +178,8 @@ and provide the value directly: copy
 For every enrolled account a dedicated `GraphServiceClient` is instantiated
 (see [IGraphClientFactory.CreateFor(account)](../src/Entra-PIM-Manager.Core/Graph/IGraphClientFactory.cs)),
 so that token acquisition, retry, and claims challenges run cleanly per tenant.
+Each App Registration gets its own MSAL public client and DPAPI-encrypted token
+cache (`msal-{client-id}.cache`).
 
 ## 7. Sovereign clouds (Entra China / 21Vianet)
 
@@ -201,22 +202,20 @@ So you need **a second App Registration, created inside a China tenant**.
 | Portal to register in | `portal.azure.com` | `portal.azure.cn` |
 | Authority | `login.microsoftonline.com` | `login.partner.microsoftonline.cn` |
 | Microsoft Graph | `graph.microsoft.com` | `microsoftgraph.chinacloudapi.cn` |
-| Config key | `AppRegistrations:Global` | `AppRegistrations:China` |
+| Entry's `Cloud` | `Global` | `China` |
 
 ### Procedure
 
 1. Sign in to [portal.azure.cn](https://portal.azure.cn) with an admin of your
    China tenant and repeat **steps 1–4** of this guide there. Nothing changes in
-   substance: same name, multitenant, same redirect-URI pattern (with the
-   **China** client id), "Allow public client flows" on, the same six delegated
-   Graph scopes, admin consent per China tenant via the `login.partner…` URL in
-   step 4.
-2. In the app: **Settings → APP REGISTRATION** → add an entry with the tenant id
-   blank, the China client id and cloud *Entra China (21Vianet)* → **Add** →
-   **Restart now**.
-3. After the restart, **Settings → ACCOUNTS → "Add account…"** shows a **Cloud**
-   dropdown (it is hidden while only one cloud is configured). Pick
-   *Entra China (21Vianet)* and sign in.
+   substance: same name, same redirect-URI pattern (with the **China** client
+   id), "Allow public client flows" on, the same six delegated Graph scopes,
+   admin consent per China tenant via the `login.partner…` URL in step 4.
+2. In the app: **Settings → APP REGISTRATION** → add an entry with the China
+   tenant's id, the China client id and cloud *Entra China (21Vianet)* →
+   **Add** → **Restart now**.
+3. After the restart, **Settings → ACCOUNTS → "Add account…"** lists the China
+   entry under **Sign in with**. Pick it and sign in.
 
 Global and China accounts coexist: each enrollment records its cloud, and the app
 routes its token acquisition, token cache file and Graph base URL accordingly.
@@ -230,87 +229,37 @@ routes its token acquisition, token cache file and Graph base URL accordingly.
   as against Global. If it misbehaves in your environment, **Advanced → Sign in
   with device code** in the same panel is the fallback and is wired per cloud too.
 
-## 8. Tenant-specific (single-tenant) registrations
+## 8. Upgrading from 0.6.x
 
-Some customers will not consent to a foreign multi-tenant app in their tenant.
-They register their **own** app — *Supported account types: Accounts in this
-organizational directory only (Single tenant)* — and hand over its client id.
-Entra PIM Manager can use any number of such registrations **alongside** the
-cloud-wide one from §1.
+Versions up to 0.6.x held **one client id per cloud** (`AppRegistrations:Global`,
+`AppRegistrations:China`; before 0.4.2 a bare `ClientId`) and let any tenant sign
+in through it, optionally limited by an `AllowedTenants` whitelist. 0.7.0 folds
+that into per-tenant entries **automatically at first start**:
 
-### How the app picks a registration
+- every tenant an account is enrolled in becomes an entry with that cloud's
+  client id, so **no account has to sign in again**;
+- every tenant in `AllowedTenants` becomes an entry too (with the Global client
+  id, or the only configured cloud's);
+- the token-cache files are renamed from the per-cloud names (`msal.cache`,
+  `msal-china.cache`, …) to the per-client-id names;
+- the legacy keys are removed from `appsettings.local.json`.
 
-Every enrolled account is a (identity, tenant, cloud) triple. For each sign-in
-and each token request the app resolves the registration from the tenant:
+**Action required in one case:** a client id that was configured but had
+neither an enrolled account nor a whitelisted tenant has no tenant to be pinned
+to. It is dropped (the log says so) and Settings shows no entry — add it again
+together with its tenant id. Likewise, signing in to a tenant that has never
+been enrolled now needs an entry first; the free-text "tenant id or domain"
+field of the add-account panel is gone.
 
-1. a tenant-specific registration pinned to that tenant **wins**;
-2. otherwise the cloud-wide registration (`AppRegistrations:{Cloud}`) is used;
-3. neither → "No App Registration is configured for …".
+## Troubleshooting
 
-Nothing about the registration is stored per account, so adding or removing a
-tenant-specific registration for a tenant that is *already enrolled* changes the
-app the enrollment is routed through. Its group then shows *"Sign-in for this
-account is no longer valid … Remove the account in Settings and add it again"*
-— do exactly that.
-
-### Setting it up
-
-1. The customer's admin registers the app in **their** tenant: steps 1–3 of this
-   guide with **Single tenant** as the account type, the same redirect URI
-   pattern (with *their* client id), "Allow public client flows" on, and the
-   same six delegated Graph scopes. Admin consent (step 4) is needed in that
-   tenant only — the app cannot be used anywhere else.
-2. In the app: **Settings → APP REGISTRATION** → add an entry **with** the tenant
-   id (GUID), the client id, an optional label (e.g. the customer's name), pick
-   the cloud → **Add** → **Restart now**. Click the entry to change it later
-   (new client id after a re-registration, a different label); ✕ removes it.
-3. After the restart, **Settings → ACCOUNTS → "Add account…"** shows a
-   **Sign in with** picker (it is hidden while only one registration exists).
-   Pick the tenant-specific entry — the tenant field disappears, because that
-   registration can only sign in to its own tenant — and sign in with an account
-   that is a member or guest of that tenant.
-
-### Configuration shape
-
-The UI writes the per-user `appsettings.local.json`; the entries can also be
-hand-edited there:
-
-```json
-{
-  "EntraPimManager": {
-    "AppRegistrations": { "Global": "00000000-0000-0000-0000-000000000000" },
-    "TenantAppRegistrations": [
-      {
-        "TenantId": "11111111-1111-1111-1111-111111111111",
-        "ClientId": "22222222-2222-2222-2222-222222222222",
-        "Cloud": "Global",
-        "Label": "Contoso"
-      }
-    ]
-  }
-}
-```
-
-`Cloud` defaults to `Global`; `Label` is optional. Keep the list in **one** file:
-.NET's configuration overlays arrays index by index, so the same key in two
-files merges entry-wise. The shipped `appsettings.json` deliberately does not
-carry it.
-
-### Things to know
-
-- **GUID, not domain.** A tenant-specific registration is matched by tenant
-  GUID. The picker pre-fills it; typing `contoso.com` into the free-text field
-  of a cloud-wide target does not select the pinned registration. If such a
-  sign-in lands in a pinned tenant anyway, it is rejected with *"This tenant has
-  its own tenant-specific App Registration…"* and nothing is enrolled.
-- **`AADSTS50194`** ("not configured as a multi-tenant application") on sign-in
-  means a single-tenant client id was added **without** a tenant id, i.e. as the
-  multi-tenant entry. Remove that entry and add it again with its tenant id.
-- **`AllowedTenants`** stays authoritative — list the pinned tenant there too if
-  you use a whitelist.
-- **Caches.** Each tenant-specific registration keeps its own DPAPI-encrypted
-  token cache (`msal-{client-id}.cache`, plus a `msal-devicecode-…` twin for the
-  device-code path); the cloud-wide registration keeps `msal.cache` /
-  `msal-china.cache`, so upgrading to this version needs no re-sign-in.
-- **Verified badge.** As with the cloud rows, a tenant-specific registration
-  counts as verified only after an account has signed in through it.
+- **`AADSTS700016` — "application not found in the directory"**: the client id
+  is unknown in the tenant it was sent to. Check the entry's tenant id, client
+  id and cloud, and that admin consent was granted in that tenant (step 4).
+- **"The sign-in ended up in a different tenant than the selected entry"**: the
+  token Entra issued names another tenant than the entry. Check the entry's
+  tenant id.
+- **"Sign-in for this account is no longer valid (its App Registration may have
+  changed)"** on a tenant group: the entry the account was enrolled through was
+  removed or its client id changed. Remove the account in Settings and add it
+  again through the current entry.

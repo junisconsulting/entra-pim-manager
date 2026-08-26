@@ -50,24 +50,29 @@ For Entra PIM Manager:
 
 ## Authority variants
 
-### Multi-tenant (Entra PIM Manager's cloud-wide registration)
+### Work-or-school authority + per-request tenant (what Entra PIM Manager uses)
 ```csharp
 .WithAuthority(AzureCloudInstance.AzurePublic, AadAuthorityAudience.AzureAdMultipleOrgs)
+// ... and on EVERY request:
+.WithTenantId(tenantId)
 ```
-One PCA per cloud-wide registration, serving every work-or-school tenant in that
-cloud. The target tenant is selected per request with `.WithTenantId(...)`.
+One PCA per App Registration (client id). The PCA-level authority is the cloud's
+`/organizations`; every acquire call names the target tenant with `.WithTenantId`,
+so the request itself goes to `/{tenantId}`. That single pattern serves both a
+multi-tenant registration used in several tenants and a customer's single-tenant
+registration: a single-tenant app refuses a request to `/organizations` (or
+`/common`) with `AADSTS50194`, but a request to its own tenant is fine. Entra PIM
+Manager therefore never issues a tenant-less request — every enrollment and every
+configuration entry carries its tenant id.
 
-### Single-tenant (Entra PIM Manager's tenant-specific registrations)
+### Single-tenant authority at PCA level
 ```csharp
 .WithAuthority($"https://login.microsoftonline.com/{tenantId}")
 // or equivalently
 .WithAuthority(AzureCloudInstance.AzurePublic, tenantId)
 ```
-A single-tenant app sent to `/organizations` (or `/common`) fails with
-`AADSTS50194` — the authority **must** name the tenant. Entra PIM Manager builds
-a separate PCA (and cache file) per such registration; `.WithTenantId(tenantId)`
-on top of a tenanted authority is a harmless no-op, so the per-request call stays
-uniform across both kinds.
+Equivalent for a PCA that only ever talks to one tenant. Not used here, because
+one PCA (one client id) may serve several tenants.
 
 ### Common (allows MSA — generally avoid for privileged tools)
 ```csharp
@@ -94,11 +99,11 @@ to `login.partner.microsoftonline.cn`, while some Microsoft docs still list the
 legacy `login.chinacloudapi.cn`. Let the enum decide.
 
 Entra PIM Manager keys the Graph base URL and the authority host off `EntraCloud`
-(`Core/Auth/EntraCloud.cs`, `EntraCloudInfo`). PCAs and token-cache files are per
-**App Registration**: one cloud-wide (multi-tenant) registration per cloud plus any
-number of tenant-pinned (single-tenant) ones. Which registration a (cloud, tenant)
-pair uses is decided by `EntraPimManagerOptions.RegistrationFor` — the pinned one
-wins; `MsalAuthService` keys its PCA dictionaries by client id.
+(`Core/Auth/EntraCloud.cs`, `EntraCloudInfo`). PCAs and token-cache files
+(`msal-{clientId}.cache`, `msal-devicecode-{clientId}.cache`) are per **App
+Registration**; configuration is per **tenant** (`TenantAppRegistrations`: tenant id
+→ client id + cloud), and `EntraPimManagerOptions.ClientIdFor(cloud, tenantId)` is
+the lookup `MsalAuthService` uses to pick the PCA for an enrollment.
 
 ## Logging integration
 
@@ -152,10 +157,10 @@ For WAM to work end-to-end, the app registration must have:
    - `http://localhost` — for browser fallback (older OS, AAD B2C if ever)
 3. **Allow public client flows**: Yes
 4. **Implicit grant**: None
-5. **Supported account types**: "Multitenant" for the cloud-wide registration that
-   serves several tenants; "Single tenant" for a customer's own registration, which
-   Entra PIM Manager pins to that tenant (`TenantAppRegistrations`). Either way, a
-   registration lives in exactly one cloud — see "National clouds" above.
+5. **Supported account types**: "Multitenant" for a registration that serves several
+   tenants (listed once per tenant in `TenantAppRegistrations`); "Single tenant" for a
+   customer's own registration (one entry). Either way, a registration lives in
+   exactly one cloud — see "National clouds" above.
 
 PowerShell to verify:
 ```powershell

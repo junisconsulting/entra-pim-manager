@@ -9,8 +9,8 @@ namespace EntraPimManager.Core.Auth;
 /// <remarks>
 /// Each cloud has its own STS authority and its own Microsoft Graph
 /// endpoint. The <see cref="MsalAuthService"/> keeps one
-/// <c>IPublicClientApplication</c> per App Registration (a cloud-wide one and any
-/// number of tenant-pinned ones per cloud), and the Graph factory points
+/// <c>IPublicClientApplication</c> per App Registration (any number per cloud,
+/// each pinned to a tenant), and the Graph factory points
 /// the SDK at the matching base URL. See <see cref="EntraCloudInfo"/>.
 /// </remarks>
 public enum EntraCloud

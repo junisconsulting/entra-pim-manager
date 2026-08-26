@@ -872,11 +872,8 @@
           <!-- Body -->
           <ScrollViewer Grid.Row="1" Margin="0,18,0,0" Classes="popup">
             <StackPanel Spacing="14">
-              <!-- Only shown when more than one App Registration is configured
-                   (cloud-wide per cloud, plus tenant-pinned ones). With a single
-                   registration there is nothing to choose, and offering a cloud
-                   without its own client id would only route the user into an
-                   opaque AADSTS700016. -->
+              <!-- Only shown when more than one App Registration (= tenant) is
+                   configured. With a single one there is nothing to choose. -->
               <StackPanel IsVisible="{Binding IsTargetChoiceVisible}">
                 <TextBlock Text="Sign in with"
                            FontSize="{DynamicResource FontCaption}"
@@ -893,29 +890,17 @@
                     </DataTemplate>
                   </ComboBox.ItemTemplate>
                 </ComboBox>
-                <TextBlock Text="A tenant-specific entry signs in to that tenant only. China routes auth via login.partner.microsoftonline.cn and Graph via microsoftgraph.chinacloudapi.cn."
+                <TextBlock Text="Each entry signs in to its own tenant. China routes auth via login.partner.microsoftonline.cn and Graph via microsoftgraph.chinacloudapi.cn."
                            TextWrapping="Wrap"
                            FontSize="{DynamicResource FontSmall}"
                            Foreground="{DynamicResource TextTertiaryBrush}"
                            Margin="0,6,0,0" />
               </StackPanel>
 
-              <!-- A tenant-pinned registration can sign in to exactly one tenant,
-                   so the free-text field only applies to a cloud-wide target. -->
-              <StackPanel IsVisible="{Binding IsTenantInputVisible}">
-                <TextBlock Text="Tenant ID or domain (optional)"
-                           FontSize="{DynamicResource FontCaption}"
-                           FontWeight="Medium"
-                           Foreground="{DynamicResource TextTertiaryBrush}"
-                           Margin="0,0,0,4" />
-                <TextBox Text="{Binding TenantInput}"
-                         PlaceholderText="leave blank for your home tenant" />
-                <TextBlock Text="Leave blank to sign in to your home tenant. Enter a tenant id or domain to enroll the same identity in a specific guest/secondary tenant. The Windows account picker opens after submit."
-                           TextWrapping="Wrap"
-                           FontSize="{DynamicResource FontSmall}"
-                           Foreground="{DynamicResource TextTertiaryBrush}"
-                           Margin="0,6,0,0" />
-              </StackPanel>
+              <TextBlock Text="The Windows account picker opens after Sign in. Choose an account that is a member or guest of the selected tenant — the same identity can be enrolled in several tenants. To sign in to a tenant that is not listed, add it under Settings → App Registration first."
+                         TextWrapping="Wrap"
+                         FontSize="{DynamicResource FontSmall}"
+                         Foreground="{DynamicResource TextTertiaryBrush}" />
 
               <!-- Error -->
               <Border Background="{DynamicResource DangerSoftBrush}"
@@ -1076,9 +1061,9 @@
             <StackPanel Spacing="10">
 
               <!-- =========== APP REGISTRATION =========== -->
-              <!-- One list of every App Registration: per cloud at most one
-                   cloud-wide (multi-tenant) entry, plus any number pinned to a
-                   single tenant. National clouds are isolated instances, so a
+              <!-- One list of every App Registration, each pinned to a tenant —
+                   this list is also the whitelist of tenants the user can sign
+                   in to. National clouds are isolated instances, so a
                    registration exists in exactly one of them. Saved into
                    %LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json
                    (outside the install dir so it survives Velopack updates) and
@@ -1141,7 +1126,7 @@
 
                 <StackPanel Spacing="8"
                             IsVisible="{Binding IsAppRegistrationSectionExpanded}">
-                <TextBlock Text="Each entry is one Entra App Registration. Leave the tenant id blank for a multi-tenant registration — it serves any tenant in that cloud (one per cloud). Enter a tenant id to pin a customer's single-tenant registration to that tenant; it then takes precedence there and appears as its own entry under Sign in with. A registration lives in a single cloud — a Global one is unknown in Entra China and vice versa."
+                <TextBlock Text="One entry per tenant you sign in to: the tenant id, the client id of the Entra App Registration to use there, and the cloud. A multi-tenant registration used in several tenants is listed once per tenant with the same client id; a customer's single-tenant registration is an entry with their client id. Only listed tenants can be signed in to. A registration lives in a single cloud — a Global one is unknown in Entra China and vice versa."
                            FontSize="{DynamicResource FontSmall}"
                            Foreground="{DynamicResource TextSecondaryBrush}"
                            TextWrapping="Wrap" />
@@ -1212,12 +1197,9 @@
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <!-- Add / edit form. The submit button enables once the client id
-                     is a GUID and the tenant id is blank or a GUID (CanExecute on
-                     SaveRegistrationCommand). The label only applies to a pinned
-                     entry — the cloud-wide one is named after its cloud — so the
-                     box follows IsNewTenantPinned. Clicking a row above loads it
-                     here; the caption + Cancel then show which one. -->
+                <!-- Add / edit form. The submit button enables once both ids are
+                     GUIDs (CanExecute on SaveRegistrationCommand). Clicking a row
+                     above loads it here; the caption + Cancel then show which one. -->
                 <StackPanel Spacing="6">
                   <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding IsEditing}">
                     <TextBlock Grid.Column="0"
@@ -1234,7 +1216,7 @@
                             Command="{Binding CancelEditCommand}" />
                   </Grid>
                   <TextBox Text="{Binding NewTenantId}"
-                           PlaceholderText="Tenant id — leave blank for any tenant in the cloud"
+                           PlaceholderText="Tenant id — 00000000-0000-0000-0000-000000000000"
                            FontSize="{DynamicResource FontBody}" />
                   <TextBox Text="{Binding NewClientId}"
                            PlaceholderText="Client id — 00000000-0000-0000-0000-000000000000"
@@ -1243,7 +1225,6 @@
                     <TextBox Grid.Column="0"
                              Text="{Binding NewLabel}"
                              PlaceholderText="Label (optional)"
-                             IsEnabled="{Binding IsNewTenantPinned}"
                              FontSize="{DynamicResource FontBody}" />
                     <ComboBox Grid.Column="1"
                               ItemsSource="{Binding CloudOptions}"

@@ -16,8 +16,6 @@ public sealed class EntraPimManagerOptionsBindingTests
     private const string Shipped = """
         {
           "EntraPimManager": {
-            "AppRegistrations": { "Global": "YOUR-CLIENT-ID-HERE", "China": "" },
-            "AllowedTenants": [],
             "Scopes": [ "User.Read" ]
           }
         }
@@ -29,7 +27,6 @@ public sealed class EntraPimManagerOptionsBindingTests
         const string perUser = """
             {
               "EntraPimManager": {
-                "AppRegistrations": { "Global": "8f3a1c2e-0000-4000-8000-000000000001" },
                 "TenantAppRegistrations": [
                   { "TenantId": "7b1c4d2e-0000-4000-8000-0000000000aa", "ClientId": "8f3a1c2e-0000-4000-8000-0000000000a1", "Label": "Contoso" },
                   { "TenantId": "7b1c4d2e-0000-4000-8000-0000000000bb", "ClientId": "8f3a1c2e-0000-4000-8000-0000000000b1", "Cloud": "China" }
@@ -40,15 +37,18 @@ public sealed class EntraPimManagerOptionsBindingTests
 
         var options = Bind(Shipped, perUser);
 
+        Assert.Equal(["User.Read"], options.Scopes);
         Assert.Equal(2, options.TenantAppRegistrations.Count);
         Assert.Equal("Global", options.TenantAppRegistrations[0].Cloud);
         Assert.Equal("Contoso", options.TenantAppRegistrations[0].Label);
         Assert.Null(options.TenantAppRegistrations[1].Label);
-        Assert.Equal(
-            ("8f3a1c2e-0000-4000-8000-0000000000a1", "7b1c4d2e-0000-4000-8000-0000000000aa"),
-            options.RegistrationFor(EntraCloud.Global, "7b1c4d2e-0000-4000-8000-0000000000aa"));
+        Assert.Equal("8f3a1c2e-0000-4000-8000-0000000000a1", options.ClientIdFor(EntraCloud.Global, "7b1c4d2e-0000-4000-8000-0000000000aa"));
         Assert.Equal([EntraCloud.Global, EntraCloud.China], options.ConfiguredClouds());
     }
+
+    [Fact]
+    public void Bind_ShippedFileAlone_HasNoRegistrations()
+        => Assert.Empty(Bind(Shipped).TenantAppRegistrations);
 
     [Fact]
     public void Bind_ListInTwoLayers_OverlaysEntriesIndexByIndex()
