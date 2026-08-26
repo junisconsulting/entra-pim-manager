@@ -32,6 +32,14 @@ public sealed partial class TenantEligibilityGroup : ObservableObject
     [ObservableProperty]
     private string? _tenantName;
 
+    /// <summary>
+    /// Why the last eligibility fetch for this account failed, in user-facing
+    /// words — <c>null</c> when it succeeded. Rendered as a warning row under
+    /// the header so an unlicensed tenant doesn't masquerade as a bare "(0)".
+    /// </summary>
+    [ObservableProperty]
+    private string? _loadError;
+
     public TenantEligibilityGroup(SignedInAccount account)
     {
         ArgumentNullException.ThrowIfNull(account);

@@ -32,10 +32,11 @@ public interface IEligibilityAggregator
     /// <summary>
     /// Fans out across <paramref name="accounts"/> in parallel and returns the
     /// eligibilities per account. Mirrors
-    /// <see cref="GetAggregatedActiveAssignmentsAsync"/> — failures on a single
-    /// tenant are logged and surfaced as empty lists.
+    /// <see cref="GetAggregatedActiveAssignmentsAsync"/> — a failure on a single
+    /// tenant is logged, yields an empty list and carries a user-facing
+    /// <see cref="EligibilityFetchResult.LoadError"/> so the UI can say why.
     /// </summary>
-    Task<IReadOnlyDictionary<SignedInAccount, IReadOnlyList<PimEligibility>>>
+    Task<IReadOnlyDictionary<SignedInAccount, EligibilityFetchResult>>
         GetAggregatedEligibilitiesAsync(
             IEnumerable<SignedInAccount> accounts, CancellationToken ct = default);
 

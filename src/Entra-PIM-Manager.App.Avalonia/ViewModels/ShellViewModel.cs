@@ -1157,7 +1157,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     /// rebuilds so a refresh doesn't snap the user's open/closed layout shut.
     /// </summary>
     private void BuildEligibilityGroups(
-        IReadOnlyDictionary<SignedInAccount, IReadOnlyList<PimEligibility>> aggregated)
+        IReadOnlyDictionary<SignedInAccount, EligibilityFetchResult> aggregated)
     {
         // Snapshot prior expansion keyed by (oid, tid) so we can carry it
         // forward — refresh rebuilds the group instances.
@@ -1171,9 +1171,9 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         foreach (var accountItem in Accounts)
         {
             var account = accountItem.Account;
-            if (!aggregated.TryGetValue(account, out var rows))
+            if (!aggregated.TryGetValue(account, out var fetched))
             {
-                rows = Array.Empty<PimEligibility>();
+                fetched = new EligibilityFetchResult(Array.Empty<PimEligibility>(), null);
             }
 
             _tenantNameCache.TryGetValue(account.TenantId, out var cachedName);
@@ -1182,8 +1182,9 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             {
                 SuppressUserExpansionEvent = true,
                 TenantName = cachedName,
+                LoadError = fetched.LoadError,
             };
-            foreach (var eligibility in rows)
+            foreach (var eligibility in fetched.Items)
             {
                 group.Items.Add(new EligibilityItemViewModel(eligibility, account, ActivateAsync)
                 {

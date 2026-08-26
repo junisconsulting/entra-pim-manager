@@ -200,4 +200,25 @@ public sealed class PimErrorMapperTests
         Assert.Equal(ErrorSeverity.Fatal, mapped.Severity);
         Assert.Contains("Sign-in failed", mapped.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Theory]
+    [InlineData("AadPremiumLicenseRequired", "some message")]
+    [InlineData("BadRequest", "The tenant needs to have Microsoft Entra ID P2 or Microsoft Entra ID Governance license.")]
+    public void DescribeFetchFailure_MissingPimLicence_NamesTheLicence(string code, string message)
+    {
+        var error = new ODataError { Error = new MainError { Code = code, Message = message } };
+
+        var caption = PimErrorMapper.DescribeFetchFailure(error);
+
+        Assert.Contains("P2 or Governance license", caption, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DescribeFetchFailure_OtherFailure_StaysGeneric()
+    {
+        var caption = PimErrorMapper.DescribeFetchFailure(new InvalidOperationException("upstream blew up"));
+
+        Assert.Contains("Couldn't load eligibilities", caption, StringComparison.Ordinal);
+        Assert.DoesNotContain("upstream", caption, StringComparison.OrdinalIgnoreCase);
+    }
 }

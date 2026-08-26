@@ -149,7 +149,7 @@ public sealed class EligibilityAggregatorTests
     {
         // One healthy tenant returns rows, the other throws. The failure must
         // not leak — the dict must still contain both accounts, the failed one
-        // with an empty list.
+        // with an empty list and a user-facing reason.
         var goodAccount = MakeAccount("oid-good", "tenant-good");
         var badAccount = MakeAccount("oid-bad", "tenant-bad");
 
@@ -197,10 +197,12 @@ public sealed class EligibilityAggregatorTests
         var result = await aggregator.GetAggregatedEligibilitiesAsync(new[] { goodAccount, badAccount });
 
         Assert.Equal(2, result.Count);
-        Assert.Equal(2, result[goodAccount].Count);
-        Assert.Contains(result[goodAccount], e => e.Kind == PimResourceKind.DirectoryRole);
-        Assert.Contains(result[goodAccount], e => e.Kind == PimResourceKind.GroupMembership);
-        Assert.Empty(result[badAccount]);
+        Assert.Equal(2, result[goodAccount].Items.Count);
+        Assert.Contains(result[goodAccount].Items, e => e.Kind == PimResourceKind.DirectoryRole);
+        Assert.Contains(result[goodAccount].Items, e => e.Kind == PimResourceKind.GroupMembership);
+        Assert.Null(result[goodAccount].LoadError);
+        Assert.Empty(result[badAccount].Items);
+        Assert.NotNull(result[badAccount].LoadError);
     }
 
     [Fact]

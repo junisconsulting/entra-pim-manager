@@ -135,6 +135,32 @@ public static class PimErrorMapper
     }
 
     /// <summary>
+    /// Returns the caption to show on a tenant group whose eligibility fetch
+    /// failed. The one cause worth naming is a tenant without a PIM licence —
+    /// otherwise the group shows "(0)" and looks exactly like a working tenant
+    /// with nothing to activate. Everything else stays generic; the detail is
+    /// in the log.
+    /// </summary>
+    public static string DescribeFetchFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        // Graph refuses PIM reads on an unlicensed tenant with
+        // AadPremiumLicenseRequired ("The tenant needs to have Microsoft Entra
+        // ID P2 or Microsoft Entra ID Governance license."). The message match
+        // is a safety net in case the code differs between the role and group
+        // surfaces.
+        if (exception is ODataError { Error: { } error }
+            && (string.Equals(error.Code, "AadPremiumLicenseRequired", StringComparison.OrdinalIgnoreCase)
+                || (error.Message?.Contains("Governance license", StringComparison.OrdinalIgnoreCase) ?? false)))
+        {
+            return "PIM is not available in this tenant: it has no Microsoft Entra ID P2 or Governance license.";
+        }
+
+        return "Couldn't load eligibilities for this tenant. See the log file for details.";
+    }
+
+    /// <summary>
     /// Walks the exception chain looking for a connectivity failure (a failed HTTP
     /// request or a socket error), which the Graph SDK surfaces wrapped at varying depths.
     /// </summary>

@@ -421,6 +421,20 @@
                         </Grid>
                       </Button>
 
+                      <!-- Fetch failure (e.g. no PIM licence): shown regardless
+                           of expansion so the tenant doesn't read as a bare "(0)". -->
+                      <Border Background="{DynamicResource WarningSoftBrush}"
+                              CornerRadius="4"
+                              Padding="8,5"
+                              Margin="20,0,0,0"
+                              IsVisible="{Binding LoadError,
+                                          Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <TextBlock Text="{Binding LoadError, StringFormat='⚠ {0}'}"
+                                   FontSize="{DynamicResource FontSmall}"
+                                   Foreground="{DynamicResource WarningBrush}"
+                                   TextWrapping="Wrap" />
+                      </Border>
+
                       <!-- Body: same row template as before; only shown when
                            the group is expanded. -->
                       <ItemsControl ItemsSource="{Binding Items}"

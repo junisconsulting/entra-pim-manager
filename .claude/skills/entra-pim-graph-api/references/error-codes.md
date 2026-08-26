@@ -93,6 +93,12 @@ Use both `error.code` AND `error.innerError.code` — the outer is generic, the 
 
 ## HTTP 403 — Authorization
 
+### `AadPremiumLicenseRequired` (seen as 400 on the role surface)
+**Cause**: The tenant has no Microsoft Entra ID P2 / Entra ID Governance licence — PIM is not provisioned there at all. Every PIM read fails (`roleEligibilityScheduleInstances/filterByCurrentUser`, `roleAssignmentScheduleInstances/filterByCurrentUser`, …), not just activation. Field-confirmed 2026-08-26; message: "The tenant needs to have Microsoft Entra ID P2 or Microsoft Entra ID Governance license."
+**DE**: "PIM ist in diesem Tenant nicht verfügbar: keine Microsoft Entra ID P2- oder Governance-Lizenz."
+**EN**: "PIM is not available in this tenant: it has no Microsoft Entra ID P2 or Governance license."
+**UI behaviour**: Surface per tenant on the list itself (`PimErrorMapper.DescribeFetchFailure`) — swallowing the read failure into an empty list makes the tenant look like it simply has no eligibilities, which users read as "the app is broken".
+
 ### `InsufficientPermissions` / `Authorization_RequestDenied`
 **Cause**: Token doesn't have the required scope. E.g., trying activation with only `*.Read` scopes.
 **DE**: "Berechtigung fehlt. Bitte Administrator kontaktieren."
