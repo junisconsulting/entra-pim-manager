@@ -11,6 +11,10 @@
 > the app down to a known set of tenant GUIDs (e.g. group subsidiaries); without a
 > whitelist, all tenants in which admin consent was granted are allowed.
 >
+> **A tenant that refuses the multi-tenant app?** A customer's own **single-tenant**
+> registration can be added alongside, pinned to that tenant — see
+> [§8](#8-tenant-specific-single-tenant-registrations).
+>
 > **Using Entra China (21Vianet) too?** National clouds are physically isolated
 > instances of Entra, so a Global App Registration does not exist there. Work
 > through this guide once per cloud and see [§7](#7-sovereign-clouds-entra-china-21vianet)
@@ -24,6 +28,8 @@
 3. **Supported account types**: **Accounts in any organizational directory
    (Any Microsoft Entra ID tenant — Multitenant)**.
    - Important: not "Single tenant", not "... and personal Microsoft accounts".
+     (A single-tenant registration is possible, but it is a *tenant-specific*
+     one and is entered differently — [§8](#8-tenant-specific-single-tenant-registrations).)
 4. **Redirect URI**: leave empty for now — it is set as a platform in step 2.
 5. **Register**.
 
@@ -137,6 +143,8 @@ alongside the registrations the UI already wrote:
 
 Empty array or omitted entry = unrestricted (any tenant with admin consent may
 be enrolled). Tenant GUIDs are unique across clouds, so one flat list covers both.
+A tenant with a tenant-specific registration ([§8](#8-tenant-specific-single-tenant-registrations))
+is **not** implicitly allowed — list it here too when using a whitelist.
 
 A bare `"ClientId"` from a pre-0.4.2 configuration is still read, as the **Global**
 registration. `AppRegistrations:Global` wins if both are present.
@@ -218,3 +226,88 @@ routes its token acquisition, token cache file and Graph base URL accordingly.
 - **WAM broker.** The broker is used against the 21Vianet authority the same way
   as against Global. If it misbehaves in your environment, **Advanced → Sign in
   with device code** in the same panel is the fallback and is wired per cloud too.
+
+## 8. Tenant-specific (single-tenant) registrations
+
+Some customers will not consent to a foreign multi-tenant app in their tenant.
+They register their **own** app — *Supported account types: Accounts in this
+organizational directory only (Single tenant)* — and hand over its client id.
+Entra PIM Manager can use any number of such registrations **alongside** the
+cloud-wide one from §1.
+
+### How the app picks a registration
+
+Every enrolled account is a (identity, tenant, cloud) triple. For each sign-in
+and each token request the app resolves the registration from the tenant:
+
+1. a tenant-specific registration pinned to that tenant **wins**;
+2. otherwise the cloud-wide registration (`AppRegistrations:{Cloud}`) is used;
+3. neither → "No App Registration is configured for …".
+
+Nothing about the registration is stored per account, so adding or removing a
+tenant-specific registration for a tenant that is *already enrolled* changes the
+app the enrollment is routed through. Its group then shows *"Sign-in for this
+account is no longer valid … Remove the account in Settings and add it again"*
+— do exactly that.
+
+### Setting it up
+
+1. The customer's admin registers the app in **their** tenant: steps 1–3 of this
+   guide with **Single tenant** as the account type, the same redirect URI
+   pattern (with *their* client id), "Allow public client flows" on, and the
+   same six delegated Graph scopes. Admin consent (step 4) is needed in that
+   tenant only — the app cannot be used anywhere else.
+2. In the app: **Settings → APP REGISTRATION → Tenant-specific registrations** →
+   enter the tenant id (GUID), the client id, an optional label (e.g. the
+   customer's name), pick the cloud → **Add** → **Restart now**. Re-adding the
+   same tenant replaces its entry; ✕ removes it.
+3. After the restart, **Settings → ACCOUNTS → "Add account…"** shows a
+   **Sign in with** picker (it is hidden while only one registration exists).
+   Pick the tenant-specific entry — the tenant field disappears, because that
+   registration can only sign in to its own tenant — and sign in with an account
+   that is a member or guest of that tenant.
+
+### Configuration shape
+
+The UI writes the per-user `appsettings.local.json`; the entries can also be
+hand-edited there:
+
+```json
+{
+  "EntraPimManager": {
+    "AppRegistrations": { "Global": "00000000-0000-0000-0000-000000000000" },
+    "TenantAppRegistrations": [
+      {
+        "TenantId": "11111111-1111-1111-1111-111111111111",
+        "ClientId": "22222222-2222-2222-2222-222222222222",
+        "Cloud": "Global",
+        "Label": "Contoso"
+      }
+    ]
+  }
+}
+```
+
+`Cloud` defaults to `Global`; `Label` is optional. Keep the list in **one** file:
+.NET's configuration overlays arrays index by index, so the same key in two
+files merges entry-wise. The shipped `appsettings.json` deliberately does not
+carry it.
+
+### Things to know
+
+- **GUID, not domain.** A tenant-specific registration is matched by tenant
+  GUID. The picker pre-fills it; typing `contoso.com` into the free-text field
+  of a cloud-wide target does not select the pinned registration. If such a
+  sign-in lands in a pinned tenant anyway, it is rejected with *"This tenant has
+  its own tenant-specific App Registration…"* and nothing is enrolled.
+- **`AADSTS50194`** ("not configured as a multi-tenant application") on sign-in
+  means a single-tenant client id was pasted into a **cloud row**. Remove it
+  there and add it as a tenant-specific registration with its tenant id.
+- **`AllowedTenants`** stays authoritative — list the pinned tenant there too if
+  you use a whitelist.
+- **Caches.** Each tenant-specific registration keeps its own DPAPI-encrypted
+  token cache (`msal-{client-id}.cache`, plus a `msal-devicecode-…` twin for the
+  device-code path); the cloud-wide registration keeps `msal.cache` /
+  `msal-china.cache`, so upgrading to this version needs no re-sign-in.
+- **Verified badge.** As with the cloud rows, a tenant-specific registration
+  counts as verified only after an account has signed in through it.

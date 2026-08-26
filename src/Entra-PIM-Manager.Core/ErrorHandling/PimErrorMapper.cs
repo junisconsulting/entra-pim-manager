@@ -157,6 +157,16 @@ public static class PimErrorMapper
             return "PIM is not available in this tenant: it has no Microsoft Entra ID P2 or Governance license.";
         }
 
+        // MsalAuthService found no cached MSAL account for this enrollment. The
+        // realistic cause is an App Registration change (a tenant-specific
+        // registration added or removed for this tenant), which moves the
+        // enrollment to a different MSAL client whose cache has never seen it.
+        // Only a fresh sign-in can repair that — say so instead of "see the log".
+        if (exception is MsalUiRequiredException { ErrorCode: MsalError.UserNullError })
+        {
+            return "Sign-in for this account is no longer valid (its App Registration may have changed). Remove the account in Settings and add it again.";
+        }
+
         return "Couldn't load eligibilities for this tenant. See the log file for details.";
     }
 
@@ -194,15 +204,36 @@ public static class PimErrorMapper
                 $"{msal.Message} Open Settings → App Registration and enter the client id for that cloud.");
         }
 
+        // Raised by MsalAuthService when a sign-in through the cloud-wide
+        // registration lands in a tenant that has its own pinned registration.
+        // The enrollment was discarded; the user has to pick the right target.
+        if (msal.ErrorCode == "registration_mismatch")
+        {
+            return Error(
+                ErrorSeverity.Fatal,
+                "This tenant has its own tenant-specific App Registration. In Add account, pick that entry under \"Sign in with\" instead of the cloud-wide one.");
+        }
+
         // AADSTS700016: the client id is unknown in the directory it was sent to.
-        // The usual cause is a cloud mismatch — a Global client id cannot exist in
-        // the 21Vianet directory (and vice versa), because the clouds are separate
-        // instances with separate app registrations.
+        // Either a cloud mismatch — a Global client id cannot exist in the 21Vianet
+        // directory (and vice versa) — or a single-tenant client id sent to a
+        // tenant other than the one it was registered in.
         if (msal.Message.Contains("AADSTS700016", StringComparison.Ordinal))
         {
             return Error(
                 ErrorSeverity.Fatal,
-                "This app registration is unknown in the selected cloud. Each cloud (Global, China) needs its own app registration — check the client id in Settings → App Registration.");
+                "This app registration is unknown in the selected cloud or tenant. Each cloud (Global, China) needs its own app registration, and a single-tenant registration only works in its own tenant — check the client id in Settings → App Registration.");
+        }
+
+        // AADSTS50194: a single-tenant app was sent to the /organizations authority.
+        // That happens when the customer's single-tenant client id is pasted into a
+        // cloud row, which the app treats as multi-tenant; it belongs in the
+        // tenant-specific list together with its tenant id.
+        if (msal.Message.Contains("AADSTS50194", StringComparison.Ordinal))
+        {
+            return Error(
+                ErrorSeverity.Fatal,
+                "This App Registration is single-tenant but is configured as the cloud-wide registration. Add it under Settings → App Registration → Tenant-specific registrations together with its tenant id.");
         }
 
         // AADSTS7000218: the token endpoint demanded a client secret/assertion,

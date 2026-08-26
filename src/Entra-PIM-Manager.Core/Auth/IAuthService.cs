@@ -21,10 +21,13 @@ public interface IAuthService
     /// </summary>
     /// <remarks>
     /// The returned <see cref="SignedInAccount"/> carries the requested tenant's id
-    /// and cloud; the underlying MSAL <c>IAccount</c> is the user's home identity
-    /// in the chosen cloud, reused across tenant enrollments within that cloud.
-    /// Each cloud authenticates against its own app registration — see
-    /// <see cref="Configuration.EntraPimManagerOptions.ClientIdFor"/>.
+    /// and cloud; the underlying MSAL <c>IAccount</c> is the user's home identity,
+    /// reused across tenant enrollments that share an App Registration. Which
+    /// registration a (cloud, tenant) pair authenticates against is decided by
+    /// <see cref="Configuration.EntraPimManagerOptions.RegistrationFor"/>: a registration
+    /// pinned to that tenant wins over the cloud-wide one. A sign-in that lands in a
+    /// tenant with a pinned registration while using another one is rejected with
+    /// <c>registration_mismatch</c>.
     /// </remarks>
     Task<SignedInAccount> AddAccountAsync(
         string? tenantIdOrDomain,
@@ -56,8 +59,8 @@ public interface IAuthService
     /// <summary>
     /// Removes the enrollment matching (<paramref name="objectId"/>, <paramref name="tenantId"/>)
     /// from the <see cref="IAccountStore"/>. The MSAL cache entry for the underlying
-    /// home identity is only purged when no other tenant enrollment within the same
-    /// <paramref name="cloud"/> still uses it.
+    /// home identity is only purged when no other tenant enrollment resolving to the
+    /// same App Registration still uses it.
     /// </summary>
     Task RemoveAccountAsync(
         string objectId,
@@ -78,8 +81,8 @@ public interface IAuthService
     /// Acquires an access token for the enrollment identified by
     /// (<paramref name="objectId"/>, <paramref name="tenantId"/>, <paramref name="cloud"/>) —
     /// silent first, falling back to an interactive WAM prompt pinned to the home
-    /// MSAL account in the matching cloud, with the request scoped to
-    /// <paramref name="tenantId"/> via <c>.WithTenantId</c>. When
+    /// MSAL account under the App Registration that (cloud, tenant) resolves to, with
+    /// the request scoped to <paramref name="tenantId"/> via <c>.WithTenantId</c>. When
     /// <paramref name="claimsChallenge"/> is supplied, the token is re-requested
     /// to satisfy a Conditional Access challenge.
     /// </summary>

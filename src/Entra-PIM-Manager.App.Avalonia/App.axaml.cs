@@ -74,11 +74,14 @@ public partial class App : Application
             _host = BuildHost();
             _host.Start();
         }
-        catch (OptionsValidationException)
+        catch (OptionsValidationException ex)
         {
-            // No valid configuration yet. For Phase B we surface this on stderr
-            // and exit; the first-run dialog comes in Phase C.
-            Log.Fatal("Entra PIM Manager: no valid configuration. Set ClientId in appsettings.local.json.");
+            // Only a malformed configuration file lands here (unknown cloud name,
+            // non-GUID tenant id, ...); a missing client id boots into the
+            // first-run CTA instead. Name the failing keys — the file is
+            // hand-editable and this is the only place the user learns why the
+            // app won't start.
+            Log.Fatal("Entra PIM Manager: configuration invalid: {Failures}", string.Join("; ", ex.Failures));
             desktop.Shutdown(1);
             return;
         }

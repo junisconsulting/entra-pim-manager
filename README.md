@@ -13,6 +13,7 @@ A Windows tray application for activating Microsoft Entra Privileged Identity Ma
 - One-click activation of Entra PIM eligibilities from the system tray
 - Multi-tenant: sign in with multiple admin accounts; eligibilities and active assignments are grouped per tenant
 - Multi-cloud: Global and Entra China (21Vianet) side by side, each with its own App Registration
+- Multi-registration: a customer's own single-tenant App Registration can be pinned to its tenant and used alongside the multi-tenant one
 - WAM-broker authentication (no embedded WebView, no in-app password prompts), with a device-code fallback for tenants whose federated IdP forces seamless SSO onto the wrong account
 - Activation form with justification, ticket reference, and a duration slider in 0.5 h steps (bounded by the per-role policy maximum)
 - Live watchdog — the list refreshes automatically when assignments are activated, deactivated, or expire
@@ -49,6 +50,8 @@ In short:
 5. Launch the app, open **Settings → APP REGISTRATION**, and paste the client id into the row for its cloud. It is saved to your per-user config at `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` and applied on the next restart — the shipped `appsettings.json` only carries a placeholder.
 
 > **Entra China (21Vianet)?** National clouds are physically isolated instances of Entra, so a Global App Registration does not exist there — a Global client id sent to `login.partner.microsoftonline.cn` fails with `AADSTS700016`. Repeat steps 1–4 in [portal.azure.cn](https://portal.azure.cn) and enter that client id in the **Entra China** row. Both clouds then work side by side; the cloud picker appears in "Add account…" as soon as more than one is configured.
+>
+> **A customer that insists on a single-tenant App Registration?** Add it under **Settings → APP REGISTRATION → Tenant-specific registrations** with its tenant id; it then takes precedence over the multi-tenant one for that tenant and appears as its own entry in the "Sign in with" picker. Details in [docs/app-registration-setup.md §8](docs/app-registration-setup.md#8-tenant-specific-single-tenant-registrations).
 >
 > Running from source instead of an installer? Copy `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` to `appsettings.local.json` and fill in `AppRegistrations` — a developer convenience that avoids retyping the ids in the UI on every run.
 

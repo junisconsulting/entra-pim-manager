@@ -191,6 +191,42 @@ public sealed class PimErrorMapperTests
     }
 
     [Fact]
+    public void MapException_Aadsts50194_PointsAtTheTenantSpecificList()
+    {
+        // A single-tenant app pasted into a cloud row is sent to /organizations.
+        var msal = new MsalServiceException(
+            "invalid_request",
+            "AADSTS50194: Application 'x' is not configured as a multi-tenant application.");
+
+        var mapped = PimErrorMapper.MapException(msal);
+
+        Assert.Equal(ErrorSeverity.Fatal, mapped.Severity);
+        Assert.Contains("Tenant-specific registrations", mapped.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MapException_RegistrationMismatch_TellsTheUserToPickTheTenantTarget()
+    {
+        var msal = new MsalServiceException("registration_mismatch", "detail for the log");
+
+        var mapped = PimErrorMapper.MapException(msal);
+
+        Assert.Equal(ErrorSeverity.Fatal, mapped.Severity);
+        Assert.Contains("Sign in with", mapped.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("detail for the log", mapped.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MapException_Aadsts700016_MentionsTheTenantAsWellAsTheCloud()
+    {
+        var msal = new MsalServiceException("unauthorized_client", "AADSTS700016: Application not found in the directory");
+
+        var mapped = PimErrorMapper.MapException(msal);
+
+        Assert.Contains("cloud or tenant", mapped.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void MapException_MsalOtherServiceError_ReturnsGenericSignInFailure()
     {
         var msal = new MsalServiceException("some_error", "AADSTS50000: something else");
@@ -211,6 +247,17 @@ public sealed class PimErrorMapperTests
         var caption = PimErrorMapper.DescribeFetchFailure(error);
 
         Assert.Contains("P2 or Governance license", caption, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DescribeFetchFailure_NoMsalAccountForEnrollment_TellsTheUserToReAddTheAccount()
+    {
+        // MsalAuthService throws this when the enrollment's registration changed
+        // underneath it — the only repair is a fresh sign-in.
+        var caption = PimErrorMapper.DescribeFetchFailure(
+            new MsalUiRequiredException(MsalError.UserNullError, "No MSAL account for oid"));
+
+        Assert.Contains("add it again", caption, StringComparison.Ordinal);
     }
 
     [Fact]

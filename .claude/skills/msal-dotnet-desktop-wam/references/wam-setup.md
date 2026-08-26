@@ -50,19 +50,24 @@ For Entra PIM Manager:
 
 ## Authority variants
 
-### Multi-tenant (what Entra PIM Manager uses)
+### Multi-tenant (Entra PIM Manager's cloud-wide registration)
 ```csharp
 .WithAuthority(AzureCloudInstance.AzurePublic, AadAuthorityAudience.AzureAdMultipleOrgs)
 ```
-One PCA per cloud, each serving every work-or-school tenant in that cloud. The
-target tenant is selected per request with `.WithTenantId(...)`.
+One PCA per cloud-wide registration, serving every work-or-school tenant in that
+cloud. The target tenant is selected per request with `.WithTenantId(...)`.
 
-### Single-tenant
+### Single-tenant (Entra PIM Manager's tenant-specific registrations)
 ```csharp
 .WithAuthority($"https://login.microsoftonline.com/{tenantId}")
 // or equivalently
 .WithAuthority(AzureCloudInstance.AzurePublic, tenantId)
 ```
+A single-tenant app sent to `/organizations` (or `/common`) fails with
+`AADSTS50194` — the authority **must** name the tenant. Entra PIM Manager builds
+a separate PCA (and cache file) per such registration; `.WithTenantId(tenantId)`
+on top of a tenanted authority is a harmless no-op, so the per-request call stays
+uniform across both kinds.
 
 ### Common (allows MSA — generally avoid for privileged tools)
 ```csharp
@@ -88,9 +93,12 @@ Never hardcode the authority host: MSAL's `AzureCloudInstance.AzureChina` resolv
 to `login.partner.microsoftonline.cn`, while some Microsoft docs still list the
 legacy `login.chinacloudapi.cn`. Let the enum decide.
 
-Entra PIM Manager keys everything off `EntraCloud` (`Core/Auth/EntraCloud.cs`): one
-PCA, one token-cache file, one Graph base URL and one client id per cloud. See
-`EntraCloudInfo` and `EntraPimManagerOptions.ClientIdFor`.
+Entra PIM Manager keys the Graph base URL and the authority host off `EntraCloud`
+(`Core/Auth/EntraCloud.cs`, `EntraCloudInfo`). PCAs and token-cache files are per
+**App Registration**: one cloud-wide (multi-tenant) registration per cloud plus any
+number of tenant-pinned (single-tenant) ones. Which registration a (cloud, tenant)
+pair uses is decided by `EntraPimManagerOptions.RegistrationFor` — the pinned one
+wins; `MsalAuthService` keys its PCA dictionaries by client id.
 
 ## Logging integration
 
@@ -144,9 +152,10 @@ For WAM to work end-to-end, the app registration must have:
    - `http://localhost` — for browser fallback (older OS, AAD B2C if ever)
 3. **Allow public client flows**: Yes
 4. **Implicit grant**: None
-5. **Supported account types**: "Multitenant" for a tool that serves several tenants
-   (Entra PIM Manager does); "Single tenant" for an in-house tool. Either way, one
-   registration **per cloud** — see "National clouds" above.
+5. **Supported account types**: "Multitenant" for the cloud-wide registration that
+   serves several tenants; "Single tenant" for a customer's own registration, which
+   Entra PIM Manager pins to that tenant (`TenantAppRegistrations`). Either way, a
+   registration lives in exactly one cloud — see "National clouds" above.
 
 PowerShell to verify:
 ```powershell

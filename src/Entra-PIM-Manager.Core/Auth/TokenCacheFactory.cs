@@ -42,9 +42,10 @@ public sealed class TokenCacheFactory
     /// The returned helper must be kept alive for the lifetime of the cache.
     /// </summary>
     /// <remarks>
-    /// Each sovereign cloud's PCA needs its own cache file so refresh tokens
-    /// from different STS authorities don't collide in one binary blob — pass
-    /// e.g. <c>msal-china.cache</c> for the China cloud PCA.
+    /// Each PCA — one per App Registration — needs its own cache file so accounts
+    /// and tokens of different registrations and STS authorities don't collide in
+    /// one binary blob: <c>msal-china.cache</c> for the China cloud-wide PCA,
+    /// <c>msal-{clientId}.cache</c> for a tenant-pinned one.
     /// </remarks>
     public async Task<MsalCacheHelper> RegisterAsync(
         ITokenCache tokenCache,

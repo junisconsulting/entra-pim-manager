@@ -33,6 +33,15 @@ public sealed class EntraPimManagerOptions
     public Dictionary<string, string> AppRegistrations { get; set; } = [];
 
     /// <summary>
+    /// App Registrations pinned to a single tenant, any number per cloud. Each one
+    /// overrides the cloud-wide registration in <see cref="AppRegistrations"/> for its
+    /// tenant — see <see cref="RegistrationFor"/>. Never shipped in the default
+    /// <c>appsettings.json</c>: <c>IConfiguration</c> overlays arrays index by index across
+    /// layers, so a shipped placeholder entry would bleed into the user's first entry.
+    /// </summary>
+    public List<TenantAppRegistration> TenantAppRegistrations { get; set; } = [];
+
+    /// <summary>
     /// Optional whitelist of Entra tenant ids (GUIDs) the user is allowed to enroll.
     /// Empty / <c>null</c> means any tenant is allowed. Used to lock the app down to
     /// a known set of partner tenants when desired.
@@ -70,11 +79,44 @@ public sealed class EntraPimManagerOptions
     }
 
     /// <summary>
-    /// Clouds that have a usable app registration configured, in <see cref="EntraCloud"/>
-    /// declaration order. Drives the cloud picker and the first-run configuration gate.
+    /// The App Registration a sign-in or token request for <paramref name="tenantIdOrDomain"/>
+    /// in <paramref name="cloud"/> must use: a usable tenant registration pinned to that
+    /// tenant wins, otherwise the cloud-wide registration, otherwise <c>null</c>. A non-null
+    /// <c>TenantId</c> in the result means "single-tenant — build the authority for that tenant".
+    /// </summary>
+    /// <remarks>
+    /// This is the whole login → registration mapping. An enrollment is identified by
+    /// (oid, tenantId, cloud), so the registration is derived from configuration on
+    /// every call and nothing about it is persisted per account.
+    /// <para/>
+    /// ponytail: tenant registrations match by GUID only. A domain name typed into the
+    /// free-text tenant field falls through to the cloud registration; the sign-in picker
+    /// pre-fills the GUID for pinned tenants, and MsalAuthService rejects a sign-in that
+    /// lands in a pinned tenant through the wrong registration. Resolving domains via
+    /// Graph would be the upgrade if hand-typed domains ever matter.
+    /// </remarks>
+    public (string ClientId, string? TenantId)? RegistrationFor(EntraCloud cloud, string? tenantIdOrDomain)
+    {
+        if (Guid.TryParse(tenantIdOrDomain, out var tenantId))
+        {
+            var pinned = TenantAppRegistrations.FirstOrDefault(t => t.IsFor(cloud, tenantId) && IsUsable(t.ClientId));
+            if (pinned is not null)
+            {
+                return (pinned.ClientId.Trim(), tenantId.ToString());
+            }
+        }
+
+        return ClientIdFor(cloud) is { } clientId ? (clientId, null) : null;
+    }
+
+    /// <summary>
+    /// Clouds that have at least one usable app registration — cloud-wide or tenant-pinned —
+    /// in <see cref="EntraCloud"/> declaration order. Drives the first-run configuration
+    /// gate and the network diagnostics.
     /// </summary>
     public IReadOnlyList<EntraCloud> ConfiguredClouds()
-        => [.. Enum.GetValues<EntraCloud>().Where(c => ClientIdFor(c) is not null)];
+        => [.. Enum.GetValues<EntraCloud>().Where(c =>
+            ClientIdFor(c) is not null || TenantAppRegistrations.Any(t => t.IsFor(c) && IsUsable(t.ClientId)))];
 
     private static bool IsUsable(string? clientId) => Guid.TryParse(clientId, out _);
 }

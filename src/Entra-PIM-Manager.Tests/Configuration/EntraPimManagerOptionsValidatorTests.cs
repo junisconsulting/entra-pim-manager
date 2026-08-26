@@ -157,9 +157,75 @@ public sealed class EntraPimManagerOptionsValidatorTests
         Assert.Contains(result.Failures, f => f.Contains("AllowedTenants", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void Validate_WithTenantRegistration_Succeeds()
+    {
+        var validator = new EntraPimManagerOptionsValidator();
+        var options = ValidOptions();
+        options.TenantAppRegistrations = [Pinned("7b1c4d2e-0000-4000-8000-0000000000aa", "8f3a1c2e-0000-4000-8000-0000000000a1", "global")];
+
+        var result = validator.Validate(name: null, options);
+
+        Assert.True(result.Succeeded);
+    }
+
+    [Fact]
+    public void Validate_WithUnknownCloudInTenantRegistration_Fails()
+    {
+        var validator = new EntraPimManagerOptionsValidator();
+        var options = ValidOptions();
+        options.TenantAppRegistrations = [Pinned("7b1c4d2e-0000-4000-8000-0000000000aa", "8f3a1c2e-0000-4000-8000-0000000000a1", "Chnia")];
+
+        var result = validator.Validate(name: null, options);
+
+        Assert.True(result.Failed);
+        Assert.Contains(result.Failures, f => f.Contains("TenantAppRegistrations[0]", StringComparison.Ordinal) && f.Contains("Chnia", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("not-a-guid", "8f3a1c2e-0000-4000-8000-0000000000a1", "TenantId")]
+    [InlineData("7b1c4d2e-0000-4000-8000-0000000000aa", "YOUR-CLIENT-ID-HERE", "ClientId")]
+    [InlineData("7b1c4d2e-0000-4000-8000-0000000000aa", "", "ClientId")]
+    public void Validate_WithNonGuidTenantRegistrationField_Fails(string tenantId, string clientId, string field)
+    {
+        // Unlike the cloud rows there is no shipped placeholder and no "leave blank"
+        // case here — an entry only exists because someone added it, and a malformed
+        // tenant id would silently never match a sign-in.
+        var validator = new EntraPimManagerOptionsValidator();
+        var options = ValidOptions();
+        options.TenantAppRegistrations = [Pinned(tenantId, clientId, "Global")];
+
+        var result = validator.Validate(name: null, options);
+
+        Assert.True(result.Failed);
+        Assert.Contains(result.Failures, f => f.Contains(field, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Validate_WithDuplicateTenantRegistration_Fails()
+    {
+        // RegistrationFor takes the first match; a second entry for the same tenant
+        // would be dead configuration that looks alive.
+        var validator = new EntraPimManagerOptionsValidator();
+        var options = ValidOptions();
+        options.TenantAppRegistrations =
+        [
+            Pinned("7b1c4d2e-0000-4000-8000-0000000000aa", "8f3a1c2e-0000-4000-8000-0000000000a1", "Global"),
+            Pinned("7B1C4D2E-0000-4000-8000-0000000000AA", "8f3a1c2e-0000-4000-8000-0000000000a2", "global"),
+        ];
+
+        var result = validator.Validate(name: null, options);
+
+        Assert.True(result.Failed);
+        Assert.Contains(result.Failures, f => f.Contains("TenantAppRegistrations[1]", StringComparison.Ordinal) && f.Contains("duplicates", StringComparison.Ordinal));
+    }
+
     private static EntraPimManagerOptions ValidOptions() => new()
     {
         ClientId = "22222222-2222-2222-2222-222222222222",
         Scopes = ["User.Read"],
     };
+
+    private static TenantAppRegistration Pinned(string tenantId, string clientId, string cloud)
+        => new() { TenantId = tenantId, ClientId = clientId, Cloud = cloud };
 }

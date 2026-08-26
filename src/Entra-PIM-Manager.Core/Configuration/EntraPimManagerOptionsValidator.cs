@@ -11,6 +11,11 @@ using Microsoft.Extensions.Options;
 /// <see cref="ViewModels.ShellViewModel"/> via the <c>NeedsConfiguration</c>
 /// state instead. The one thing rejected here is an unknown cloud name — that is
 /// invisible from the UI, because the affected row silently never picks the value up.
+/// <para/>
+/// <see cref="EntraPimManagerOptions.TenantAppRegistrations"/> is held to a stricter
+/// standard: an entry only exists because someone added it, there is no shipped
+/// placeholder, and a malformed tenant id would silently never match — so every
+/// field is checked and duplicates are rejected.
 /// </summary>
 public sealed class EntraPimManagerOptionsValidator : IValidateOptions<EntraPimManagerOptions>
 {
@@ -38,6 +43,36 @@ public sealed class EntraPimManagerOptionsValidator : IValidateOptions<EntraPimM
                 var known = string.Join(", ", Enum.GetNames<EntraCloud>());
                 failures.Add(
                     $"{EntraPimManagerOptions.SectionName}:AppRegistrations has an unknown cloud '{cloudName}'. Known clouds: {known}.");
+            }
+        }
+
+        var seenTenants = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < options.TenantAppRegistrations.Count; i++)
+        {
+            var entry = options.TenantAppRegistrations[i];
+            var prefix = $"{EntraPimManagerOptions.SectionName}:TenantAppRegistrations[{i}]";
+
+            var cloudKnown = Enum.TryParse<EntraCloud>(entry.Cloud, ignoreCase: true, out var cloud);
+            if (!cloudKnown)
+            {
+                var known = string.Join(", ", Enum.GetNames<EntraCloud>());
+                failures.Add($"{prefix} has an unknown cloud '{entry.Cloud}'. Known clouds: {known}.");
+            }
+
+            var tenantKnown = Guid.TryParse(entry.TenantId, out var tenantId);
+            if (!tenantKnown)
+            {
+                failures.Add($"{prefix} has a non-GUID TenantId: '{entry.TenantId}'.");
+            }
+
+            if (!Guid.TryParse(entry.ClientId, out _))
+            {
+                failures.Add($"{prefix} has a non-GUID ClientId: '{entry.ClientId}'.");
+            }
+
+            if (cloudKnown && tenantKnown && !seenTenants.Add($"{cloud}|{tenantId}"))
+            {
+                failures.Add($"{prefix} duplicates an earlier entry for tenant {tenantId} in {cloud}; only the first would ever be used.");
             }
         }
 

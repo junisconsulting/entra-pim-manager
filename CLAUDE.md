@@ -110,7 +110,9 @@ This is a privileged-access tool; these are not style preferences.
 
 - Minimum OS: Windows 10 1809 / Windows Server 2019 — the WAM broker requires it.
 - WAM redirect URI: `ms-appx-web://microsoft.aad.brokerplugin/{client-id}`, public client flows enabled.
-- Multi-tenant app registration; consent is per-tenant.
+- One multi-tenant app registration per cloud, plus optional single-tenant ones pinned to a tenant
+  (`TenantAppRegistrations`); consent is per-tenant. The registration an enrollment uses is
+  derived from (cloud, tenant) by `EntraPimManagerOptions.RegistrationFor` — never persisted.
 - Directory-role and PIM-for-Groups endpoints differ in casing and shape — see the
   `entra-pim-graph-api` skill rather than inferring symmetry.
 - `AvaloniaUseCompiledBindingsByDefault` is on: binding errors are build errors, not runtime surprises.

@@ -82,13 +82,12 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     private string? _deviceCodeVerificationUri;
 
     /// <summary>
-    /// Cloud the user has selected for this enrollment. Defaults to the first
-    /// configured cloud; the China option targets the 21Vianet-operated
-    /// <c>login.partner.microsoftonline.cn</c> authority and
-    /// <c>microsoftgraph.chinacloudapi.cn</c> Graph endpoint.
+    /// The App Registration the user signs in with. A cloud-wide target leaves the
+    /// tenant to the free-text field (blank = home tenant); a tenant-pinned target
+    /// fixes the tenant and hides the field. Defaults to the first target.
     /// </summary>
     [ObservableProperty]
-    private CloudOption? _selectedCloud;
+    private SignInTarget? _selectedTarget;
 
     public AddTenantPanelViewModel(
         IAuthService authService,
@@ -99,29 +98,55 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
         _authService = authService;
         _logger = logger;
 
-        // Only clouds that actually have an app registration configured. National
-        // clouds are isolated instances, so a Global client id is unusable against
-        // the 21Vianet authority — offering China without its own registration
-        // would just route the user into an opaque AADSTS700016.
-        CloudOptions = [.. options.Value.ConfiguredClouds()
-            .Select(c => new CloudOption(c, EntraCloudInfo.DisplayName(c)))];
-        _selectedCloud = CloudOptions.FirstOrDefault();
+        // One target per App Registration: the cloud-wide one of every cloud that
+        // has one (any tenant in that cloud), then every tenant-pinned one. Only
+        // real registrations are offered — a cloud without its own client id would
+        // just route the user into an opaque AADSTS700016. ConfiguredClouds() is
+        // deliberately not used for the first group: it also counts clouds that
+        // only have tenant-pinned registrations.
+        var settings = options.Value;
+        var targets = new List<SignInTarget>();
+        foreach (var cloud in Enum.GetValues<EntraCloud>().Where(c => settings.ClientIdFor(c) is not null))
+        {
+            targets.Add(new SignInTarget(cloud, null, $"{EntraCloudInfo.DisplayName(cloud)} — any tenant"));
+        }
+
+        foreach (var pinned in settings.TenantAppRegistrations)
+        {
+            if (!Enum.TryParse<EntraCloud>(pinned.Cloud, ignoreCase: true, out var cloud) || !Guid.TryParse(pinned.TenantId, out var tenantId))
+            {
+                continue;
+            }
+
+            var name = string.IsNullOrWhiteSpace(pinned.Label) ? pinned.TenantId : pinned.Label;
+            targets.Add(new SignInTarget(cloud, tenantId.ToString(), $"{name} · {EntraCloudInfo.DisplayName(cloud)}"));
+        }
+
+        SignInTargets = targets;
+        _selectedTarget = SignInTargets.FirstOrDefault();
     }
 
     /// <summary>Raised when the panel finishes — payload is null on cancel/error.</summary>
     public event Action<SignedInAccount?>? Closed;
 
     /// <summary>
-    /// Options shown in the cloud ComboBox — one per configured app registration,
-    /// in <see cref="EntraCloud"/> declaration order (Global first).
+    /// Options shown in the "Sign in with" ComboBox — cloud-wide registrations in
+    /// <see cref="EntraCloud"/> declaration order (Global first), then tenant-pinned
+    /// ones in configuration order.
     /// </summary>
-    public IReadOnlyList<CloudOption> CloudOptions { get; }
+    public IReadOnlyList<SignInTarget> SignInTargets { get; }
 
     /// <summary>
-    /// Whether the cloud ComboBox is worth showing. With a single configured
+    /// Whether the "Sign in with" ComboBox is worth showing. With a single
     /// registration there is nothing to choose.
     /// </summary>
-    public bool IsCloudChoiceVisible => CloudOptions.Count > 1;
+    public bool IsTargetChoiceVisible => SignInTargets.Count > 1;
+
+    /// <summary>
+    /// The free-text tenant field only makes sense for a cloud-wide target; a
+    /// tenant-pinned registration can sign in to exactly one tenant.
+    /// </summary>
+    public bool IsTenantInputVisible => SelectedTarget?.TenantId is null;
 
     /// <summary>X-offset for the slide-in transform — mirrors <c>ActivationPanelViewModel</c>.</summary>
     public double PanelOffsetX => IsOpen ? 0 : 420;
@@ -139,7 +164,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
         TenantInput = string.Empty;
         ErrorMessage = null;
         IsConnecting = false;
-        SelectedCloud = CloudOptions.FirstOrDefault();
+        SelectedTarget = SignInTargets.FirstOrDefault();
         IsAdvancedExpanded = false;
         DeviceCodeUserCode = null;
         DeviceCodeVerificationUri = null;
@@ -148,6 +173,9 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
 
     partial void OnDeviceCodeUserCodeChanged(string? value)
         => OnPropertyChanged(nameof(IsDeviceCodeInProgress));
+
+    partial void OnSelectedTargetChanged(SignInTarget? value)
+        => OnPropertyChanged(nameof(IsTenantInputVisible));
 
     [RelayCommand]
     private void ToggleAdvanced() => IsAdvancedExpanded = !IsAdvancedExpanded;
@@ -168,22 +196,23 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     [RelayCommand]
     private async Task ConnectAsync()
     {
-        if (SelectedCloud is not { } cloud)
+        if (SelectedTarget is not { } target)
         {
             ErrorMessage = NoRegistrationMessage;
             return;
         }
 
-        // Tenant is optional: blank enrolls the identity's home tenant (the
-        // common case), a value targets a specific guest/secondary tenant.
-        var input = TenantInput?.Trim() ?? string.Empty;
+        // A pinned target fixes the tenant. Otherwise the tenant is optional:
+        // blank enrolls the identity's home tenant (the common case), a value
+        // targets a specific guest/secondary tenant.
+        var input = target.TenantId ?? TenantInput?.Trim() ?? string.Empty;
         ErrorMessage = null;
 
         IsConnecting = true;
         try
         {
             using var cts = new CancellationTokenSource(AuthCallTimeout);
-            var account = await _authService.AddAccountAsync(input, cloud.Cloud, cts.Token);
+            var account = await _authService.AddAccountAsync(input, target.Cloud, cts.Token);
 
             IsOpen = false;
             Closed?.Invoke(account);
@@ -194,7 +223,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
                 ex,
                 "Failed to add account (tenant {TenantInput}, cloud {Cloud})",
                 string.IsNullOrEmpty(input) ? "<home>" : input,
-                cloud.Cloud);
+                target.Cloud);
             ErrorMessage = PimErrorMapper.MapException(ex).Message;
         }
         finally
@@ -206,15 +235,15 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     [RelayCommand]
     private async Task ConnectViaDeviceCodeAsync()
     {
-        if (SelectedCloud is not { } cloud)
+        if (SelectedTarget is not { } target)
         {
             ErrorMessage = NoRegistrationMessage;
             return;
         }
 
-        // Tenant input is optional for device code — a blank field enrolls the
-        // identity's home tenant, same as the broker "Add account" entry point.
-        var input = TenantInput?.Trim();
+        // Same target semantics as the broker "Add account" entry point: a pinned
+        // target fixes the tenant, otherwise a blank field enrolls the home tenant.
+        var input = target.TenantId ?? TenantInput?.Trim();
         ErrorMessage = null;
         DeviceCodeUserCode = null;
         DeviceCodeVerificationUri = null;
@@ -226,7 +255,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
         {
             var account = await _authService.AddAccountViaDeviceCodeAsync(
                 input,
-                cloud.Cloud,
+                target.Cloud,
                 challenge =>
                 {
                     // MSAL invokes this from a background thread; marshal the
@@ -262,7 +291,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
                 ex,
                 "Device-code sign-in failed for tenant {TenantInput} (cloud {Cloud})",
                 string.IsNullOrEmpty(input) ? "<home>" : input,
-                cloud.Cloud);
+                target.Cloud);
             ErrorMessage = PimErrorMapper.MapException(ex).Message;
         }
         finally
@@ -288,8 +317,11 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
         _deviceCodeCts?.Cancel();
     }
 
-    /// <summary>ComboBox row: pairs the enum value with the localized label.</summary>
-    public sealed record CloudOption(EntraCloud Cloud, string DisplayName)
+    /// <summary>
+    /// ComboBox row: one App Registration to sign in with. <paramref name="TenantId"/>
+    /// is null for a cloud-wide registration and the pinned tenant's GUID otherwise.
+    /// </summary>
+    public sealed record SignInTarget(EntraCloud Cloud, string? TenantId, string DisplayName)
     {
         public override string ToString() => DisplayName;
     }

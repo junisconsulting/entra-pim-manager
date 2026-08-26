@@ -12,6 +12,8 @@ public sealed class EntraPimManagerOptionsTests
 {
     private const string GlobalId = "8f3a1c2e-0000-4000-8000-000000000001";
     private const string ChinaId = "8f3a1c2e-0000-4000-8000-000000000002";
+    private const string TenantA = "7b1c4d2e-0000-4000-8000-0000000000aa";
+    private const string TenantAppId = "8f3a1c2e-0000-4000-8000-0000000000a1";
 
     [Fact]
     public void ClientIdFor_ResolvesEachCloudToItsOwnRegistration()
@@ -125,4 +127,104 @@ public sealed class EntraPimManagerOptionsTests
     [Fact]
     public void ConfiguredClouds_IsEmptyWhenNothingIsConfigured()
         => Assert.Empty(new EntraPimManagerOptions().ConfiguredClouds());
+
+    [Fact]
+    public void ConfiguredClouds_IncludesACloudWithOnlyATenantRegistration()
+    {
+        // A customer that refuses the multi-tenant app still needs its cloud probed
+        // by the network diagnostics and counted by the first-run gate.
+        var options = new EntraPimManagerOptions
+        {
+            TenantAppRegistrations = { Pinned(TenantA, TenantAppId, "Global") },
+        };
+
+        Assert.Equal([EntraCloud.Global], options.ConfiguredClouds());
+    }
+
+    [Fact]
+    public void RegistrationFor_PrefersTheTenantRegistrationOverTheCloudRegistration()
+    {
+        var options = new EntraPimManagerOptions
+        {
+            AppRegistrations = { ["Global"] = GlobalId },
+            TenantAppRegistrations = { Pinned(TenantA, TenantAppId, "Global") },
+        };
+
+        Assert.Equal((TenantAppId, TenantA), options.RegistrationFor(EntraCloud.Global, TenantA));
+    }
+
+    [Theory]
+    [InlineData("7B1C4D2E-0000-4000-8000-0000000000AA")]
+    [InlineData("{7b1c4d2e-0000-4000-8000-0000000000aa}")]
+    public void RegistrationFor_MatchesTheTenantAsAGuidRegardlessOfCaseOrBraces(string input)
+    {
+        // The tenant id is the matching key; a hand-edited file must not miss on
+        // formatting. The returned TenantId is canonical so it feeds the authority.
+        var options = new EntraPimManagerOptions
+        {
+            TenantAppRegistrations = { Pinned(TenantA, TenantAppId, "global") },
+        };
+
+        Assert.Equal((TenantAppId, TenantA), options.RegistrationFor(EntraCloud.Global, input));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("contoso.com")]
+    [InlineData("8f3a1c2e-0000-4000-8000-0000000000bb")]
+    public void RegistrationFor_FallsBackToTheCloudRegistrationForAnyOtherTenant(string? input)
+    {
+        // Blank = home tenant, a domain, or a GUID without a pinned registration all
+        // go through the multi-tenant registration. A domain never matches a pinned
+        // entry — see the ponytail note on RegistrationFor.
+        var options = new EntraPimManagerOptions
+        {
+            AppRegistrations = { ["Global"] = GlobalId },
+            TenantAppRegistrations = { Pinned(TenantA, TenantAppId, "Global") },
+        };
+
+        Assert.Equal((GlobalId, null), options.RegistrationFor(EntraCloud.Global, input));
+    }
+
+    [Fact]
+    public void RegistrationFor_IgnoresATenantRegistrationOfAnotherCloud()
+    {
+        // Tenant GUIDs are unique across clouds, but the registration still names
+        // its cloud — a China entry must never be picked for a Global sign-in.
+        var options = new EntraPimManagerOptions
+        {
+            AppRegistrations = { ["Global"] = GlobalId },
+            TenantAppRegistrations = { Pinned(TenantA, TenantAppId, "China") },
+        };
+
+        Assert.Equal((GlobalId, null), options.RegistrationFor(EntraCloud.Global, TenantA));
+    }
+
+    [Fact]
+    public void RegistrationFor_TreatsATenantRegistrationWithoutAGuidClientIdAsAbsent()
+    {
+        var options = new EntraPimManagerOptions
+        {
+            AppRegistrations = { ["Global"] = GlobalId },
+            TenantAppRegistrations = { Pinned(TenantA, "not-a-guid", "Global") },
+        };
+
+        Assert.Equal((GlobalId, null), options.RegistrationFor(EntraCloud.Global, TenantA));
+    }
+
+    [Fact]
+    public void RegistrationFor_ReturnsNullWhenNeitherKindIsConfigured()
+    {
+        var options = new EntraPimManagerOptions
+        {
+            TenantAppRegistrations = { Pinned(TenantA, TenantAppId, "Global") },
+        };
+
+        Assert.Null(options.RegistrationFor(EntraCloud.Global, "8f3a1c2e-0000-4000-8000-0000000000bb"));
+        Assert.Null(options.RegistrationFor(EntraCloud.China, TenantA));
+    }
+
+    private static TenantAppRegistration Pinned(string tenantId, string clientId, string cloud)
+        => new() { TenantId = tenantId, ClientId = clientId, Cloud = cloud };
 }

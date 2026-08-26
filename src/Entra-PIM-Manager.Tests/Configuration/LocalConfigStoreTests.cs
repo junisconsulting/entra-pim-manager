@@ -13,6 +13,9 @@ public sealed class LocalConfigStoreTests : IDisposable
 {
     private const string GlobalId = "8f3a1c2e-0000-4000-8000-000000000001";
     private const string ChinaId = "8f3a1c2e-0000-4000-8000-000000000002";
+    private const string TenantA = "7b1c4d2e-0000-4000-8000-0000000000aa";
+    private const string TenantB = "7b1c4d2e-0000-4000-8000-0000000000bb";
+    private const string TenantAppId = "8f3a1c2e-0000-4000-8000-0000000000a1";
 
     private readonly string _directory = Path.Combine(
         Path.GetTempPath(),
@@ -138,11 +141,99 @@ public sealed class LocalConfigStoreTests : IDisposable
         Assert.Equal(ChinaId, options.ClientIdFor(EntraCloud.China));
     }
 
+    [Fact]
+    public void SaveTenantRegistration_AppendsAndPreservesSiblings()
+    {
+        const string existing = """
+            {
+              "EntraPimManager": {
+                "AppRegistrations": { "Global": "8f3a1c2e-0000-4000-8000-000000000001" },
+                "AllowedTenants": [ "8f3a1c2e-0000-4000-8000-00000000000b" ]
+              },
+              "Serilog": { "MinimumLevel": "Debug" }
+            }
+            """;
+        Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
+        File.WriteAllText(_filePath, existing);
+
+        LocalConfigStore.SaveTenantRegistration(_filePath, Pinned(TenantA, TenantAppId, "global", "Contoso"));
+
+        var root = JsonDocument.Parse(File.ReadAllText(_filePath)).RootElement;
+        var section = root.GetProperty("EntraPimManager");
+        Assert.Equal(GlobalId, ReadRegistration("Global"));
+        Assert.Single(section.GetProperty("AllowedTenants").EnumerateArray());
+        Assert.Equal("Debug", root.GetProperty("Serilog").GetProperty("MinimumLevel").GetString());
+
+        var entry = Assert.Single(ReadTenantRegistrations());
+        Assert.Equal(TenantA, entry.TenantId);
+        Assert.Equal(TenantAppId, entry.ClientId);
+        Assert.Equal("Global", entry.Cloud);
+        Assert.Equal("Contoso", entry.Label);
+    }
+
+    [Fact]
+    public void SaveTenantRegistration_ReplacesTheEntryForTheSameCloudAndTenant()
+    {
+        // "Add" with a known tenant is how the user corrects a client id — the
+        // list must never end up with two entries for one tenant (the validator
+        // would refuse to start the app).
+        LocalConfigStore.SaveTenantRegistration(_filePath, Pinned(TenantA, TenantAppId, "Global", "Contoso"));
+        LocalConfigStore.SaveTenantRegistration(_filePath, Pinned(TenantB, ChinaId, "Global", null));
+
+        LocalConfigStore.SaveTenantRegistration(_filePath, Pinned(TenantA.ToUpperInvariant(), GlobalId, "Global", null));
+
+        var entries = ReadTenantRegistrations();
+        Assert.Equal(2, entries.Count);
+        Assert.Equal(GlobalId, entries[0].ClientId);
+        Assert.Null(entries[0].Label);
+        Assert.Equal(TenantB, entries[1].TenantId);
+    }
+
+    [Fact]
+    public void RemoveTenantRegistration_RemovesOnlyTheMatchingEntry()
+    {
+        LocalConfigStore.SaveTenantRegistration(_filePath, Pinned(TenantA, TenantAppId, "Global", null));
+        LocalConfigStore.SaveTenantRegistration(_filePath, Pinned(TenantA, ChinaId, "China", null));
+
+        LocalConfigStore.RemoveTenantRegistration(_filePath, EntraCloud.Global, TenantA);
+        LocalConfigStore.RemoveTenantRegistration(_filePath, EntraCloud.Global, TenantB);
+
+        var entry = Assert.Single(ReadTenantRegistrations());
+        Assert.Equal("China", entry.Cloud);
+    }
+
+    [Fact]
+    public void SaveTenantRegistration_WritesWhatRegistrationForReadsBack()
+    {
+        // Guards the writer ↔ binder contract for the list, like the cloud test above.
+        LocalConfigStore.SaveClientId(_filePath, EntraCloud.Global, GlobalId);
+        LocalConfigStore.SaveTenantRegistration(_filePath, Pinned(TenantA, TenantAppId, "Global", null));
+
+        var options = new EntraPimManagerOptions
+        {
+            AppRegistrations = ReadSection().Deserialize<Dictionary<string, string>>()!,
+            TenantAppRegistrations = ReadTenantRegistrations(),
+        };
+
+        Assert.Equal((TenantAppId, TenantA), options.RegistrationFor(EntraCloud.Global, TenantA));
+        Assert.Equal((GlobalId, null), options.RegistrationFor(EntraCloud.Global, TenantB));
+    }
+
+    private static TenantAppRegistration Pinned(string tenantId, string clientId, string cloud, string? label)
+        => new() { TenantId = tenantId, ClientId = clientId, Cloud = cloud, Label = label };
+
     private JsonElement ReadSection()
         => JsonDocument.Parse(File.ReadAllText(_filePath))
             .RootElement
             .GetProperty("EntraPimManager")
             .GetProperty("AppRegistrations");
+
+    private List<TenantAppRegistration> ReadTenantRegistrations()
+        => JsonDocument.Parse(File.ReadAllText(_filePath))
+            .RootElement
+            .GetProperty("EntraPimManager")
+            .GetProperty("TenantAppRegistrations")
+            .Deserialize<List<TenantAppRegistration>>()!;
 
     private string? ReadRegistration(string cloud)
         => ReadSection().GetProperty(cloud).GetString();

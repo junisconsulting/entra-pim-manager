@@ -872,34 +872,37 @@
           <!-- Body -->
           <ScrollViewer Grid.Row="1" Margin="0,18,0,0" Classes="popup">
             <StackPanel Spacing="14">
-              <!-- Only shown when more than one cloud has an App Registration
-                   configured. With a single registration there is nothing to
-                   choose, and offering a cloud without its own client id would
-                   only route the user into an opaque AADSTS700016. -->
-              <StackPanel IsVisible="{Binding IsCloudChoiceVisible}">
-                <TextBlock Text="Cloud"
+              <!-- Only shown when more than one App Registration is configured
+                   (cloud-wide per cloud, plus tenant-pinned ones). With a single
+                   registration there is nothing to choose, and offering a cloud
+                   without its own client id would only route the user into an
+                   opaque AADSTS700016. -->
+              <StackPanel IsVisible="{Binding IsTargetChoiceVisible}">
+                <TextBlock Text="Sign in with"
                            FontSize="{DynamicResource FontCaption}"
                            FontWeight="Medium"
                            Foreground="{DynamicResource TextTertiaryBrush}"
                            Margin="0,0,0,4" />
-                <ComboBox ItemsSource="{Binding CloudOptions}"
-                          SelectedItem="{Binding SelectedCloud}"
+                <ComboBox ItemsSource="{Binding SignInTargets}"
+                          SelectedItem="{Binding SelectedTarget}"
                           IsEnabled="{Binding !IsConnecting}"
                           HorizontalAlignment="Stretch">
                   <ComboBox.ItemTemplate>
-                    <DataTemplate x:DataType="vm:AddTenantPanelViewModel+CloudOption">
+                    <DataTemplate x:DataType="vm:AddTenantPanelViewModel+SignInTarget">
                       <TextBlock Text="{Binding DisplayName}" />
                     </DataTemplate>
                   </ComboBox.ItemTemplate>
                 </ComboBox>
-                <TextBlock Text="China routes auth via login.partner.microsoftonline.cn and Graph via microsoftgraph.chinacloudapi.cn."
+                <TextBlock Text="A tenant-specific entry signs in to that tenant only. China routes auth via login.partner.microsoftonline.cn and Graph via microsoftgraph.chinacloudapi.cn."
                            TextWrapping="Wrap"
                            FontSize="{DynamicResource FontSmall}"
                            Foreground="{DynamicResource TextTertiaryBrush}"
                            Margin="0,6,0,0" />
               </StackPanel>
 
-              <StackPanel>
+              <!-- A tenant-pinned registration can sign in to exactly one tenant,
+                   so the free-text field only applies to a cloud-wide target. -->
+              <StackPanel IsVisible="{Binding IsTenantInputVisible}">
                 <TextBlock Text="Tenant ID or domain (optional)"
                            FontSize="{DynamicResource FontCaption}"
                            FontWeight="Medium"
@@ -1137,7 +1140,7 @@
 
                 <StackPanel Spacing="8"
                             IsVisible="{Binding IsAppRegistrationSectionExpanded}">
-                <TextBlock Text="Client id of your Entra App Registration, one per cloud. A registration lives in a single cloud — a Global one is unknown in Entra China and vice versa. Leave a cloud blank if you don't use it."
+                <TextBlock Text="Client id of your Entra App Registration, one per cloud. A registration lives in a single cloud — a Global one is unknown in Entra China and vice versa. Leave a cloud blank if you don't use it, or if you only use tenant-specific registrations in it (below)."
                            FontSize="{DynamicResource FontSmall}"
                            Foreground="{DynamicResource TextSecondaryBrush}"
                            TextWrapping="Wrap" />
@@ -1203,6 +1206,101 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
+
+                <!-- Tenant-specific registrations: a customer's own single-tenant
+                     app, pinned to its tenant. Takes precedence over the cloud
+                     row for that tenant. Rows are read-only; re-adding a tenant
+                     replaces its entry. -->
+                <TextBlock Text="Tenant-specific registrations"
+                           FontSize="{DynamicResource FontSmall}"
+                           FontWeight="Medium"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           Margin="0,8,0,0" />
+                <TextBlock Text="For a customer whose App Registration is single-tenant. Pinned to its tenant id, it is used instead of the cloud-wide registration for that tenant and appears as its own entry under Sign in with."
+                           FontSize="{DynamicResource FontSmall}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           TextWrapping="Wrap" />
+
+                <ItemsControl ItemsSource="{Binding TenantRegistrations}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <StackPanel Spacing="8" />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:TenantRegistrationRowViewModel">
+                      <Border Background="{DynamicResource Surface1Brush}"
+                              BorderBrush="{DynamicResource BorderSubtleBrush}"
+                              BorderThickness="1"
+                              CornerRadius="6"
+                              Padding="10,8">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                          <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="{Binding Title}"
+                                       FontSize="{DynamicResource FontSmall}"
+                                       FontWeight="Medium"
+                                       Foreground="{DynamicResource TextPrimaryBrush}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding TenantId}" />
+                            <TextBlock Text="{Binding ClientId}"
+                                       FontSize="{DynamicResource FontSmall}"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Status}"
+                                       FontSize="{DynamicResource FontSmall}"
+                                       Foreground="{DynamicResource TextTertiaryBrush}"
+                                       TextWrapping="Wrap" />
+                          </StackPanel>
+                          <Button Grid.Column="1"
+                                  Classes="ghost"
+                                  Padding="10,6"
+                                  VerticalAlignment="Top"
+                                  Command="{Binding $parent[ItemsControl].((vm:SettingsPanelViewModel)DataContext).RemoveTenantRegistrationCommand}"
+                                  CommandParameter="{Binding}"
+                                  ToolTip.Tip="Remove this registration">
+                            <TextBlock Text="✕"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource DangerBrush}"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center" />
+                          </Button>
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Add form. "Add" enables once both ids parse as GUIDs
+                     (CanExecute on AddTenantRegistrationCommand). -->
+                <StackPanel Spacing="6">
+                  <TextBox Text="{Binding NewTenantId}"
+                           PlaceholderText="Tenant id — 00000000-0000-0000-0000-000000000000"
+                           FontSize="{DynamicResource FontBody}" />
+                  <TextBox Text="{Binding NewClientId}"
+                           PlaceholderText="Client id — 00000000-0000-0000-0000-000000000000"
+                           FontSize="{DynamicResource FontBody}" />
+                  <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                    <TextBox Grid.Column="0"
+                             Text="{Binding NewLabel}"
+                             PlaceholderText="Label (optional)"
+                             FontSize="{DynamicResource FontBody}" />
+                    <ComboBox Grid.Column="1"
+                              ItemsSource="{Binding CloudOptions}"
+                              SelectedItem="{Binding NewTenantCloud}"
+                              VerticalAlignment="Center">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SettingsPanelViewModel+CloudOption">
+                          <TextBlock Text="{Binding Label}" />
+                        </DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <Button Grid.Column="2"
+                            Classes="primary"
+                            Content="Add"
+                            Command="{Binding AddTenantRegistrationCommand}" />
+                  </Grid>
+                </StackPanel>
 
                 <!-- Restart-required banner. Visible right after a successful
                      save. The restart button replaces the running process so

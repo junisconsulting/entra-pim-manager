@@ -7,15 +7,33 @@
     // Application (client) ID per cloud. National clouds are physically isolated
     // instances, so an App Registration exists in exactly one of them — a Global
     // client id is unknown in Entra China and vice versa. Configure the clouds
-    // you use and leave the rest out; at least one is required.
+    // you use and leave the rest out; at least one registration (here or in
+    // TenantAppRegistrations) is required.
     "AppRegistrations": {
       "Global": "00000000-0000-0000-0000-000000000000",
       "China": ""
     },
 
+    // Optional: App Registrations pinned to a single tenant — for a customer
+    // whose registration is single-tenant. Such an entry is used instead of the
+    // cloud-wide registration for its tenant. "Cloud" defaults to "Global",
+    // "Label" is the name shown in the sign-in picker. Keep this list in ONE
+    // file only: IConfiguration overlays arrays index by index across files,
+    // so entries in two files would merge field by field.
+    // "TenantAppRegistrations": [
+    //   {
+    //     "TenantId": "00000000-0000-0000-0000-000000000000",
+    //     "ClientId": "00000000-0000-0000-0000-000000000000",
+    //     "Cloud": "Global",
+    //     "Label": "Contoso"
+    //   }
+    // ],
+
     // Optional: restrict sign-in to these tenants only. Leave as []
     // (or omit) to allow any tenant that has granted admin consent.
     // Tenant GUIDs are unique across clouds, so one flat list covers both.
+    // Tenants with a tenant-specific registration are NOT implicitly allowed —
+    // list them here too when using a whitelist.
     "AllowedTenants": []
   }
 }

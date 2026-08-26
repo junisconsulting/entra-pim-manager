@@ -73,6 +73,38 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 - [ ] Settings zeigt das grüne **Verified**-Badge erst, wenn **beide** konfigurierten
       Registrations je eine erfolgreiche Anmeldung hatten.
 
+## 1c. Tenant-spezifische (Single-Tenant) App Registration
+
+> Voraussetzung: eine **Single-Tenant** App Registration in einem Test-Tenant
+> (siehe `docs/app-registration-setup.md` §8) — gleiche Redirect-URI, Public
+> Client Flows an, gleiche sechs Scopes, Admin-Consent nur dort.
+
+- [ ] Nur eine tenant-spezifische Registration konfiguriert, Cloud-Zeile leer →
+      „Add account" zeigt **keinen** „Sign in with"-Picker und **kein** Tenant-Feld.
+- [ ] Cloud-Registration **und** tenant-spezifische Registration konfiguriert →
+      Picker zeigt „Entra Global — any tenant" und den Label-Eintrag; beim
+      Label-Eintrag verschwindet das Tenant-Feld.
+- [ ] Sign-in über den tenant-spezifischen Eintrag: Eligibilities werden gelistet,
+      `msal-{client-id}.cache` entsteht, Log zeigt die Authority
+      `login.microsoftonline.com/{tenant-id}` (nicht `/organizations`).
+- [ ] Aktivierung **und** Deaktivierung einer Rolle über diesen Account erfolgreich.
+- [ ] „Entra Global — any tenant" + leeres Tenant-Feld, Anmeldung mit einem Konto
+      **im gepinnten Tenant** → Meldung „This tenant has its own tenant-specific
+      App Registration…", **kein** Eintrag in `accounts.json`.
+- [ ] Gepinnten Account entfernen lässt `msal.cache` und den Global-Account
+      unberührt — und umgekehrt.
+- [ ] Single-Tenant-ClientId in die **Cloud-Zeile** eingetragen → verständliche
+      Meldung („…single-tenant but is configured as the cloud-wide…"), **kein**
+      roher `AADSTS50194`.
+- [ ] Tenant-spezifische Registration per ✕ entfernen → Restart-Banner; nach
+      Neustart zeigt die Tenant-Gruppe „Sign-in for this account is no longer
+      valid…", und der Account lässt sich in Settings trotzdem entfernen.
+- [ ] Gleichen Tenant erneut hinzufügen (anderer Label) → ein Eintrag, nicht zwei.
+- [ ] **Verified**-Badge erst, wenn Cloud-Registration **und** tenant-spezifische
+      Registration je eine erfolgreiche Anmeldung hatten.
+- [ ] In-Place-Upgrade von der Vorversion mit bestehendem Global-Account: kein
+      erneuter Sign-in nötig (Cache-Dateinamen unverändert).
+
 ## 2. Read-Pfade (Eligibilities & Active Assignments) — Phase 2
 
 - [ ] „Eligible Roles…" öffnet die Liste; Directory-Rollen werden angezeigt.
@@ -208,6 +240,7 @@ Logdateien: `%LocalAppData%\Entra-PIM-Manager\logs\pim-manager-*.log`
 | ------------------- | ---------------------- | --------- |
 | 1 Auth              |                        |           |
 | 1b Sovereign Cloud  |                        |           |
+| 1c Tenant-App-Reg   |                        |           |
 | 2 Read-Pfade        |                        |           |
 | 3 Aktivierung       |                        |           |
 | 4 Tray & UI         |                        |           |
