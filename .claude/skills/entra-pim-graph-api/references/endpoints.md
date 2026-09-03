@@ -208,9 +208,14 @@ Same `/policies/roleManagementPolicyAssignments` endpoint, but filter by group s
 
 ```
 GET /policies/roleManagementPolicyAssignments
-    ?$filter=scopeId eq '<groupId>' and scopeType eq 'Group'
+    ?$filter=scopeId eq '<groupId>' and scopeType eq 'Group' and roleDefinitionId eq 'member'
     &$expand=policy($expand=rules)
 ```
+
+**Filter on `roleDefinitionId`** (`member` or `owner`, literal strings). Member and owner settings
+are independent per group, and without that clause the response carries both policy assignments in
+unspecified order. Requires the `RoleManagementPolicy.Read.AzureADGroup` scope — the `.Directory`
+one does not cover groups.
 
 **Important**: A group's policy doesn't exist until the group is onboarded to PIM (happens implicitly on first eligibility/assignment API call). If you get an empty result, check whether the group is actually PIM-managed.
 

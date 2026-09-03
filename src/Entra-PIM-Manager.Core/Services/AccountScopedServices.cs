@@ -46,7 +46,7 @@ public sealed class AccountScopedServices : IAccountScopedServices
         var groupResolver = new GroupResolver(graph);
         var roleService = new PimRoleService(graph, _loggerFactory.CreateLogger<PimRoleService>());
         var groupService = new PimGroupService(graph, groupResolver, _loggerFactory.CreateLogger<PimGroupService>());
-        var policyService = new PolicyService(graph, _policyCache);
+        var policyService = new PolicyService(graph, _policyCache, _loggerFactory.CreateLogger<PolicyService>());
         return new AccountScopedServiceBundle(roleService, groupService, policyService);
     }
 }

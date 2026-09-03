@@ -471,6 +471,14 @@
                                                    Foreground="{DynamicResource WarningBrush}" />
                                       </Border>
                                     </StackPanel>
+                                    <TextBlock Text="{Binding ActivationErrorText}"
+                                               FontSize="{DynamicResource FontCaption}"
+                                               FontWeight="Medium"
+                                               Foreground="{DynamicResource DangerBrush}"
+                                               TextWrapping="Wrap"
+                                               Margin="0,3,0,0"
+                                               IsVisible="{Binding ActivationErrorText,
+                                                                   Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                                   </StackPanel>
                                   <!-- Idle: chevron pointing into the activation panel. -->
                                   <PathIcon Grid.Column="1"

@@ -4,6 +4,7 @@ using EntraPimManager.Core.Caching;
 using EntraPimManager.Core.Models;
 using EntraPimManager.Core.Services;
 using EntraPimManager.Tests.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
 
 public sealed class PolicyServiceTests
 {
@@ -15,7 +16,7 @@ public sealed class PolicyServiceTests
     {
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("policy-directory-full.json")));
-        var service = new PolicyService(GraphClientTestBuilder.Build(handler), new PolicyCache());
+        var service = new PolicyService(GraphClientTestBuilder.Build(handler), new PolicyCache(), NullLogger<PolicyService>.Instance);
 
         var policy = await service.GetPolicyAsync(TenantA, PimResourceKind.DirectoryRole, "role-def-ga");
 
@@ -35,7 +36,7 @@ public sealed class PolicyServiceTests
     {
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("policy-minimal.json")));
-        var service = new PolicyService(GraphClientTestBuilder.Build(handler), new PolicyCache());
+        var service = new PolicyService(GraphClientTestBuilder.Build(handler), new PolicyCache(), NullLogger<PolicyService>.Instance);
 
         var policy = await service.GetPolicyAsync(TenantA, PimResourceKind.GroupMembership, "group-x");
 
@@ -52,7 +53,7 @@ public sealed class PolicyServiceTests
     {
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("policy-directory-full.json")));
-        var service = new PolicyService(GraphClientTestBuilder.Build(handler), new PolicyCache());
+        var service = new PolicyService(GraphClientTestBuilder.Build(handler), new PolicyCache(), NullLogger<PolicyService>.Instance);
 
         await service.GetPolicyAsync(TenantA, PimResourceKind.DirectoryRole, "role-def-ga");
         await service.GetPolicyAsync(TenantA, PimResourceKind.DirectoryRole, "role-def-ga");
@@ -68,11 +69,52 @@ public sealed class PolicyServiceTests
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("policy-directory-full.json")),
             FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("policy-directory-full.json")));
-        var service = new PolicyService(GraphClientTestBuilder.Build(handler), new PolicyCache());
+        var service = new PolicyService(GraphClientTestBuilder.Build(handler), new PolicyCache(), NullLogger<PolicyService>.Instance);
 
         await service.GetPolicyAsync(TenantA, PimResourceKind.DirectoryRole, "role-def-ga");
         await service.GetPolicyAsync(TenantB, PimResourceKind.DirectoryRole, "role-def-ga");
 
         Assert.Equal(2, handler.RequestCount);
+    }
+
+    [Theory]
+    [InlineData(PimResourceKind.GroupMembership, "member")]
+    [InlineData(PimResourceKind.GroupOwnership, "owner")]
+    public async Task GetPolicyAsync_ForAGroup_FiltersOnTheMemberOrOwnerRole(
+        PimResourceKind kind,
+        string expectedRoleDefinitionId)
+    {
+        // A group has one policy for 'member' and an independent one for 'owner'
+        // at the same scope. Without the roleDefinitionId filter Graph returns
+        // both and the wrong one can win.
+        var handler = new FakeHttpMessageHandler(
+            FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("policy-minimal.json")));
+        var service = new PolicyService(
+            GraphClientTestBuilder.Build(handler), new PolicyCache(), NullLogger<PolicyService>.Instance);
+
+        await service.GetPolicyAsync(TenantA, kind, "group-x");
+
+        var query = Uri.UnescapeDataString(handler.Requests[0].RequestUri!.Query);
+        Assert.Contains("scopeId eq 'group-x' and scopeType eq 'Group'", query, StringComparison.Ordinal);
+        Assert.Contains($"roleDefinitionId eq '{expectedRoleDefinitionId}'", query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetPolicyAsync_WhenGraphRejectsTheRead_FallsBackToDefaults()
+    {
+        // A tenant that never consented to RoleManagementPolicy.Read.AzureADGroup
+        // answers 403 PermissionScopeNotGranted. The activation form must still
+        // open — PIM enforces the real rules on the request itself.
+        var handler = new FakeHttpMessageHandler(
+            FakeHttpMessageHandler.JsonResponse(
+                """{"error":{"code":"PermissionScopeNotGranted","message":"Authorization failed."}}""",
+                System.Net.HttpStatusCode.Forbidden));
+        var service = new PolicyService(
+            GraphClientTestBuilder.Build(handler), new PolicyCache(), NullLogger<PolicyService>.Instance);
+
+        var policy = await service.GetPolicyAsync(TenantA, PimResourceKind.GroupMembership, "group-x");
+
+        Assert.Equal(TimeSpan.FromHours(8), policy.MaximumDuration);
+        Assert.True(policy.RequiresJustification);
     }
 }

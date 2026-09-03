@@ -2,8 +2,10 @@ namespace EntraPimManager.Core.Services;
 
 using EntraPimManager.Core.Caching;
 using EntraPimManager.Core.Models;
+using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
+using Microsoft.Graph.Models.ODataErrors;
 
 /// <summary>
 /// Reads role-management policy assignments and parses the end-user activation
@@ -19,11 +21,13 @@ public sealed class PolicyService : IPolicyService
 
     private readonly GraphServiceClient _graph;
     private readonly PolicyCache _cache;
+    private readonly ILogger<PolicyService> _logger;
 
-    public PolicyService(GraphServiceClient graph, PolicyCache cache)
+    public PolicyService(GraphServiceClient graph, PolicyCache cache, ILogger<PolicyService> logger)
     {
         _graph = graph;
         _cache = cache;
+        _logger = logger;
     }
 
     /// <inheritdoc />
@@ -42,22 +46,47 @@ public sealed class PolicyService : IPolicyService
             return cached;
         }
 
+        // A group carries two independent policies — one for 'member', one for
+        // 'owner' — both at the same scope. Filtering on the group alone returns
+        // both, and taking the first would apply the owner's rules to a
+        // membership activation (or vice versa) in unspecified order.
+        var groupRole = kind == PimResourceKind.GroupOwnership ? "owner" : "member";
         var filter = kind == PimResourceKind.DirectoryRole
             ? $"scopeId eq '/' and scopeType eq 'Directory' and roleDefinitionId eq '{resourceId}'"
-            : $"scopeId eq '{resourceId}' and scopeType eq 'Group'";
+            : $"scopeId eq '{resourceId}' and scopeType eq 'Group' and roleDefinitionId eq '{groupRole}'";
 
-        var response = await _graph.Policies.RoleManagementPolicyAssignments
-            .GetAsync(
-                requestConfiguration =>
-                {
-                    requestConfiguration.QueryParameters.Filter = filter;
-                    requestConfiguration.QueryParameters.Expand = ["policy($expand=rules)"];
-                },
-                ct)
-            .ConfigureAwait(false);
+        ActivationPolicy policy;
+        try
+        {
+            var response = await _graph.Policies.RoleManagementPolicyAssignments
+                .GetAsync(
+                    requestConfiguration =>
+                    {
+                        requestConfiguration.QueryParameters.Filter = filter;
+                        requestConfiguration.QueryParameters.Expand = ["policy($expand=rules)"];
+                    },
+                    ct)
+                .ConfigureAwait(false);
 
-        var assignment = response?.Value?.FirstOrDefault();
-        var policy = ParsePolicyRules(assignment?.Policy?.Rules);
+            var assignment = response?.Value?.FirstOrDefault();
+            policy = ParsePolicyRules(assignment?.Policy?.Rules);
+        }
+        catch (ODataError error)
+        {
+            // The policy only decides what the activation form offers — PIM
+            // enforces the real rules on the request itself. A tenant that has
+            // not consented to the policy scope (PermissionScopeNotGranted) must
+            // therefore still reach the form, with the conservative defaults,
+            // rather than hit a dead end on click.
+            _logger.LogWarning(
+                "Policy read failed for {Kind} in tenant {TenantId}: {Code} (HTTP {Status}). Using default activation limits.",
+                kind,
+                tenantId,
+                error.Error?.Code,
+                error.ResponseStatusCode);
+            policy = new ActivationPolicy();
+        }
+
         _cache.Set(tenantId, kind, resourceId, policy);
         return policy;
     }

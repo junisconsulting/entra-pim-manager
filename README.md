@@ -45,7 +45,7 @@ In short:
 
 1. Create an App Registration in your Entra portal — multi-tenant if it should serve several tenants, single-tenant if it lives in exactly one.
 2. Add the WAM redirect URI `ms-appx-web://microsoft.aad.brokerplugin/{client-id}` and enable public client flows.
-3. Grant delegated Graph permissions: `User.Read`, `RoleEligibilitySchedule.Read.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`, `RoleManagementPolicy.Read.Directory`, `PrivilegedAccess.ReadWrite.AzureADGroup`, `Group.Read.All`.
+3. Grant delegated Graph permissions: `User.Read`, `RoleEligibilitySchedule.Read.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`, `RoleManagementPolicy.Read.Directory`, `RoleManagementPolicy.Read.AzureADGroup`, `PrivilegedAccess.ReadWrite.AzureADGroup`, `Group.Read.All`.
 4. Grant admin consent in every tenant where Entra PIM Manager will be used.
 5. Launch the app, open **Settings → APP REGISTRATION**, and add one entry per tenant: tenant id, client id, cloud, optional label. A multi-tenant registration is listed once per tenant with the same client id; only listed tenants can be signed in to. Entries are saved to your per-user config at `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` and applied on the next restart — the shipped `appsettings.json` only carries the scopes.
 

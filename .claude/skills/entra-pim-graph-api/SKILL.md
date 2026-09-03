@@ -109,11 +109,17 @@ GET /v1.0/policies/roleManagementPolicyAssignments
     ?$filter=scopeId eq '/' and scopeType eq 'Directory' and roleDefinitionId eq '<id>'
     &$expand=policy($expand=rules)
 
-# For a PIM-managed group
+# For a PIM-managed group — 'member' and 'owner' are SEPARATE policies
 GET /v1.0/policies/roleManagementPolicyAssignments
-    ?$filter=scopeId eq '<groupId>' and scopeType eq 'Group'
+    ?$filter=scopeId eq '<groupId>' and scopeType eq 'Group' and roleDefinitionId eq 'member'
     &$expand=policy($expand=rules)
 ```
+
+**Omitting `roleDefinitionId` on the group surface is a bug, not a shortcut**: a group carries two
+independent policies at the same scope — one for `member`, one for `owner` — so the unfiltered
+query returns both, in unspecified order. Taking the first applies the owner's max duration and
+justification rules to a membership activation. `roleDefinitionId` here is the literal string
+`member` or `owner`, not a GUID.
 
 Parse the `policy.rules` array. The rule IDs you typically care about: `Expiration_EndUser_Assignment`, `Enablement_EndUser_Assignment`, `Approval_EndUser_Assignment`. See `references/policy-rules.md` for the full schema.
 
@@ -147,9 +153,16 @@ User.Read
 RoleEligibilitySchedule.Read.Directory
 RoleAssignmentSchedule.ReadWrite.Directory
 RoleManagementPolicy.Read.Directory
+RoleManagementPolicy.Read.AzureADGroup
 PrivilegedAccess.ReadWrite.AzureADGroup
 Group.Read.All
 ```
+
+The two `RoleManagementPolicy.Read.*` scopes are **not** interchangeable and neither covers the
+other surface: reading a group's policy with only the `.Directory` scope fails with HTTP 403
+`PermissionScopeNotGranted` ("missing permission scope RoleManagementPolicy.Read.AzureADGroup,
+RoleManagementPolicy.ReadWrite.AzureADGroup"). Confirmed in the field 2026-09-03 — the symptom is
+a self-service UI where directory roles activate fine and every group click dead-ends.
 
 All except `User.Read` require admin consent — they're classified as privileged and users cannot self-consent.
 

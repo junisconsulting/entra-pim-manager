@@ -51,6 +51,12 @@ public static class PimErrorMapper
             "InsufficientPermissions" or "Authorization_RequestDenied" =>
                 Error(ErrorSeverity.Fatal, "Missing permission. Please contact your administrator."),
 
+            // The app asked for a scope this tenant never consented to. Only a
+            // tenant admin can fix it, and only on the App Registration — say
+            // which side the problem is on instead of "contact your admin".
+            "PermissionScopeNotGranted" =>
+                Error(ErrorSeverity.Fatal, "This tenant has not granted the App Registration all required permissions. An admin must re-grant admin consent for it."),
+
             "RoleAssignmentApprovalRequired" =>
                 Error(ErrorSeverity.Info, "This activation requires approval. The request has been submitted."),
 

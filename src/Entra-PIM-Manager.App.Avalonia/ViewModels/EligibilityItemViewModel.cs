@@ -33,6 +33,16 @@ public sealed partial class EligibilityItemViewModel : ObservableObject
     [ObservableProperty]
     private string? _tenantName;
 
+    /// <summary>
+    /// Inline error caption shown under the row when the click could not open
+    /// the activation panel. Without it the row's only feedback is a Windows
+    /// toast, which Focus Assist / DND swallows — the click then looks ignored.
+    /// Mirrors <see cref="ActiveAssignmentItemViewModel.DeactivationErrorText"/>.
+    /// Cleared at the start of the next attempt.
+    /// </summary>
+    [ObservableProperty]
+    private string? _activationErrorText;
+
     public EligibilityItemViewModel(
         PimEligibility eligibility,
         SignedInAccount account,

@@ -683,6 +683,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         // user clicks, but this guards against the edge case where the
         // user is faster than the prefetch.
         item.IsActivating = true;
+        item.ActivationErrorText = null;
         try
         {
             using var cts = new CancellationTokenSource(GraphCallTimeout);
@@ -706,7 +707,9 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         catch (Exception ex)
         {
             _logger.LogError(ex, "Loading policy failed");
-            _toastService.ShowError("Activation", PimErrorMapper.MapException(ex).Message);
+            var mapped = PimErrorMapper.MapException(ex).Message;
+            _toastService.ShowError("Activation", mapped);
+            item.ActivationErrorText = mapped;
         }
         finally
         {

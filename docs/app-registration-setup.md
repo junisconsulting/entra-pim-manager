@@ -71,6 +71,7 @@ add the following scopes:
 | `RoleEligibilitySchedule.Read.Directory` | Read eligible directory roles |
 | `RoleAssignmentSchedule.ReadWrite.Directory` | Activate/deactivate directory roles |
 | `RoleManagementPolicy.Read.Directory` | Read PIM policies for directory roles |
+| `RoleManagementPolicy.Read.AzureADGroup` | Read PIM policies for groups (member and owner) |
 | `PrivilegedAccess.ReadWrite.AzureADGroup` | Activate/deactivate PIM for Groups |
 | `Group.Read.All` | Resolve group names |
 

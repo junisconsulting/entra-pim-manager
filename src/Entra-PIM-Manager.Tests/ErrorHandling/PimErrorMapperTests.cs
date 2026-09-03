@@ -18,6 +18,7 @@ public sealed class PimErrorMapperTests
     [InlineData("EligibilityNotFound", ErrorSeverity.RefreshList, null)]
     [InlineData("RoleAssignmentExists", ErrorSeverity.Info, null)]
     [InlineData("InsufficientPermissions", ErrorSeverity.Fatal, null)]
+    [InlineData("PermissionScopeNotGranted", ErrorSeverity.Fatal, null)]
     public void Map_KnownCode_ReturnsExpectedSeverityAndFieldHint(
         string code,
         ErrorSeverity severity,
