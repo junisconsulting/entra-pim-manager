@@ -91,3 +91,33 @@ through, which is worse than having no gate.
 what is actually on screen. Do this as its own change with the app in front of you, not as a
 side effect of a feature — guessing at the wording is how the drift happened in the first place.
 Section 1b (sovereign cloud, added in 0.4.2) is current and should be kept as-is.
+
+---
+
+## A device-code account cannot recover from a changed scope set
+
+**Evidence:** `MsalAuthService.AcquireForDeviceCodeAccountAsync`
+(`src/Entra-PIM-Manager.Core/Auth/MsalAuthService.cs`) renews strictly silently and deliberately
+has no interactive fallback — the comment there explains why. Field evidence 2026-09-03/04, while
+testing the 0.8.0 scope addition: one device-code enrollment logged
+`MsalUiRequiredException / AADSTS65001 "The user or administrator has not consented"` once per
+refresh tick for over eight hours (1020 warnings, 22:00:44 → 06:27:49) and never recovered; MSAL
+answered most of those from its throttle cache (`MsalThrottledUiRequiredException`). The broker
+path (`AcquireForAccountAsync`, same file) catches `MsalUiRequiredException` and goes interactive,
+so broker enrollments repair themselves on the next refresh.
+
+**Why it matters:** every scope change invalidates the cached grant, so *all* device-code
+enrollments start failing at once on the first start after such an update. The tenant group shows
+the generic "Couldn't load eligibilities for this tenant" (`PimErrorMapper.DescribeFetchFailure`
+has no arm for `AADSTS65001`), which names neither the cause nor the way out, and the refresh loop
+keeps retrying once a minute against a throttled MSAL. The user's only repair is to remove the
+account and re-run the device-code enrollment — which the app never tells them.
+
+**What makes the fix safe:** the recovery must not silently become a broker sign-in — that would
+defeat the reason the account uses device code (federated IdP, see the comment in
+`AcquireForDeviceCodeAccountAsync`). The minimum honest fix is diagnostic, not automatic: map
+`AADSTS65001` in `DescribeFetchFailure` to "this tenant has not consented to the app's current
+permissions — an admin must grant consent, then add this account again", and verify it on a
+device-code enrollment in a tenant where consent was deliberately withheld. A re-enrollment button
+on the failing row is the larger follow-up; it needs the device-code UI flow driven from the
+account list, which does not exist yet.
