@@ -67,8 +67,13 @@ public sealed class UserSettingsService : IUserSettingsService
         await _ioLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            await WriteAsync(settings, ct).ConfigureAwait(false);
+            // Published before the write, not after. Most callers save fire-and-forget and
+            // then immediately compose their next change from Current — publishing late
+            // hands them the previous value, and their write silently reverts this one.
+            // If the file write then fails it is logged, and memory is ahead of disk for
+            // one session; a stale read is the worse of the two.
             _current = settings;
+            await WriteAsync(settings, ct).ConfigureAwait(false);
             _logger.LogInformation(
                 "User settings saved (theme {Theme}, durationHours {Duration}, expiryWarn {ExpiryEnabled} @ {ExpiryMin}m)",
                 settings.Theme,

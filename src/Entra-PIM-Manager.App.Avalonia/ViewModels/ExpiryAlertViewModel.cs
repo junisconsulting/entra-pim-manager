@@ -19,6 +19,14 @@ public sealed partial class ExpiryAlertViewModel : ObservableObject
     [ObservableProperty]
     private string _contextLabel = string.Empty;
 
+    /// <summary>
+    /// Scope of an Azure resource role ("Subscription: prod"), <c>null</c> for the
+    /// Graph kinds. Without it "Owner" names nothing: the same role can be active on
+    /// several scopes at once, and the alert would not say which one is running out.
+    /// </summary>
+    [ObservableProperty]
+    private string? _scopeLabel;
+
     /// <summary>Pre-formatted remaining time, e.g. <c>"4m"</c> or <c>"45s"</c>.</summary>
     [ObservableProperty]
     private string _remainingText = string.Empty;
@@ -48,6 +56,7 @@ public sealed partial class ExpiryAlertViewModel : ObservableObject
     {
         ResourceName = item.DisplayName;
         ContextLabel = $"{item.TenantLabel} · {item.AccountLabel}";
+        ScopeLabel = item.Assignment.ScopeLabel;
         RemainingText = item.RemainingText;
         RemainingTime = item.RemainingTime;
         AdditionalCount = additionalCount;

@@ -61,7 +61,7 @@ public sealed class ClaimsChallengeHandler : DelegatingHandler
             "Conditional Access claims challenge received (HTTP 401) — re-acquiring token and retrying once");
 
         var result = await _authService
-            .AcquireTokenForAccountAsync(_accountId, _tenantId, _cloud, _scopes, claims, cancellationToken)
+            .AcquireTokenForAccountAsync(_accountId, _tenantId, _cloud, _scopes, claims, false, cancellationToken)
             .ConfigureAwait(false);
 
         var retryRequest = await CloneRequestAsync(request, cancellationToken).ConfigureAwait(false);

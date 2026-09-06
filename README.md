@@ -1,6 +1,6 @@
 # Entra PIM Manager
 
-A Windows tray application for activating Microsoft Entra Privileged Identity Management (PIM) eligibilities — Directory Roles and Group Memberships — from one place, across multiple tenants, without UAC, admin rights, or service installation.
+A Windows tray application for activating Microsoft Entra Privileged Identity Management (PIM) eligibilities — Directory Roles, Group Memberships and Azure resource roles — from one place, across multiple tenants, without UAC, admin rights, or service installation.
 
 <p>
   <img src="docs/screenshot1.png" alt="Entra PIM Manager screenshot 1" width="32%" />
@@ -10,15 +10,16 @@ A Windows tray application for activating Microsoft Entra Privileged Identity Ma
 
 ## Features
 
-- One-click activation of Entra PIM eligibilities from the system tray
+- One-click activation of PIM eligibilities from the system tray — Entra directory roles, PIM for Groups, and Azure resource roles (Azure RBAC at management-group, subscription, resource-group or resource scope)
 - Multi-tenant: sign in with multiple admin accounts; eligibilities and active assignments are grouped per tenant
 - One App Registration entry per tenant — a multi-tenant registration reused across tenants, a customer's own single-tenant registration, or a mix
 - Multi-cloud: Global and Entra China (21Vianet) side by side, each with its own App Registration
 - WAM-broker authentication (no embedded WebView, no in-app password prompts), with a device-code fallback for tenants whose federated IdP forces seamless SSO onto the wrong account
 - Activation form with justification, ticket reference, and a duration slider in 0.5 h steps (bounded by the per-role policy maximum)
 - Live watchdog — the list refreshes automatically when assignments are activated, deactivated, or expire
+- Search across role name, type, tenant and Azure scope — a subscription name finds its roles
 - Favorites for recurring justifications
-- Drag-and-drop reordering of accounts in Settings
+- Drag-and-drop reordering of accounts in Settings, and a short alias per account ("EADM") in place of a long UPN
 - Per-user install to `%LocalAppData%\Programs\Entra-PIM-Manager\` — no UAC, no HKLM, no Windows service
 - Optional Windows autostart (enabled by default on first install, toggleable in Settings)
 - Velopack-based auto-update
@@ -45,9 +46,9 @@ In short:
 
 1. Create an App Registration in your Entra portal — multi-tenant if it should serve several tenants, single-tenant if it lives in exactly one.
 2. Add the WAM redirect URI `ms-appx-web://microsoft.aad.brokerplugin/{client-id}` and enable public client flows.
-3. Grant delegated Graph permissions: `User.Read`, `RoleEligibilitySchedule.Read.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`, `RoleManagementPolicy.Read.Directory`, `RoleManagementPolicy.Read.AzureADGroup`, `PrivilegedAccess.ReadWrite.AzureADGroup`, `Group.Read.All`.
+3. Grant delegated Graph permissions: `User.Read`, `RoleEligibilitySchedule.Read.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`, `RoleManagementPolicy.Read.Directory`, `RoleManagementPolicy.Read.AzureADGroup`, `PrivilegedAccess.ReadWrite.AzureADGroup`, `Group.Read.All` — plus the delegated permission **Azure Service Management → `user_impersonation`** for Azure resource roles (PIM for Azure Resources goes through Azure Resource Manager, not Graph).
 4. Grant admin consent in every tenant where Entra PIM Manager will be used.
-5. Launch the app, open **Settings → APP REGISTRATION**, and add one entry per tenant: tenant id, client id, cloud, optional label. A multi-tenant registration is listed once per tenant with the same client id; only listed tenants can be signed in to. Entries are saved to your per-user config at `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` and applied on the next restart — the shipped `appsettings.json` only carries the scopes.
+5. Launch the app, open **Settings → TENANTS**, and add one entry per tenant: tenant id, client id, cloud, optional label. A multi-tenant registration is listed once per tenant with the same client id; only listed tenants can be signed in to. Entries are saved to your per-user config at `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` and applied on the next restart — the shipped `appsettings.json` only carries the scopes.
 
 > **Entra China (21Vianet)?** National clouds are physically isolated instances of Entra, so a Global App Registration does not exist there — a Global client id sent to `login.partner.microsoftonline.cn` fails with `AADSTS700016`. Repeat steps 1–4 in [portal.azure.cn](https://portal.azure.cn) and add that tenant's entry with cloud **Entra China**. Both clouds then work side by side; "Add account…" lists every entry under "Sign in with".
 >

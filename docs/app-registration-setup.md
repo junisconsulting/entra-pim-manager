@@ -1,7 +1,8 @@
 # Entra App Registration — Setup for Entra PIM Manager
 
 > This guide describes the one-time setup of an Entra App Registration
-> that Entra PIM Manager needs in order to authenticate against Microsoft Graph.
+> that Entra PIM Manager needs in order to authenticate against Microsoft Graph
+> and Azure Resource Manager.
 > Requires an Entra administrator for the admin consent in every tenant in which
 > Entra PIM Manager will be used.
 >
@@ -75,6 +76,22 @@ add the following scopes:
 | `PrivilegedAccess.ReadWrite.AzureADGroup` | Activate/deactivate PIM for Groups |
 | `Group.Read.All` | Resolve group names |
 
+PIM for Azure Resources goes through Azure Resource Manager rather than Graph and
+needs one more delegated permission:
+
+**API permissions → Add a permission → Azure Service Management → Delegated
+permissions** — add `user_impersonation`.
+
+| Permission | Purpose |
+|---|---|
+| `user_impersonation` (Azure Service Management) | List, activate and deactivate Azure resource roles (PIM for Azure Resources) as the signed-in user |
+
+The app derives the matching scope (`https://management.azure.com/user_impersonation`,
+or the China host's) from the entry's cloud — it is not configured anywhere. A
+tenant that never grants this permission still works for directory roles and
+groups; its tenant group shows "Azure resource roles unavailable" instead of the
+Azure rows.
+
 ## 4. Admin consent — per tenant
 
 **API permissions → Grant admin consent for \<home tenant\>**.
@@ -104,7 +121,8 @@ https://login.partner.microsoftonline.cn/{external-tenant-id}/adminconsent
 ```
 
 Without admin consent in the respective tenant, the first Graph call fails when
-that account is added.
+that account is added. The consent URL covers every permission listed on the
+registration — the Azure Service Management one included.
 
 ## 5. Enter the registration in the app
 
@@ -146,6 +164,12 @@ The UI writes this; the entries can also be hand-edited:
 }
 ```
 
+The form has one more field, **Ticket system**, which is deliberately *not* part of
+this file: it is prefilled into the activation form for that tenant whenever a role
+requires a ticket, and it is stored with the other user settings, so it applies at
+once instead of after the restart the registration fields need. Leave it empty and
+the field simply starts blank.
+
 `Cloud` defaults to `Global`; `Label` is optional. Keep the list in **one** file:
 .NET's configuration overlays arrays index by index, so the same key in two
 files merges entry-wise. The shipped `appsettings.json` deliberately carries
@@ -179,6 +203,8 @@ and provide the entries directly: copy
 
 For every enrolled account a dedicated `GraphServiceClient` is instantiated
 (see [IGraphClientFactory.CreateFor(account)](../src/Entra-PIM-Manager.Core/Graph/IGraphClientFactory.cs)),
+plus a dedicated Azure Resource Manager client
+([IArmClientFactory.CreateFor(account)](../src/Entra-PIM-Manager.Core/Arm/IArmClientFactory.cs)),
 so that token acquisition, retry, and claims challenges run cleanly per tenant.
 Each App Registration gets its own MSAL public client and DPAPI-encrypted token
 cache (`msal-{client-id}.cache`).
@@ -204,6 +230,7 @@ So you need **a second App Registration, created inside a China tenant**.
 | Portal to register in | `portal.azure.com` | `portal.azure.cn` |
 | Authority | `login.microsoftonline.com` | `login.partner.microsoftonline.cn` |
 | Microsoft Graph | `graph.microsoft.com` | `microsoftgraph.chinacloudapi.cn` |
+| Azure Resource Manager | `management.azure.com` | `management.chinacloudapi.cn` |
 | Entry's `Cloud` | `Global` | `China` |
 
 ### Procedure
@@ -211,9 +238,10 @@ So you need **a second App Registration, created inside a China tenant**.
 1. Sign in to [portal.azure.cn](https://portal.azure.cn) with an admin of your
    China tenant and repeat **steps 1–4** of this guide there. Nothing changes in
    substance: same name, same redirect-URI pattern (with the **China** client
-   id), "Allow public client flows" on, the same six delegated Graph scopes,
-   admin consent per China tenant via the `login.partner…` URL in step 4.
-2. In the app: **Settings → APP REGISTRATION** → add an entry with the China
+   id), "Allow public client flows" on, the same delegated permissions (Graph
+   and Azure Service Management), admin consent per China tenant via the
+   `login.partner…` URL in step 4.
+2. In the app: **Settings → TENANTS** → add an entry with the China
    tenant's id, the China client id and cloud *Entra China (21Vianet)* →
    **Add** → **Restart now**.
 3. After the restart, **Settings → ACCOUNTS → "Add account…"** lists the China
@@ -265,3 +293,17 @@ field of the add-account panel is gone.
   changed)"** on a tenant group: the entry the account was enrolled through was
   removed or its client id changed. Remove the account in Settings and add it
   again through the current entry.
+- **"Azure resource roles unavailable: This tenant has not consented…"** on a
+  tenant group: the registration lacks the Azure Service Management →
+  `user_impersonation` permission, or the tenant has not consented to it yet
+  (steps 3 and 4). Directory roles and groups keep working; the Azure rows appear
+  on their own once consent is granted (a broker account may show one WAM
+  consent prompt first, a device-code account picks it up within the hour or
+  after a restart).
+- **An Azure role assigned to a group does not appear, while other Azure roles
+  do**: Azure resolves the caller's group memberships from its own cache, so a
+  membership that changed minutes ago is not visible to the eligibility query
+  yet — most often after an eligible PIM-for-Groups member was turned into a
+  real member. The permission is not the problem: refresh again later. To
+  confirm the eligibility exists at all, list it by the group instead of by
+  yourself (`$filter=principalId eq '<group object id>'` at the scope).

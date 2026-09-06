@@ -28,6 +28,7 @@ public sealed class NetworkProbeCatalogTests
         Assert.Contains("aadcdn.msauth.cn", hosts);
         Assert.Contains("aadcdn.msftauth.cn", hosts);
         Assert.Contains("microsoftgraph.chinacloudapi.cn", hosts);
+        Assert.Contains("management.chinacloudapi.cn", hosts);
         Assert.All(china.Probes, p => Assert.Equal(Uri.UriSchemeHttps, p.Url.Scheme));
     }
 
@@ -47,6 +48,7 @@ public sealed class NetworkProbeCatalogTests
         Assert.Contains("aadcdn.msftauth.net", hosts);
         Assert.Contains("logincdn.msftauth.net", hosts);
         Assert.Contains("graph.microsoft.com", hosts);
+        Assert.Contains("management.azure.com", hosts);
     }
 
     [Fact]
@@ -76,5 +78,15 @@ public sealed class NetworkProbeCatalogTests
     public void AuthorityBaseUrl_MatchesCloud(EntraCloud cloud, string expected)
     {
         Assert.Equal(expected, EntraCloudInfo.AuthorityBaseUrl(cloud));
+    }
+
+    [Theory]
+    [InlineData(EntraCloud.Global, "https://management.azure.com/user_impersonation")]
+    [InlineData(EntraCloud.China, "https://management.chinacloudapi.cn/user_impersonation")]
+    public void ResourceManagerScopes_MatchesCloud(EntraCloud cloud, string expected)
+    {
+        var scope = Assert.Single(EntraCloudInfo.ResourceManagerScopes(cloud));
+        Assert.Equal(expected, scope);
+        Assert.StartsWith(EntraCloudInfo.ResourceManagerBaseUrl(cloud) + "/", scope, StringComparison.Ordinal);
     }
 }

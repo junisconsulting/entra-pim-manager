@@ -12,6 +12,7 @@ using EntraPimManager.AppAvalonia.Services;
 using EntraPimManager.AppAvalonia.Tray;
 using EntraPimManager.AppAvalonia.ViewModels;
 using EntraPimManager.AppAvalonia.Views;
+using EntraPimManager.Core.Arm;
 using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Caching;
 using EntraPimManager.Core.Configuration;
@@ -46,6 +47,7 @@ public partial class App : Application
     private ExpiryAlertController? _expiryAlertController;
     private UpdateController? _updateController;
     private FirstRunSetupController? _firstRunSetupController;
+    private WhatsNewController? _whatsNewController;
 
     /// <summary>Service provider for views/code-behind that cannot get DI injection directly.</summary>
     public static IServiceProvider? Services { get; private set; }
@@ -124,6 +126,14 @@ public partial class App : Application
         // left a marker this launch (autostart / Start menu opt-out). No-ops otherwise.
         _firstRunSetupController = Services.GetRequiredService<FirstRunSetupController>();
         _firstRunSetupController.Start();
+
+        // Release notes, once per version change. Deliberately not tied to the
+        // first-run marker above: Velopack raises OnFirstRun for a Setup.exe run over
+        // an existing install too, so keying off it would swallow the notes on the
+        // most common manual update. The cost is one extra dismissible window on a
+        // genuinely fresh install.
+        _whatsNewController = Services.GetRequiredService<WhatsNewController>();
+        _whatsNewController.Start();
 
         desktop.ShutdownRequested += (_, _) =>
         {
@@ -264,7 +274,7 @@ public partial class App : Application
             foreach (var (cloud, clientId) in result.Dropped)
             {
                 Log.Warning(
-                    "Legacy client id {ClientId} for {Cloud} had no enrolled or whitelisted tenant and was removed — add it under Settings → App Registration together with its tenant id",
+                    "Legacy client id {ClientId} for {Cloud} had no enrolled or whitelisted tenant and was removed — add it under Settings → Tenants together with its tenant id",
                     clientId,
                     cloud);
             }
@@ -330,6 +340,7 @@ public partial class App : Application
             sp.GetRequiredService<ILogger<UserSettingsService>>()));
         builder.Services.AddSingleton<IAuthService, MsalAuthService>();
         builder.Services.AddSingleton<IGraphClientFactory, GraphClientFactory>();
+        builder.Services.AddSingleton<IArmClientFactory, ArmClientFactory>();
         builder.Services.AddSingleton<PolicyCache>();
         builder.Services.AddSingleton<IAccountScopedServices, AccountScopedServices>();
         builder.Services.AddSingleton<IEligibilityAggregator, EligibilityAggregator>();
@@ -357,6 +368,9 @@ public partial class App : Application
         builder.Services.AddSingleton<FirstRunSetupViewModel>();
         builder.Services.AddSingleton<FirstRunSetupWindow>();
         builder.Services.AddSingleton<FirstRunSetupController>();
+        builder.Services.AddSingleton<WhatsNewViewModel>();
+        builder.Services.AddSingleton<WhatsNewWindow>();
+        builder.Services.AddSingleton<WhatsNewController>();
 
         return builder.Build();
     }

@@ -24,6 +24,7 @@ public sealed class MsalAuthProviderTests
                 Cloud,
                 Scopes,
                 null,
+                false,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(TestAuth.Result("access-token-1"));
         var provider = new MsalAuthProvider(authService.Object, Scopes, AccountId, TenantId, Cloud);
@@ -49,6 +50,7 @@ public sealed class MsalAuthProviderTests
                 Cloud,
                 Scopes,
                 "claims-blob",
+                false,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(TestAuth.Result("access-token-2"));
         var provider = new MsalAuthProvider(authService.Object, Scopes, AccountId, TenantId, Cloud);
@@ -68,6 +70,7 @@ public sealed class MsalAuthProviderTests
                 Cloud,
                 Scopes,
                 "claims-blob",
+                false,
                 It.IsAny<CancellationToken>()),
             Times.Once);
         Assert.Equal("Bearer access-token-2", Assert.Single(request.Headers["Authorization"]));
@@ -84,6 +87,7 @@ public sealed class MsalAuthProviderTests
                 Cloud,
                 Scopes,
                 "proactive-claims",
+                false,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(TestAuth.Result("access-token-3"));
         var provider = new MsalAuthProvider(authService.Object, Scopes, AccountId, TenantId, Cloud);
@@ -103,6 +107,7 @@ public sealed class MsalAuthProviderTests
                 Cloud,
                 Scopes,
                 "proactive-claims",
+                false,
                 It.IsAny<CancellationToken>()),
             Times.Once);
         Assert.Equal("Bearer access-token-3", Assert.Single(request.Headers["Authorization"]));
@@ -119,6 +124,7 @@ public sealed class MsalAuthProviderTests
                 Cloud,
                 Scopes,
                 "server-claims",
+                false,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(TestAuth.Result("access-token-4"));
         var provider = new MsalAuthProvider(authService.Object, Scopes, AccountId, TenantId, Cloud);
@@ -139,6 +145,7 @@ public sealed class MsalAuthProviderTests
                 Cloud,
                 Scopes,
                 "server-claims",
+                false,
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }

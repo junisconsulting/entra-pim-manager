@@ -1,5 +1,6 @@
 namespace EntraPimManager.Tests.ErrorHandling;
 
+using EntraPimManager.Core.Arm;
 using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.ErrorHandling;
 using EntraPimManager.Core.Models;
@@ -45,6 +46,50 @@ public sealed class PimErrorMapperTests
         var mapped = PimErrorMapper.Map(error);
 
         Assert.Equal(ErrorSeverity.Throttled, mapped.Severity);
+    }
+
+    [Theory]
+    [InlineData("RoleAssignmentRequestPolicyValidationFailed", "The following policy rules failed: [\"MfaRule\"]", ErrorSeverity.StepUpRequired, null)]
+    [InlineData("RoleAssignmentRequestPolicyValidationFailed", "The following policy rules failed: [\"JustificationRule\"]", ErrorSeverity.Validation, "justification")]
+    [InlineData("RoleAssignmentRequestPolicyValidationFailed", "The following policy rules failed: [\"TicketingRule\"]", ErrorSeverity.Validation, "ticket")]
+    [InlineData("RoleAssignmentRequestPolicyValidationFailed", "The following policy rules failed: [\"ExpirationRule\"]", ErrorSeverity.Validation, "duration")]
+    [InlineData("RoleAssignmentRequestPolicyValidationFailed", "The following policy rules failed: [\"EligibilityRule\"]", ErrorSeverity.RefreshList, null)]
+    [InlineData("RoleAssignmentRequestPolicyValidationFailed", "The following policy rules failed: [\"SomethingNew\"]", ErrorSeverity.Fatal, null)]
+    [InlineData("RoleAssignmentRequestAcrsValidationFailed", "Reauthenticate with claims=%7B%22access_token%22%3A%7B%22acrs%22...", ErrorSeverity.StepUpRequired, null)]
+    [InlineData("ActiveDurationTooShort", "The Active duration is too short. Minimum Required is 5 minutes.", ErrorSeverity.Validation, null)]
+    [InlineData("AuthorizationFailed", "The client does not have authorization to perform action", ErrorSeverity.Fatal, null)]
+    [InlineData("RoleAssignmentExists", "The Role assignment already exists.", ErrorSeverity.Info, null)]
+    [InlineData("InvalidRoleAssignmentRequestSchedule", "The role assignment request schedule is invalid.", ErrorSeverity.Validation, "duration")]
+    public void Map_ArmError_ReturnsExpectedSeverityAndFieldHint(
+        string code,
+        string message,
+        ErrorSeverity severity,
+        string? fieldHint)
+    {
+        // ARM shares Graph's code vocabulary but folds every policy failure
+        // into one code and names the rule only in the message.
+        var mapped = PimErrorMapper.Map(new ArmRequestException(400, code, message));
+
+        Assert.Equal(severity, mapped.Severity);
+        Assert.Equal(fieldHint, mapped.FieldHint);
+        Assert.NotEmpty(mapped.Message);
+    }
+
+    [Fact]
+    public void Map_ArmThrottled_ReturnsThrottled()
+    {
+        var mapped = PimErrorMapper.Map(new ArmRequestException(429, string.Empty, string.Empty));
+
+        Assert.Equal(ErrorSeverity.Throttled, mapped.Severity);
+    }
+
+    [Fact]
+    public void MapException_ArmRequestException_DelegatesToCodeMapping()
+    {
+        var mapped = PimErrorMapper.MapException(
+            new ArmRequestException(400, "RoleAssignmentExists", "The Role assignment already exists."));
+
+        Assert.Equal(ErrorSeverity.Info, mapped.Severity);
     }
 
     [Fact]
@@ -211,7 +256,7 @@ public sealed class PimErrorMapperTests
         var mapped = PimErrorMapper.MapException(msal);
 
         Assert.Equal(ErrorSeverity.Fatal, mapped.Severity);
-        Assert.Contains("Settings → App Registration", mapped.Message, StringComparison.Ordinal);
+        Assert.Contains("Settings → Tenants", mapped.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -257,6 +302,40 @@ public sealed class PimErrorMapperTests
             new MsalUiRequiredException(MsalError.UserNullError, "No MSAL account for oid"));
 
         Assert.Contains("add it again", caption, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DescribeFetchFailure_TenantHasNotConsented_NamesConsentAndSelfRecovery()
+    {
+        // AADSTS65001 is the window between a scope change and the admin's
+        // consent — the account is not broken, it is waiting.
+        var caption = PimErrorMapper.DescribeFetchFailure(
+            new MsalUiRequiredException("invalid_grant", "AADSTS65001: The user or administrator has not consented to use the application"));
+
+        Assert.Contains("consent", caption, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("recovers on its own", caption, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DescribeFetchFailure_ArmRejected_NamesResourceManager()
+    {
+        var caption = PimErrorMapper.DescribeFetchFailure(
+            new ArmRequestException(403, "AuthorizationFailed", "The client does not have authorization"));
+
+        Assert.Contains("Azure Resource Manager", caption, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DescribeFetchFailure_CancelledDuringSignIn_NamesThePromptAndConsent()
+    {
+        // Field case 2026-09-04: a tenant without ARM consent produced "the request
+        // timed out", which reads as a network fault and sends the admin the wrong way.
+        var caption = PimErrorMapper.DescribeFetchFailure(
+            new ArmSignInPendingException(new OperationCanceledException()));
+
+        Assert.Contains("signing in", caption, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("consent", caption, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("timed out", caption, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

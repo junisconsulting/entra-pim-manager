@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "RoleAssignmentRequestPolicyValidationFailed",
+    "message": "The following policy rules failed: [\"MfaRule\"]"
+  }
+}

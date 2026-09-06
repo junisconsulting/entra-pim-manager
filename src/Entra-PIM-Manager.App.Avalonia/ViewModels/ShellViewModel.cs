@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EntraPimManager.AppAvalonia.Services;
 using EntraPimManager.Core.Auth;
+using EntraPimManager.Core.Collections;
 using EntraPimManager.Core.Configuration;
 using EntraPimManager.Core.ErrorHandling;
 using EntraPimManager.Core.Models;
@@ -40,8 +41,36 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     // without risking 429s.
     private const int PolicyPrefetchConcurrency = 6;
 
+    /// <summary>
+    /// Upper bound on eligibilities warmed per refresh. The prefetch is a
+    /// convenience — it saves a 1-3 s wait on the first click — and there is one
+    /// target per (role, scope), so an account eligible across a large Azure estate
+    /// would otherwise fire several hundred ARM policy reads on every refresh. What
+    /// is not prefetched still activates: ActivateAsync fetches lazily behind the
+    /// spinner the row already shows.
+    /// </summary>
+    private const int PolicyPrefetchLimit = 100;
+
+    // Recent activations: three are shown, more are remembered so an entry that is
+    // temporarily pinned or unavailable can come back instead of being forgotten.
+    private const int RecentShortcutLimit = 3;
+    private const int RecentShortcutMemory = 10;
+
+    /// <summary>
+    /// Up to this many eligibilities, a tenant's sections open with it — headers over a
+    /// handful of rows are noise. Above it they start collapsed, which is the whole point
+    /// of having them.
+    /// </summary>
+    private const int SectionAutoExpandLimit = 12;
+
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan GraphCallTimeout = TimeSpan.FromSeconds(30);
+
+    // Strictly longer than the aggregator's 30 s per-account budget. The two
+    // timers start together, so an equal value lets this one fire first and
+    // discard every tenant's result — the per-tenant isolation only works
+    // while the inner budget is the one that expires.
+    private static readonly TimeSpan RefreshTimeout = TimeSpan.FromSeconds(45);
 
     // How long an "Activating…" placeholder may live without Graph publishing
     // the real assignment before we give up and drop it.
@@ -76,6 +105,17 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     // the auto-expand-on-match behaviour would overwrite the layout the user
     // had before they started typing.
     private Dictionary<string, bool>? _preFilterExpansion;
+
+    // Expansion state of the per-role Azure nodes, carried across refreshes only.
+    private Dictionary<string, bool> _roleGroupExpansion = new(StringComparer.Ordinal);
+
+    private Dictionary<string, bool> _sectionExpansion = new(StringComparer.Ordinal);
+
+    private Dictionary<string, bool>? _preFilterSectionExpansion;
+
+    // Pinned eligibility keys, mirrored from user settings so a toggle does not have
+    // to wait for the write to land before the next rebuild reads it back.
+    private HashSet<string> _pinnedKeys = new(StringComparer.Ordinal);
 
     // Cancellation handle for the background policy prefetch. Each new
     // RefreshAsync cancels the previous prefetch (which is likely working
@@ -115,6 +155,13 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     /// </summary>
     [ObservableProperty]
     private bool _isExpiryAlertVisible;
+
+    /// <summary>
+    /// True while at least one pinned or recent row exists. Hidden during a search:
+    /// with the same hit above and below, the shortcuts turn into noise.
+    /// </summary>
+    [ObservableProperty]
+    private bool _hasShortcuts;
 
     public ShellViewModel(
         IAuthService authService,
@@ -204,7 +251,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
 
     /// <summary>
     /// Enrolled accounts in stable order, wrapped so the row can carry a
-    /// mutable tenant label. Bound to the Settings ACCOUNTS section.
+    /// mutable tenant label. Grouped by tenant in the Settings TENANTS section.
     /// </summary>
     public ObservableCollection<AccountListItemViewModel> Accounts { get; } = [];
 
@@ -213,6 +260,12 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
 
     /// <summary>Cross-tenant: active assignments across every enrolled account.</summary>
     public ObservableCollection<ActiveAssignmentItemViewModel> ActiveAssignments { get; } = [];
+
+    /// <summary>Eligibilities the user pinned, shown above the tenant groups.</summary>
+    public ObservableCollection<EligibilityItemViewModel> PinnedItems { get; } = [];
+
+    /// <summary>The last few activations, shown under the pinned ones.</summary>
+    public ObservableCollection<EligibilityItemViewModel> RecentItems { get; } = [];
 
     /// <summary>The slide-in activation panel — bound by the popup window.</summary>
     public ActivationPanelViewModel ActivationPanel => _activationPanel;
@@ -223,19 +276,10 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     /// <summary>The slide-in Settings panel — bound by the popup window.</summary>
     public SettingsPanelViewModel SettingsPanel => _settingsPanel;
 
-    /// <inheritdoc />
-    IAsyncRelayCommand<SignedInAccount?> IAccountsHost.RemoveAccountCommand => RemoveAccountCommand;
-
-    /// <inheritdoc />
-    IRelayCommand IAccountsHost.OpenAddAccountPanelCommand => OpenAddAccountPanelCommand;
-
-    /// <inheritdoc />
-    IRelayCommand<SignedInAccount?> IAccountsHost.SelectAccountCommand => SelectAccountCommand;
-
     /// <summary>
     /// True when not a single cloud has a usable App Registration client id —
     /// every entry is empty or a non-GUID placeholder. The main popup shows a
-    /// first-run empty state pointing the user at Settings → App Registration;
+    /// first-run empty state pointing the user at Settings → Tenants;
     /// the regular eligibility / active lists stay hidden until this is false.
     /// </summary>
     public bool NeedsConfiguration => _options.ConfiguredClouds().Count == 0;
@@ -273,7 +317,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         {
             // First-run: the App Registration ClientId hasn't been set yet.
             // Skip account/auth init entirely — the empty-state CTA in the
-            // popup will guide the user to Settings → App Registration.
+            // popup will guide the user to Settings → Tenants.
             _countdownTimer.Start();
             return;
         }
@@ -321,42 +365,50 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     }
 
     /// <summary>
-    /// Reorders the enrolled accounts so <paramref name="draggedAccount"/>
-    /// lands at <paramref name="newIndex"/>. Used by the DnD wiring in the
-    /// Settings ACCOUNTS section. The change propagates to:
-    /// <list type="bullet">
-    /// <item><see cref="Accounts"/> — moved in place (ObservableCollection.Move
-    /// keeps the existing item instances)</item>
-    /// <item><see cref="EligibilityGroups"/> — reordered locally to match
-    /// without re-fetching from Graph; the existing group VMs (with their
-    /// IsExpanded state) are preserved</item>
-    /// <item>Persistence — full ordered list is written to
-    /// <see cref="IAuthService.ReorderAccountsAsync"/></item>
-    /// </list>
+    /// Reorders the tenant cards so <paramref name="dragged"/> lands where
+    /// <paramref name="target"/> was, and derives the flat account order from the new
+    /// tenant order. Used by the DnD wiring in the Settings TENANTS section.
     /// </summary>
-    public async Task MoveAccountAsync(SignedInAccount draggedAccount, int newIndex)
+    /// <remarks>
+    /// The persisted model is still a flat list of accounts, and the popup takes its
+    /// group order from it — so the tenant order has to be written back into that list.
+    /// Rewriting it is only ever done here, on an explicit drop: doing it while merely
+    /// rendering Settings would silently reshuffle a popup the user never touched.
+    /// Accounts keep their order within their tenant.
+    /// </remarks>
+    /// <param name="dragged">The tenant card being moved.</param>
+    /// <param name="target">The card it was dropped on.</param>
+    public async Task MoveTenantAsync(TenantNodeViewModel dragged, TenantNodeViewModel target)
     {
-        if (draggedAccount is null)
+        if (dragged is null || target is null)
         {
             return;
         }
 
-        var oldIndex = -1;
-        for (var i = 0; i < Accounts.Count; i++)
-        {
-            if (IsSameEnrollment(Accounts[i].Account, draggedAccount))
-            {
-                oldIndex = i;
-                break;
-            }
-        }
-
-        if (oldIndex < 0 || newIndex < 0 || newIndex >= Accounts.Count || newIndex == oldIndex)
+        var nodes = _settingsPanel.Nodes.ToList();
+        var from = nodes.IndexOf(dragged);
+        var to = nodes.IndexOf(target);
+        if (from < 0 || to < 0 || from == to)
         {
             return;
         }
 
-        Accounts.Move(oldIndex, newIndex);
+        nodes.RemoveAt(from);
+        nodes.Insert(to, dragged);
+
+        var ordered = nodes.SelectMany(n => n.Accounts).ToList();
+        if (ordered.Count != Accounts.Count)
+        {
+            // Every account belongs to exactly one card, so this cannot happen — but a
+            // partial order written to disk would be worse than an ignored drop.
+            _logger.LogWarning(
+                "Tenant reorder produced {Ordered} of {Total} accounts; ignoring the drop",
+                ordered.Count,
+                Accounts.Count);
+            return;
+        }
+
+        ObservableCollectionSync.Apply(Accounts, ordered);
         RebuildGroupsFromAccountOrder();
 
         try
@@ -366,7 +418,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to persist account reorder");
+            _logger.LogError(ex, "Failed to persist tenant reorder");
         }
     }
 
@@ -397,7 +449,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         IsBusy = true;
         try
         {
-            using var cts = new CancellationTokenSource(GraphCallTimeout);
+            using var cts = new CancellationTokenSource(RefreshTimeout);
             var snapshot = Accounts.Select(a => a.Account).ToList();
 
             // Both reads fan out across all enrolled accounts in parallel with
@@ -442,6 +494,10 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         {
             await _authService.RemoveAccountAsync(account.ObjectId, account.TenantId, account.Cloud);
 
+            // Signing in again after the Azure consent was finally granted is the
+            // obvious remedy, and the backoff key would otherwise survive it.
+            _aggregator.ForgetAzureBackoff(account);
+
             var item = Accounts.FirstOrDefault(a => IsSameEnrollment(a.Account, account));
             if (item is not null)
             {
@@ -470,6 +526,14 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
                 ActiveAssignments.Remove(row);
             }
 
+            // The shortcut sections are derived from EligibilityGroups, so they only
+            // drop the removed enrollment's rows when something rebuilds them — and
+            // the refresh that normally does is stopped below once the last account
+            // is gone. Without this a pinned row outlives its account, sits next to
+            // the "no accounts" empty state, and routes a click at an enrollment
+            // that no longer exists.
+            RebuildShortcutSections();
+
             UpdateActiveCount();
             UpdateEligibleCount();
             IsSignedIn = ActiveAccount is not null;
@@ -489,15 +553,22 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         }
     }
 
-    /// <summary>Opens the single "Add account" slide-in (broker sign-in primary,
-    /// device code under Advanced). Closes Settings first: the slide-in panels
-    /// are overlapping siblings and Settings renders on top, so otherwise this
+    /// <summary>Opens the "Add account" slide-in for <paramref name="slot"/> (broker
+    /// sign-in primary, device code under Advanced). Closes Settings first: the slide-in
+    /// panels are overlapping siblings and Settings renders on top, so otherwise this
     /// panel opens invisibly behind it.</summary>
+    /// <param name="slot">The tenant to sign in to, from the card the button sits in.</param>
     [RelayCommand]
-    private void OpenAddAccountPanel()
+    private void OpenAddAccountPanel(TenantSlot? slot)
     {
         _settingsPanel.IsOpen = false;
-        _addTenantPanel.Open();
+        if (slot is null)
+        {
+            _addTenantPanel.Open();
+            return;
+        }
+
+        _addTenantPanel.Open(slot.Cloud, slot.TenantId);
     }
 
     /// <summary>Opens the Settings slide-in. Closes any other open slide-in first
@@ -538,8 +609,12 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         _prefetchCts?.Dispose();
         _prefetchCts = new CancellationTokenSource();
 
+        // Pinned first: past the limit, the rows someone actually clicks are the ones
+        // they pinned. OrderByDescending is stable, so the rest keep list order.
         var targets = EligibilityGroups
             .SelectMany(g => g.Items.Select(i => (g.Account, i.Eligibility)))
+            .OrderByDescending(t => _pinnedKeys.Contains(ShortcutKey(t.Account, t.Eligibility)))
+            .Take(PolicyPrefetchLimit)
             .ToList();
         if (targets.Count == 0)
         {
@@ -578,6 +653,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
                         target.Account.TenantId,
                         target.Eligibility.Kind,
                         target.Eligibility.ResourceId,
+                        target.Eligibility.ScopeId,
                         innerCt).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
@@ -692,6 +768,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
                 account.TenantId,
                 item.Eligibility.Kind,
                 item.Eligibility.ResourceId,
+                item.Eligibility.ScopeId,
                 cts.Token);
             _settingsPanel.IsOpen = false;
 
@@ -864,6 +941,11 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
 
         _toastService.ShowActivationResult(eligibility.DisplayName, result);
 
+        if (result.IsSuccess && _activationPanel.Account is { } activated)
+        {
+            RememberRecent(activated, eligibility);
+        }
+
         // Graph PIM's read API is eventually consistent — show a placeholder
         // immediately, the next refresh swaps it for the real assignment
         // (or the 30 s watchdog drops it).
@@ -879,6 +961,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
                 DeactivateAsync);
             _tenantNameCache.TryGetValue(account.TenantId, out var cachedName);
             pending.TenantName = cachedName;
+            pending.AccountAlias = AliasFor(account);
             ActiveAssignments.Insert(0, pending);
             UpdateActiveCount();
             MarkActiveEligibilities();
@@ -972,6 +1055,18 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
 
     private string EnrollmentKey(SignedInAccount account)
         => $"{account.ObjectId}|{account.TenantId}|{account.Cloud}";
+
+    /// <summary>
+    /// The user's alias for an enrollment, or <c>null</c> when none is set.
+    /// Read from settings at every use rather than cached in a field: this view
+    /// model is constructed before <c>IUserSettingsService.LoadAsync()</c> runs
+    /// (see <c>App.axaml.cs</c>), so a constructor-time snapshot would be empty.
+    /// </summary>
+    private string? AliasFor(SignedInAccount account)
+        => _userSettings.Current.AccountAliases is { } aliases
+            && aliases.TryGetValue(EnrollmentKey(account), out var alias)
+                ? alias
+                : null;
 
     private void UpdateCountdowns()
     {
@@ -1097,7 +1192,10 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             Accounts.Remove(existing);
         }
 
-        var item = new AccountListItemViewModel(account);
+        var item = new AccountListItemViewModel(account, RenameAccount, SelectAccountCommand, RemoveAccountCommand)
+        {
+            AccountAlias = AliasFor(account),
+        };
         if (_tenantNameCache.TryGetValue(account.TenantId, out var cachedName))
         {
             item.TenantName = cachedName;
@@ -1166,6 +1264,59 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     }
 
     /// <summary>
+    /// Stores (or clears, when <paramref name="alias"/> is <c>null</c>) the user's
+    /// name for one enrollment and pushes it to every row already on screen.
+    /// </summary>
+    /// <remarks>
+    /// The push is not cosmetic: account rows are never rebuilt by a refresh, and
+    /// the popup rows would otherwise carry the old name until the next 60 s tick.
+    /// Matching is per enrollment, not per tenant id — two accounts in one tenant
+    /// are named separately. The alias never reaches the log: it is text the user
+    /// typed and may contain a UPN or a customer name.
+    /// </remarks>
+    private void RenameAccount(AccountListItemViewModel row, string? alias)
+    {
+        var key = EnrollmentKey(row.Account);
+        PersistShellSettings(s =>
+        {
+            var dict = s.AccountAliases is null
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, string>(s.AccountAliases, StringComparer.OrdinalIgnoreCase);
+            if (alias is null)
+            {
+                dict.Remove(key);
+            }
+            else
+            {
+                dict[key] = alias;
+            }
+
+            return s with { AccountAliases = dict };
+        });
+
+        // PersistShellSettings only publishes Current after the async write, so a
+        // refresh landing inside that window rebuilds rows with the previous alias
+        // and self-heals on the next tick. The rows below are updated regardless.
+        row.AccountAlias = alias;
+
+        foreach (var active in ActiveAssignments)
+        {
+            if (IsSameEnrollment(active.Account, row.Account))
+            {
+                active.AccountAlias = alias;
+            }
+        }
+
+        foreach (var group in EligibilityGroups)
+        {
+            if (IsSameEnrollment(group.Account, row.Account))
+            {
+                group.AccountAlias = alias;
+            }
+        }
+    }
+
+    /// <summary>
     /// Rebuilds <see cref="EligibilityGroups"/> from the aggregated dict.
     /// Preserves <see cref="TenantEligibilityGroup.IsExpanded"/> across
     /// rebuilds so a refresh doesn't snap the user's open/closed layout shut.
@@ -1173,10 +1324,33 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     private void BuildEligibilityGroups(
         IReadOnlyDictionary<SignedInAccount, EligibilityFetchResult> aggregated)
     {
+        _pinnedKeys = new HashSet<string>(
+            _userSettings.Current.PinnedEligibilities ?? [], StringComparer.Ordinal);
+
         // Snapshot prior expansion keyed by (oid, tid) so we can carry it
         // forward — refresh rebuilds the group instances.
         var previousExpansion = EligibilityGroups
             .ToDictionary(g => EnrollmentKey(g.Account), g => g.IsExpanded);
+
+        // Same for the role nodes inside each group, keyed by tenant + role. Kept in
+        // memory only: a node the user opened must survive the 60 s refresh, but a
+        // tenant with hundreds of Azure roles has no business filling the settings file.
+        // Merged, not replaced. A tenant that failed to fetch this tick renders with no
+        // rows at all, so rebuilding these from what is on screen would forget what the
+        // user opened there and collapse it again once the tenant comes back — the one
+        // case the memory exists for.
+        foreach (var group in EligibilityGroups)
+        {
+            foreach (var node in group.RoleGroups)
+            {
+                _roleGroupExpansion[RoleNodeKey(group.Account, node.RoleDefinitionId)] = node.IsExpanded;
+            }
+
+            foreach (var section in group.Sections)
+            {
+                _sectionExpansion[SectionKey(group.Account, section.Kind)] = section.IsExpanded;
+            }
+        }
 
         EligibilityGroups.Clear();
 
@@ -1196,15 +1370,10 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             {
                 SuppressUserExpansionEvent = true,
                 TenantName = cachedName,
+                AccountAlias = AliasFor(account),
                 LoadError = fetched.LoadError,
             };
-            foreach (var eligibility in fetched.Items)
-            {
-                group.Items.Add(new EligibilityItemViewModel(eligibility, account, ActivateAsync)
-                {
-                    TenantName = cachedName,
-                });
-            }
+            BuildGroupRows(group, fetched.Items, account, cachedName);
 
             // Default-expand layering (highest priority first):
             //   1. previous in-memory state (carried across this refresh)
@@ -1222,7 +1391,10 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             }
             else
             {
-                group.IsExpanded = IsSameEnrollment(account, ActiveAccount);
+                // Collapsed by default, including the active account's. With several
+                // hundred eligibilities an expanded tenant is the whole popup; what the
+                // user should land on is the pinned and recent entries above it.
+                group.IsExpanded = false;
             }
 
             group.SuppressUserExpansionEvent = false;
@@ -1231,7 +1403,239 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             EligibilityGroups.Add(group);
         }
 
+        RebuildShortcutSections();
         UpdateEligibleCount();
+    }
+
+    /// <summary>
+    /// Fills one tenant group: the canonical flat <see cref="TenantEligibilityGroup.Items"/>
+    /// list, plus the two collections the view renders — plain rows, and one node per
+    /// Azure resource role the account holds on more than one scope.
+    /// </summary>
+    /// <remarks>
+    /// The folding is what keeps the list usable for infrastructure teams: eligible
+    /// on one role across 400 subscriptions is 400 rows otherwise, and no amount of
+    /// scrolling makes that readable. A role on a single scope stays a plain row —
+    /// a node hiding one child would only cost a click.
+    /// </remarks>
+    private void BuildGroupRows(
+        TenantEligibilityGroup group,
+        IReadOnlyList<PimEligibility> eligibilities,
+        SignedInAccount account,
+        string? tenantName)
+    {
+        var foldable = eligibilities
+            .Where(e => e.Kind == PimResourceKind.AzureResourceRole)
+            .GroupBy(e => RoleDefinitionKey(e.ResourceId), StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+        // Sections start collapsed once a tenant is big enough that scrolling it is the
+        // problem; below that, opening the tenant should still show its roles directly.
+        var sectionsStartOpen = eligibilities.Count <= SectionAutoExpandLimit;
+
+        foreach (var eligibility in eligibilities)
+        {
+            var folded = eligibility.Kind == PimResourceKind.AzureResourceRole
+                && foldable.ContainsKey(RoleDefinitionKey(eligibility.ResourceId));
+            var row = new EligibilityItemViewModel(eligibility, account, ActivateAsync, TogglePin)
+            {
+                TenantName = tenantName,
+                IsInRoleGroup = folded,
+                IsPinned = _pinnedKeys.Contains(ShortcutKey(account, eligibility)),
+            };
+
+            group.Items.Add(row);
+            var section = SectionFor(group, SectionKindOf(eligibility), sectionsStartOpen);
+            if (!folded)
+            {
+                section.Items.Add(row);
+                continue;
+            }
+
+            var roleKey = RoleDefinitionKey(eligibility.ResourceId);
+            var node = section.RoleGroups.FirstOrDefault(
+                r => string.Equals(r.RoleDefinitionId, roleKey, StringComparison.OrdinalIgnoreCase));
+            if (node is null)
+            {
+                node = new AzureRoleGroup(roleKey, eligibility.DisplayName)
+                {
+                    IsExpanded = _roleGroupExpansion.TryGetValue(
+                        RoleNodeKey(account, roleKey), out var wasExpanded) && wasExpanded,
+                };
+                section.RoleGroups.Add(node);
+            }
+
+            node.Items.Add(row);
+            node.MatchCount = node.Items.Count;
+        }
+    }
+
+    /// <summary>
+    /// Which section an eligibility belongs to. An administrative-unit-scoped directory
+    /// role is deliberately not filed under "Directory roles": its scope is not the
+    /// directory, and the section header says so once instead of every row repeating it.
+    /// </summary>
+    private EligibilitySectionKind SectionKindOf(PimEligibility eligibility) => eligibility.Kind switch
+    {
+        PimResourceKind.DirectoryRole when eligibility.IsAdministrativeUnitScoped
+            => EligibilitySectionKind.AdministrativeUnit,
+        PimResourceKind.DirectoryRole => EligibilitySectionKind.DirectoryRole,
+        PimResourceKind.AzureResourceRole => EligibilitySectionKind.AzureResource,
+
+        // Membership and ownership share a section; the row's own kind line is the flag.
+        _ => EligibilitySectionKind.Group,
+    };
+
+    /// <summary>
+    /// The tenant's section for <paramref name="kind"/>, created on first use so a tenant
+    /// only ever shows headers for what it actually holds. Order follows the enum.
+    /// </summary>
+    private EligibilitySection SectionFor(TenantEligibilityGroup group, EligibilitySectionKind kind, bool startExpanded)
+    {
+        var existing = group.Sections.FirstOrDefault(s => s.Kind == kind);
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        var section = new EligibilitySection(kind)
+        {
+            IsExpanded = _sectionExpansion.TryGetValue(SectionKey(group.Account, kind), out var wasExpanded)
+                ? wasExpanded
+                : startExpanded,
+        };
+
+        var insertAt = group.Sections.Count(s => s.Kind < kind);
+        group.Sections.Insert(insertAt, section);
+        return section;
+    }
+
+    /// <summary>
+    /// Identity of one collapsible Azure role node. Keyed by enrollment, not by
+    /// tenant: a normal and an admin account in the same tenant are two groups
+    /// that can hold a node for the same role.
+    /// </summary>
+    private string RoleNodeKey(SignedInAccount account, string roleDefinitionId)
+        => $"{EnrollmentKey(account)}|{roleDefinitionId}";
+
+    /// <summary>
+    /// Identity of one kind section, so an opened section survives the 60 s refresh.
+    /// Keyed by enrollment, like the role nodes — two accounts in one tenant are two
+    /// groups, each with its own sections.
+    /// </summary>
+    private string SectionKey(SignedInAccount account, EligibilitySectionKind kind)
+        => $"{EnrollmentKey(account)}|{(int)kind}";
+
+    /// <summary>
+    /// The role's own identity, without the scope it was read at. ARM returns
+    /// <c>roleDefinitionId</c> fully qualified — the same built-in role reads as a
+    /// different string under every subscription — so the trailing GUID is what
+    /// makes "Owner on 400 subscriptions" one role instead of 400.
+    /// </summary>
+    private string RoleDefinitionKey(string resourceId)
+        => resourceId[(resourceId.LastIndexOf('/') + 1)..];
+
+    /// <summary>
+    /// Identity of one (enrollment, kind, role, scope) eligibility, used as the
+    /// persisted key for pins and the recent list.
+    /// </summary>
+    private string ShortcutKey(SignedInAccount account, PimEligibility eligibility)
+        => $"{EnrollmentKey(account)}|{(int)eligibility.Kind}|{eligibility.ResourceId}|{eligibility.ScopeId}";
+
+    /// <summary>
+    /// Refills the pinned and recent sections from the live rows. Both are views over
+    /// what the tenant groups actually hold: a key whose eligibility is gone — revoked,
+    /// or its tenant failing to load — simply drops out instead of offering a row that
+    /// would fail on click. Recent skips anything pinned so nothing shows up twice.
+    /// </summary>
+    private void RebuildShortcutSections()
+    {
+        PinnedItems.Clear();
+        RecentItems.Clear();
+
+        // Grouped, not ToDictionary: an eligibility held directly *and* through a
+        // group comes back as two rows with one key, and a duplicate-key throw here
+        // would take down the whole refresh, not just the shortcut sections.
+        var live = EligibilityGroups
+            .SelectMany(group => group.Items)
+            .GroupBy(row => ShortcutKey(row.Account, row.Eligibility), StringComparer.Ordinal)
+            .ToDictionary(rows => rows.Key, rows => rows.First(), StringComparer.Ordinal);
+
+        foreach (var key in _pinnedKeys)
+        {
+            if (live.TryGetValue(key, out var row))
+            {
+                PinnedItems.Add(Shortcut(row));
+            }
+        }
+
+        foreach (var key in _userSettings.Current.RecentEligibilities ?? [])
+        {
+            if (RecentItems.Count == RecentShortcutLimit)
+            {
+                break;
+            }
+
+            if (!_pinnedKeys.Contains(key) && live.TryGetValue(key, out var row))
+            {
+                RecentItems.Add(Shortcut(row));
+            }
+        }
+
+        UpdateShortcutVisibility();
+    }
+
+    /// <summary>One place for the rule: shortcuts exist and no search is running.</summary>
+    private void UpdateShortcutVisibility()
+        => HasShortcuts = (PinnedItems.Count > 0 || RecentItems.Count > 0)
+            && string.IsNullOrWhiteSpace(FilterText);
+
+    /// <summary>A second row view model over the same eligibility, laid out for the top sections.</summary>
+    private EligibilityItemViewModel Shortcut(EligibilityItemViewModel row)
+        => new(row.Eligibility, row.Account, ActivateAsync, TogglePin)
+        {
+            TenantName = row.TenantName,
+            IsShortcut = true,
+            IsPinned = row.IsPinned,
+            IsCurrentlyActive = row.IsCurrentlyActive,
+        };
+
+    /// <summary>Pins or unpins one eligibility and rebuilds the sections.</summary>
+    private void TogglePin(EligibilityItemViewModel row)
+    {
+        var key = ShortcutKey(row.Account, row.Eligibility);
+        if (!_pinnedKeys.Remove(key))
+        {
+            _pinnedKeys.Add(key);
+        }
+
+        foreach (var candidate in EligibilityGroups.SelectMany(group => group.Items))
+        {
+            if (ShortcutKey(candidate.Account, candidate.Eligibility) == key)
+            {
+                candidate.IsPinned = _pinnedKeys.Contains(key);
+            }
+        }
+
+        PersistShellSettings(s => s with { PinnedEligibilities = [.. _pinnedKeys] });
+        RebuildShortcutSections();
+    }
+
+    /// <summary>
+    /// Records a successful activation at the head of the recent list. Kept longer
+    /// than it is shown so an entry that is currently pinned or unavailable can
+    /// resurface instead of being lost.
+    /// </summary>
+    private void RememberRecent(SignedInAccount account, PimEligibility eligibility)
+    {
+        var key = ShortcutKey(account, eligibility);
+        PersistShellSettings(s =>
+        {
+            var recent = new List<string> { key };
+            recent.AddRange((s.RecentEligibilities ?? []).Where(existing => existing != key));
+            return s with { RecentEligibilities = [.. recent.Take(RecentShortcutMemory)] };
+        });
     }
 
     /// <summary>
@@ -1246,6 +1650,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     {
         var filter = FilterText?.Trim() ?? string.Empty;
         var filterActive = filter.Length > 0;
+        UpdateShortcutVisibility();
 
         // Entering filter mode → snapshot. Leaving filter mode → restore.
         if (filterActive && _preFilterExpansion is null)
@@ -1253,6 +1658,9 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             _preFilterExpansion = EligibilityGroups.ToDictionary(
                 g => EnrollmentKey(g.Account),
                 g => g.IsExpanded);
+            _preFilterSectionExpansion = EligibilityGroups
+                .SelectMany(g => g.Sections.Select(sec => (Key: SectionKey(g.Account, sec.Kind), sec.IsExpanded)))
+                .ToDictionary(entry => entry.Key, entry => entry.IsExpanded, StringComparer.Ordinal);
         }
         else if (!filterActive && _preFilterExpansion is { } snapshot)
         {
@@ -1262,23 +1670,69 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
                 try
                 {
                     group.IsExpanded = snapshot.TryGetValue(EnrollmentKey(group.Account), out var prior)
-                        ? prior
-                        : IsSameEnrollment(group.Account, ActiveAccount);
+                        && prior;
                 }
                 finally
                 {
                     group.SuppressUserExpansionEvent = false;
                 }
+
+                // Role nodes and sections collapse again when the search ends. The
+                // search opened them; leaving hundreds of rows unfolded would undo the
+                // very thing they exist for.
+                foreach (var node in group.RoleGroups)
+                {
+                    node.IsExpanded = false;
+                }
+
+                foreach (var section in group.Sections)
+                {
+                    section.IsExpanded = _preFilterSectionExpansion is { } sections
+                        && sections.TryGetValue(SectionKey(group.Account, section.Kind), out var priorSection)
+                        && priorSection;
+                }
             }
 
             _preFilterExpansion = null;
+            _preFilterSectionExpansion = null;
         }
 
         foreach (var group in EligibilityGroups)
         {
-            var matches = filterActive
-                ? group.Items.Count(item => item.DisplayName.Contains(filter, StringComparison.OrdinalIgnoreCase))
-                : group.Items.Count;
+            var matches = 0;
+            foreach (var item in group.Items)
+            {
+                item.IsVisible = !filterActive || item.Matches(filter);
+                if (item.IsVisible)
+                {
+                    matches++;
+                }
+            }
+
+            // A role node counts and shows only its matching scopes, and opens itself
+            // while a filter is active — a hit behind a collapsed node reads as "no result".
+            foreach (var node in group.RoleGroups)
+            {
+                node.MatchCount = node.Items.Count(item => item.IsVisible);
+                node.IsVisible = node.MatchCount > 0;
+                if (filterActive)
+                {
+                    node.IsExpanded = true;
+                }
+            }
+
+            // Same rule one level up: a section counts only its matching rows, hides when
+            // it has none, and opens itself while a filter is active.
+            foreach (var section in group.Sections)
+            {
+                section.MatchCount = section.Items.Count(item => item.IsVisible)
+                    + section.RoleGroups.Sum(node => node.MatchCount);
+                section.IsVisible = !filterActive || section.MatchCount > 0;
+                if (filterActive)
+                {
+                    section.IsExpanded = true;
+                }
+            }
 
             group.MatchCount = matches;
             group.IsVisible = filterActive ? matches > 0 : true;
@@ -1399,6 +1853,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         foreach (var (account, list) in aggregated)
         {
             _tenantNameCache.TryGetValue(account.TenantId, out var cachedName);
+            var alias = AliasFor(account);
 
             foreach (var assignment in list)
             {
@@ -1407,6 +1862,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
                 ActiveAssignments.Add(new ActiveAssignmentItemViewModel(assignment, account, DeactivateAsync)
                 {
                     TenantName = cachedName,
+                    AccountAlias = alias,
                     IsDeactivating = deactivatingKeys.Contains(key),
                     DeactivationErrorText = carriedError,
                 });
@@ -1474,6 +1930,37 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
                     item.Account.TenantId);
                 item.IsCurrentlyActive = activeKeys.Contains(key);
             }
+
+            // Counted off the canonical flat list, so it stays correct no matter how
+            // the sections below split the same rows up.
+            group.ActiveCount = group.Items.Count(item => item.IsCurrentlyActive);
+
+            foreach (var node in group.RoleGroups)
+            {
+                node.ActiveCount = node.Items.Count(item => item.IsCurrentlyActive);
+            }
+
+            // A collapsed section must still admit that something behind it is granting
+            // access right now — the count is over the section's own rows, whether they
+            // sit directly in it or inside one of its role nodes.
+            foreach (var section in group.Sections)
+            {
+                section.ActiveCount = section.Items.Concat(section.RoleGroups.SelectMany(n => n.Items))
+                    .Count(item => item.IsCurrentlyActive);
+            }
+        }
+
+        // The shortcut sections hold their own row instances over the same
+        // eligibilities, so they need the same pass.
+        foreach (var item in PinnedItems.Concat(RecentItems))
+        {
+            var key = (
+                item.Eligibility.Kind,
+                item.Eligibility.ResourceId,
+                item.Eligibility.ScopeId,
+                item.Account.ObjectId,
+                item.Account.TenantId);
+            item.IsCurrentlyActive = activeKeys.Contains(key);
         }
     }
 

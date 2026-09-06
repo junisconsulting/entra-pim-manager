@@ -122,6 +122,24 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
     public bool ShowAuthContextBanner => Policy.RequiresAuthContext;
 
     /// <summary>
+    /// Whether to warn that this group can carry directory roles.
+    /// </summary>
+    /// <remarks>
+    /// It belongs here rather than on the list row. Joining a role-assignable group can
+    /// grant far more than group membership, and this is the screen where the user
+    /// commits to that — a badge back in the list is read while browsing, if at all.
+    /// The banner names the consequence instead of Microsoft's term for it, which tells
+    /// nobody anything who does not already know the term.
+    /// </remarks>
+    public bool ShowRoleAssignableBanner => Eligibility?.IsRoleAssignableGroup ?? false;
+
+    /// <summary>
+    /// Whether the Validate (dry-run) button applies. Azure Resource Manager has
+    /// no validation-only mode, so the button is hidden for Azure resource roles.
+    /// </summary>
+    public bool CanValidate => Eligibility?.Kind != PimResourceKind.AzureResourceRole;
+
+    /// <summary>
     /// Saved justification templates for the currently open eligibility.
     /// Refreshed by <see cref="LoadFavoritesAsync"/> each time <see cref="Open"/>
     /// fires; clicking a chip pastes the favourite into <see cref="Justification"/>.
@@ -172,7 +190,10 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
         DurationHours = Math.Min(defaultDuration, policy.MaximumDuration.TotalHours);
         Justification = string.Empty;
         TicketNumber = string.Empty;
-        TicketSystem = string.Empty;
+
+        // The ticket number is per incident and must never be carried over; the
+        // system is a constant of the tenant, so it comes prefilled from settings.
+        TicketSystem = _userSettings.Current.TicketSystemFor(account.TenantId) ?? string.Empty;
         ValidationMessage = null;
         ValidationSuccess = null;
         IsValidating = false;
@@ -189,7 +210,12 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
 
     partial void OnAccountChanged(SignedInAccount? value) => OnPropertyChanged(nameof(AccountLabel));
 
-    partial void OnEligibilityChanged(PimEligibility? value) => OnPropertyChanged(nameof(ResourceName));
+    partial void OnEligibilityChanged(PimEligibility? value)
+    {
+        OnPropertyChanged(nameof(ResourceName));
+        OnPropertyChanged(nameof(CanValidate));
+        OnPropertyChanged(nameof(ShowRoleAssignableBanner));
+    }
 
     partial void OnPolicyChanged(ActivationPolicy value)
     {
@@ -328,15 +354,18 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
             return;
         }
 
-        if (RequiresTicket && (string.IsNullOrWhiteSpace(TicketNumber) || string.IsNullOrWhiteSpace(TicketSystem)))
+        // Only the number is mandatory — the ticketing rule does not require a
+        // system, so demanding one would be our own hurdle, not Microsoft's.
+        if (RequiresTicket && string.IsNullOrWhiteSpace(TicketNumber))
         {
-            ValidationMessage = "Please provide a ticket number and ticket system.";
+            ValidationMessage = "Please provide a ticket number.";
             return;
         }
 
+        var ticketSystem = string.IsNullOrWhiteSpace(TicketSystem) ? null : TicketSystem.Trim();
         var ticket = string.IsNullOrWhiteSpace(TicketNumber)
             ? null
-            : new TicketInfo(TicketNumber.Trim(), TicketSystem.Trim());
+            : new TicketInfo(TicketNumber.Trim(), ticketSystem);
 
         // Only a real activation stamps the auth-context claim — a dry-run
         // must not fling an MFA prompt at the user.

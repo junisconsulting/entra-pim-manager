@@ -53,7 +53,7 @@ public sealed class MsalAuthProvider : IAuthenticationProvider
         claims ??= request.RequestOptions.OfType<AuthContextRequestOption>().FirstOrDefault()?.ClaimsJson;
 
         var result = await _authService
-            .AcquireTokenForAccountAsync(_accountId, _tenantId, _cloud, _scopes, claims, cancellationToken)
+            .AcquireTokenForAccountAsync(_accountId, _tenantId, _cloud, _scopes, claims, false, cancellationToken)
             .ConfigureAwait(false);
 
         request.Headers.Add("Authorization", $"Bearer {result.AccessToken}");

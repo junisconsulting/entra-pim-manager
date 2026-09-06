@@ -39,6 +39,15 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
+  <!-- Release notes ship with the build so the what's-new window works offline.
+       Named by version alone (ReleaseNotes.0.9.0.md) — the controller looks up the
+       running Major.Minor.Patch, which is what a -local build carries too. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\packaging\release-notes\*.md">
+      <LogicalName>ReleaseNotes.%(Filename).md</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="appsettings.local.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('appsettings.local.json')" />

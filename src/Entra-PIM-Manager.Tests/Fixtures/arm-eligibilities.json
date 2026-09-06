@@ -1,0 +1,46 @@
+{
+  "value": [
+    {
+      "properties": {
+        "scope": "/subscriptions/sub-1",
+        "roleDefinitionId": "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c",
+        "principalId": "user-oid-1",
+        "principalType": "User",
+        "status": "Provisioned",
+        "roleEligibilityScheduleId": "/subscriptions/sub-1/providers/Microsoft.Authorization/RoleEligibilitySchedules/sched-1",
+        "startDateTime": "2026-01-01T00:00:00Z",
+        "endDateTime": "2026-12-31T00:00:00Z",
+        "memberType": "Direct",
+        "expandedProperties": {
+          "scope": { "id": "/subscriptions/sub-1", "displayName": "Pay-As-You-Go", "type": "subscription" },
+          "roleDefinition": { "id": "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c", "displayName": "Contributor", "type": "BuiltInRole" },
+          "principal": { "id": "user-oid-1", "displayName": "User Account", "email": "user@example.com", "type": "User" }
+        }
+      },
+      "name": "elig-arm-1",
+      "id": "/subscriptions/sub-1/providers/Microsoft.Authorization/RoleEligibilityScheduleInstances/elig-arm-1",
+      "type": "Microsoft.Authorization/RoleEligibilityScheduleInstances"
+    },
+    {
+      "properties": {
+        "scope": "/subscriptions/sub-1/resourceGroups/rg-prod",
+        "roleDefinitionId": "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7",
+        "principalId": "group-oid-9",
+        "principalType": "Group",
+        "status": "Provisioned",
+        "roleEligibilityScheduleId": "/subscriptions/sub-1/providers/Microsoft.Authorization/RoleEligibilitySchedules/sched-2",
+        "startDateTime": "2026-01-01T00:00:00Z",
+        "endDateTime": null,
+        "memberType": "Group",
+        "expandedProperties": {
+          "scope": { "id": "/subscriptions/sub-1/resourceGroups/rg-prod", "displayName": "rg-prod", "type": "resourcegroup" },
+          "roleDefinition": { "id": "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7", "displayName": "Reader", "type": "BuiltInRole" },
+          "principal": { "id": "group-oid-9", "displayName": "grp-azure-readers", "email": null, "type": "Group" }
+        }
+      },
+      "name": "elig-arm-2",
+      "id": "/subscriptions/sub-1/resourceGroups/rg-prod/providers/Microsoft.Authorization/RoleEligibilityScheduleInstances/elig-arm-2",
+      "type": "Microsoft.Authorization/RoleEligibilityScheduleInstances"
+    }
+  ]
+}

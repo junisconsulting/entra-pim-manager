@@ -66,6 +66,7 @@ public sealed class ClaimsChallengeHandlerTests
                 Cloud,
                 It.IsAny<string[]>(),
                 It.IsAny<string?>(),
+                false,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(TestAuth.Result("stepped-up-token"));
         using var invoker = CreateInvoker(authService.Object, inner);
@@ -86,6 +87,7 @@ public sealed class ClaimsChallengeHandlerTests
                 Cloud,
                 It.IsAny<string[]>(),
                 It.IsAny<string?>(),
+                false,
                 It.IsAny<CancellationToken>()),
             Times.Once);
     }

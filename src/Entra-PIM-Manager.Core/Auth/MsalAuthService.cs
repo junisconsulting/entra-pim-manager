@@ -34,6 +34,10 @@ public sealed class MsalAuthService : IAuthService, IDisposable
     private readonly ILogger<MsalAuthService> _logger;
     private readonly SemaphoreSlim _authLock = new(1, 1);
 
+    // MSAL repeats the same environment warnings on every acquisition; this lets each
+    // distinct one through once per process. See MsalLogThrottle for the numbers.
+    private readonly MsalLogThrottle _msalLogThrottle = new();
+
     // One PCA per App Registration, keyed by client id. A PCA is bound to one
     // client id, and a client id exists in exactly one cloud, so the id is a
     // complete key. Each PCA gets its own cache file via TokenCacheFactory so
@@ -164,6 +168,7 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         EntraCloud cloud,
         string[] scopes,
         string? claimsChallenge = null,
+        bool silentOnly = false,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(objectId);
@@ -196,7 +201,7 @@ public sealed class MsalAuthService : IAuthService, IDisposable
 
             return authMethod == AuthMethod.DeviceCode
                 ? await AcquireForDeviceCodeAccountAsync(pca, account, tenantId, scopes, ct).ConfigureAwait(false)
-                : await AcquireForAccountAsync(pca, account, tenantId, scopes, claimsChallenge, ct).ConfigureAwait(false);
+                : await AcquireForAccountAsync(pca, account, tenantId, scopes, claimsChallenge, silentOnly, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -254,7 +259,12 @@ public sealed class MsalAuthService : IAuthService, IDisposable
             // tenant app accepts. The IAccount.HomeAccountId still reflects the
             // chosen identity's HOME tenant; AuthenticationResult.TenantId carries
             // the target.
+            // One consent prompt covers Graph and Azure Resource Manager: the
+            // ARM scope is consented here but never requested in the same
+            // token — a token carries one audience. (The device-code builder
+            // has no equivalent; those enrollments rely on tenant admin consent.)
             var result = await pca.AcquireTokenInteractive(_options.Scopes)
+                .WithExtraScopesToConsent(EntraCloudInfo.ResourceManagerScopes(cloud))
                 .WithPrompt(Prompt.SelectAccount)
                 .WithTenantId(tenantId)
                 .WithParentActivityOrWindow(_windowTracker.GetCurrentWindowHandle())
@@ -391,6 +401,7 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         string tenantId,
         string[] scopes,
         string? claimsChallenge,
+        bool silentOnly,
         CancellationToken ct)
     {
         try
@@ -412,7 +423,7 @@ public sealed class MsalAuthService : IAuthService, IDisposable
                 result.AuthenticationResultMetadata.TokenSource);
             return result;
         }
-        catch (MsalUiRequiredException)
+        catch (MsalUiRequiredException) when (!silentOnly)
         {
             // Re-auth required. Stay pinned to the same account and the same target tenant.
             var interactive = pca.AcquireTokenInteractive(scopes)
@@ -519,6 +530,13 @@ public sealed class MsalAuthService : IAuthService, IDisposable
             MsalLogLevel.Warning => LogLevel.Warning,
             _ => LogLevel.Debug,
         };
+
+        // IsEnabled first: at the default level most of this is dropped anyway, and
+        // there is no reason to normalise a message on its way to nowhere.
+        if (!_logger.IsEnabled(mappedLevel) || !_msalLogThrottle.ShouldLog(mappedLevel, message))
+        {
+            return;
+        }
 
         _logger.Log(mappedLevel, "[MSAL] {Message}", message);
     }

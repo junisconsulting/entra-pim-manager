@@ -45,6 +45,15 @@
                  TextTrimming="CharacterEllipsis"
                  Foreground="{DynamicResource TextSecondaryBrush}" />
 
+      <!-- Azure resource roles only: "Owner" is ambiguous while the same role is
+           active on several scopes, which is exactly when this alert fires twice. -->
+      <TextBlock Text="{Binding ScopeLabel}"
+                 FontSize="{DynamicResource FontSmall}"
+                 TextTrimming="CharacterEllipsis"
+                 Foreground="{DynamicResource TextTertiaryBrush}"
+                 IsVisible="{Binding ScopeLabel,
+                                     Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
       <!-- Live countdown, coloured by urgency via the shared converter -->
       <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,2,0,0">
         <TextBlock Text="Expires in"

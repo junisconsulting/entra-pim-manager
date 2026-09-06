@@ -44,9 +44,9 @@ src/Entra-PIM-Manager.Tests         →  xUnit, Moq                         (tes
 
 `Entra-PIM-Manager.Core` **must not** reference Avalonia, WPF, or any other UI toolkit. This is the layering boundary that keeps tests simple and the core logic UI-agnostic.
 
-### Graph access
+### Graph and ARM access
 
-All Microsoft Graph calls go through the service layer (`PimRoleService`, `PimGroupService`, `PolicyService`). Do not call `HttpClient` directly against `graph.microsoft.com` — this would bypass our auth, retry, and telemetry handling.
+All Microsoft Graph and Azure Resource Manager calls go through the service layer (`PimRoleService`, `PimGroupService`, `PimAzureResourceService`, `PolicyService`). Do not call `HttpClient` directly against `graph.microsoft.com` or `management.azure.com` — this would bypass our auth, retry, and claims-challenge handling. ARM clients come from `IArmClientFactory`.
 
 ### Async & cancellation
 
@@ -89,6 +89,5 @@ Entra PIM Manager is a privileged-access tool — please take these constraints 
 Pull requests in these areas need discussion first — they are tracked as backlog rather than as accepted contributions:
 
 - Approval workflows (approver view, pending requests)
-- Azure Resource Roles (separate API under `/roleManagement/azureResources`)
 - Renewal or extension of expiring assignments (`action: "selfExtend"`)
 - Bulk activation of multiple roles in a single step

@@ -14,9 +14,12 @@ installed clients can never update to**.
 
 1. **`main` is green** and the change you are releasing is merged.
 2. **Release notes exist** at `packaging/release-notes/{version}.md` — without the leading `v`.
-   The workflow throws *before* building if the file is missing. This file is used three times: the
-   GitHub release body, the Velopack installer welcome screen, and the in-app update prompt — which
-   is why they can never drift apart. Write it before tagging, not after.
+   The workflow throws *before* building if the file is missing. This file is used four times: the
+   GitHub release body, the Velopack installer welcome screen, the in-app update prompt, and — since
+   0.9.0 — the what's-new window, which reads it as an embedded resource (`ReleaseNotes.{version}.md`,
+   see the `EmbeddedResource` item in the app `.csproj`). That is why they can never drift apart, and
+   why the file has to exist **before** `vpk pack`: a build packed without it shows no window at all.
+   Write it before tagging, not after.
 3. **The version is not already released.** `gh release list` — tags are not reusable.
 4. **Run the `verify` skill** (build, tests, coverage gate).
 

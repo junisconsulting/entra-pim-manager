@@ -73,6 +73,30 @@ public sealed class PimGroupServiceTests
     }
 
     [Fact]
+    public async Task ActivateAsync_TicketWithoutASystem_FoldsInTheNumberAlone()
+    {
+        var handler = new FakeHttpMessageHandler(
+            FakeHttpMessageHandler.JsonResponse(
+                FixtureLoader.Load("activation-group-provisioned.json"), HttpStatusCode.Created));
+        var service = new PimGroupService(
+            GraphClientTestBuilder.Build(handler),
+            new Mock<IGroupResolver>().Object,
+            NullLogger<PimGroupService>.Instance);
+
+        var eligibility = new PimEligibility(PimResourceKind.GroupMembership, "grp-project-x", "group-1", "group-1", "user-oid-1", null, false);
+        var request = new ActivationRequest(eligibility, TimeSpan.FromHours(3), "Project work", new TicketInfo("CHG-77", null));
+
+        var result = await service.ActivateAsync(request);
+
+        Assert.True(result.IsSuccess);
+        var body = handler.RequestBodies[0];
+        Assert.NotNull(body);
+
+        // No stray separator where the system would have been.
+        Assert.Contains("[Ticket: CHG-77]", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ActivateAsync_WithAuthContextClaim_AttachesClaimsRequestOption()
     {
         var handler = new FakeHttpMessageHandler(

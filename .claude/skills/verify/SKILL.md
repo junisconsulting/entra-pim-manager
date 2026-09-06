@@ -38,6 +38,13 @@ dotnet build src/Entra-PIM-Manager.Tests/Entra-PIM-Manager.Tests.csproj -c Relea
 Expect ~3 s each once restored. This step is the type check, the StyleCop pass, and — because
 `AvaloniaUseCompiledBindingsByDefault` is on — the XAML binding check, all at once.
 
+**Add `--no-incremental` to the App build whenever a view model changed.** Verified 2026-09-05: after
+renaming several `SettingsPanelViewModel` members, an ordinary `dotnet build` reported **0 errors**
+while `TrayPopupWindow.axaml` still bound to every one of the old names — MSBuild considered the
+XAML up to date because only `.cs` files had changed, so the Avalonia compiler never ran. The
+binding check is the *only* automated proof the UI layer gets, and an incremental build silently
+skips it. With the flag, the same tree produced 20 `AVLN2000` errors.
+
 Most first-attempt failures here are the two StyleCop rules described in CLAUDE.md, "Code standards".
 
 ## 2. Unit tests — always

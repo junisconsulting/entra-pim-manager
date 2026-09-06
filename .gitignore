@@ -34,3 +34,8 @@ packaging/velopack/releases/
 [Tt]est[Rr]esults/
 coverage*.xml
 *.coverage
+
+# Logs. The app writes its day-files under %LocalAppData%, but a log copied into the
+# working tree for diagnosis must never be committed: the lines carry tenant GUIDs and
+# object ids, and this repository is public.
+*.log

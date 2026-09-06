@@ -1,10 +1,12 @@
 namespace EntraPimManager.Tests.Services;
 
+using EntraPimManager.Core.Arm;
 using EntraPimManager.Core.Caching;
 using EntraPimManager.Core.Models;
 using EntraPimManager.Core.Services;
 using EntraPimManager.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 
 public sealed class PolicyServiceTests
 {
@@ -16,9 +18,9 @@ public sealed class PolicyServiceTests
     {
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("policy-directory-full.json")));
-        var service = new PolicyService(GraphClientTestBuilder.Build(handler), new PolicyCache(), NullLogger<PolicyService>.Instance);
+        var service = new PolicyService(GraphClientTestBuilder.Build(handler), Mock.Of<IPimAzureResourceService>(), new PolicyCache(), NullLogger<PolicyService>.Instance);
 
-        var policy = await service.GetPolicyAsync(TenantA, PimResourceKind.DirectoryRole, "role-def-ga");
+        var policy = await service.GetPolicyAsync(TenantA, PimResourceKind.DirectoryRole, "role-def-ga", "/");
 
         // The end-user expiration rule is PT4H; the admin-eligibility rule (P365D)
         // shares the same .NET type and must not leak into the parsed policy.
@@ -36,9 +38,9 @@ public sealed class PolicyServiceTests
     {
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("policy-minimal.json")));
-        var service = new PolicyService(GraphClientTestBuilder.Build(handler), new PolicyCache(), NullLogger<PolicyService>.Instance);
+        var service = new PolicyService(GraphClientTestBuilder.Build(handler), Mock.Of<IPimAzureResourceService>(), new PolicyCache(), NullLogger<PolicyService>.Instance);
 
-        var policy = await service.GetPolicyAsync(TenantA, PimResourceKind.GroupMembership, "group-x");
+        var policy = await service.GetPolicyAsync(TenantA, PimResourceKind.GroupMembership, "group-x", "group-x");
 
         Assert.Equal(TimeSpan.FromHours(8), policy.MaximumDuration);
         Assert.True(policy.RequiresJustification);
@@ -53,10 +55,10 @@ public sealed class PolicyServiceTests
     {
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("policy-directory-full.json")));
-        var service = new PolicyService(GraphClientTestBuilder.Build(handler), new PolicyCache(), NullLogger<PolicyService>.Instance);
+        var service = new PolicyService(GraphClientTestBuilder.Build(handler), Mock.Of<IPimAzureResourceService>(), new PolicyCache(), NullLogger<PolicyService>.Instance);
 
-        await service.GetPolicyAsync(TenantA, PimResourceKind.DirectoryRole, "role-def-ga");
-        await service.GetPolicyAsync(TenantA, PimResourceKind.DirectoryRole, "role-def-ga");
+        await service.GetPolicyAsync(TenantA, PimResourceKind.DirectoryRole, "role-def-ga", "/");
+        await service.GetPolicyAsync(TenantA, PimResourceKind.DirectoryRole, "role-def-ga", "/");
 
         Assert.Equal(1, handler.RequestCount);
     }
@@ -69,10 +71,10 @@ public sealed class PolicyServiceTests
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("policy-directory-full.json")),
             FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("policy-directory-full.json")));
-        var service = new PolicyService(GraphClientTestBuilder.Build(handler), new PolicyCache(), NullLogger<PolicyService>.Instance);
+        var service = new PolicyService(GraphClientTestBuilder.Build(handler), Mock.Of<IPimAzureResourceService>(), new PolicyCache(), NullLogger<PolicyService>.Instance);
 
-        await service.GetPolicyAsync(TenantA, PimResourceKind.DirectoryRole, "role-def-ga");
-        await service.GetPolicyAsync(TenantB, PimResourceKind.DirectoryRole, "role-def-ga");
+        await service.GetPolicyAsync(TenantA, PimResourceKind.DirectoryRole, "role-def-ga", "/");
+        await service.GetPolicyAsync(TenantB, PimResourceKind.DirectoryRole, "role-def-ga", "/");
 
         Assert.Equal(2, handler.RequestCount);
     }
@@ -90,13 +92,79 @@ public sealed class PolicyServiceTests
         var handler = new FakeHttpMessageHandler(
             FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("policy-minimal.json")));
         var service = new PolicyService(
-            GraphClientTestBuilder.Build(handler), new PolicyCache(), NullLogger<PolicyService>.Instance);
+            GraphClientTestBuilder.Build(handler), Mock.Of<IPimAzureResourceService>(), new PolicyCache(), NullLogger<PolicyService>.Instance);
 
-        await service.GetPolicyAsync(TenantA, kind, "group-x");
+        await service.GetPolicyAsync(TenantA, kind, "group-x", "group-x");
 
         var query = Uri.UnescapeDataString(handler.Requests[0].RequestUri!.Query);
         Assert.Contains("scopeId eq 'group-x' and scopeType eq 'Group'", query, StringComparison.Ordinal);
         Assert.Contains($"roleDefinitionId eq '{expectedRoleDefinitionId}'", query, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetPolicyAsync_ForAnAzureResourceRole_ReadsThroughArmAtTheScope()
+    {
+        var expected = new ActivationPolicy { MaximumDuration = TimeSpan.FromHours(2) };
+        var arm = new Mock<IPimAzureResourceService>();
+        arm
+            .Setup(a => a.GetPolicyAsync("/subscriptions/sub-1", "role-def-contributor", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+        var handler = new FakeHttpMessageHandler(new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError));
+        var service = new PolicyService(
+            GraphClientTestBuilder.Build(handler), arm.Object, new PolicyCache(), NullLogger<PolicyService>.Instance);
+
+        var policy = await service.GetPolicyAsync(
+            TenantA, PimResourceKind.AzureResourceRole, "role-def-contributor", "/subscriptions/sub-1");
+
+        Assert.Same(expected, policy);
+        Assert.Equal(0, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task GetPolicyAsync_SameAzureRoleAtTwoScopes_IsCachedPerScope()
+    {
+        // Contributor on the subscription and Contributor on one of its resource
+        // groups are different policies — a role-only cache key would serve the
+        // first one for both.
+        var arm = new Mock<IPimAzureResourceService>();
+        arm
+            .Setup(a => a.GetPolicyAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ActivationPolicy());
+        var service = new PolicyService(
+            GraphClientTestBuilder.Build(new FakeHttpMessageHandler(new HttpResponseMessage())),
+            arm.Object,
+            new PolicyCache(),
+            NullLogger<PolicyService>.Instance);
+
+        await service.GetPolicyAsync(TenantA, PimResourceKind.AzureResourceRole, "role-def-contributor", "/subscriptions/sub-1");
+        await service.GetPolicyAsync(TenantA, PimResourceKind.AzureResourceRole, "role-def-contributor", "/subscriptions/sub-1");
+        await service.GetPolicyAsync(TenantA, PimResourceKind.AzureResourceRole, "role-def-contributor", "/subscriptions/sub-1/resourceGroups/rg-1");
+
+        arm.Verify(
+            a => a.GetPolicyAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task GetPolicyAsync_WhenArmRejectsTheRead_FallsBackToDefaults()
+    {
+        // An eligible-only user may not be allowed to read the policy at all;
+        // the form still opens and ARM enforces the real rules on activation.
+        var arm = new Mock<IPimAzureResourceService>();
+        arm
+            .Setup(a => a.GetPolicyAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ArmRequestException(403, "AuthorizationFailed", "The client does not have authorization"));
+        var service = new PolicyService(
+            GraphClientTestBuilder.Build(new FakeHttpMessageHandler(new HttpResponseMessage())),
+            arm.Object,
+            new PolicyCache(),
+            NullLogger<PolicyService>.Instance);
+
+        var policy = await service.GetPolicyAsync(
+            TenantA, PimResourceKind.AzureResourceRole, "role-def-contributor", "/subscriptions/sub-1");
+
+        Assert.Equal(TimeSpan.FromHours(8), policy.MaximumDuration);
+        Assert.True(policy.RequiresJustification);
     }
 
     [Fact]
@@ -110,9 +178,9 @@ public sealed class PolicyServiceTests
                 """{"error":{"code":"PermissionScopeNotGranted","message":"Authorization failed."}}""",
                 System.Net.HttpStatusCode.Forbidden));
         var service = new PolicyService(
-            GraphClientTestBuilder.Build(handler), new PolicyCache(), NullLogger<PolicyService>.Instance);
+            GraphClientTestBuilder.Build(handler), Mock.Of<IPimAzureResourceService>(), new PolicyCache(), NullLogger<PolicyService>.Instance);
 
-        var policy = await service.GetPolicyAsync(TenantA, PimResourceKind.GroupMembership, "group-x");
+        var policy = await service.GetPolicyAsync(TenantA, PimResourceKind.GroupMembership, "group-x", "group-x");
 
         Assert.Equal(TimeSpan.FromHours(8), policy.MaximumDuration);
         Assert.True(policy.RequiresJustification);

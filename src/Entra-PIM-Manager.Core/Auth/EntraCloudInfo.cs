@@ -29,6 +29,25 @@ public static class EntraCloudInfo
         _ => "https://login.microsoftonline.com",
     };
 
+    /// <summary>
+    /// Azure Resource Manager base URL for <paramref name="cloud"/>, no trailing
+    /// slash. PIM for Azure Resources lives here, not in Graph.
+    /// </summary>
+    public static string ResourceManagerBaseUrl(EntraCloud cloud) => cloud switch
+    {
+        EntraCloud.China => "https://management.chinacloudapi.cn",
+        _ => "https://management.azure.com",
+    };
+
+    /// <summary>
+    /// The delegated scope for Azure Resource Manager in <paramref name="cloud"/>
+    /// (the App Registration's "Azure Service Management → user_impersonation"
+    /// permission). Derived from the cloud on purpose — it is not configurable —
+    /// and never mixed into a Graph token request: one audience per token.
+    /// </summary>
+    public static string[] ResourceManagerScopes(EntraCloud cloud) =>
+        [$"{ResourceManagerBaseUrl(cloud)}/user_impersonation"];
+
     /// <summary>MSAL cloud instance for <paramref name="cloud"/>.</summary>
     public static AzureCloudInstance MsalCloudInstance(EntraCloud cloud) => cloud switch
     {

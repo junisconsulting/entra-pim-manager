@@ -32,6 +32,8 @@ PIM exposes two separate endpoint trees:
 
 A user activating "Global Administrator" hits the first. A user activating "member of grp-tier0-emergency" hits the second. **Both flows can coexist** for the same user, and a UI listing eligibilities must query both surfaces and merge results.
 
+PIM for **Azure resources** (Azure RBAC) is a third surface on Azure Resource Manager, not on Graph — see the `azure-rbac-pim-arm-api` skill. The Graph beta `privilegedAccess/azureResources` endpoints are deprecated (they stop returning data on 2026-10-28); never use them.
+
 ## The five essential calls
 
 ### 1. List my eligible directory roles

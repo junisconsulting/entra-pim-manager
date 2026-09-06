@@ -28,7 +28,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     /// shell's <c>NeedsConfiguration</c> state.
     /// </summary>
     private const string NoRegistrationMessage =
-        "No App Registration is configured yet. Add one under Settings → App Registration first.";
+        "No App Registration is configured yet. Add one under Settings → Tenants first.";
 
     private static readonly TimeSpan AuthCallTimeout = TimeSpan.FromMinutes(2);
 
@@ -49,6 +49,10 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     // tell their abort apart from a 10-minute timeout (both surface as
     // OperationCanceledException) and stay silent instead of showing an error.
     private bool _deviceCodeUserCancelled;
+
+    // True when the caller already named the tenant — the picker then has nothing
+    // left to offer and stays hidden.
+    private bool _targetPreselected;
 
     [ObservableProperty]
     private bool _isOpen;
@@ -95,7 +99,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
         _logger = logger;
 
         // One target per configured entry, in configuration order — the same
-        // wording as the rows in Settings → APP REGISTRATION. Entries the
+        // wording as the cards in Settings → TENANTS. Entries the
         // validator would have rejected cannot occur here; the parse guards are
         // for the compiler, not for a real case.
         var targets = new List<SignInTarget>();
@@ -121,10 +125,10 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     public IReadOnlyList<SignInTarget> SignInTargets { get; }
 
     /// <summary>
-    /// Whether the "Sign in with" ComboBox is worth showing. With a single
-    /// registration there is nothing to choose.
+    /// Whether the "Sign in with" ComboBox is worth showing. With a single registration,
+    /// or when the tenant came from the card the user clicked in, there is nothing to choose.
     /// </summary>
-    public bool IsTargetChoiceVisible => SignInTargets.Count > 1;
+    public bool IsTargetChoiceVisible => SignInTargets.Count > 1 && !_targetPreselected;
 
     /// <summary>X-offset for the slide-in transform — mirrors <c>ActivationPanelViewModel</c>.</summary>
     public double PanelOffsetX => IsOpen ? 0 : 420;
@@ -139,13 +143,40 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     /// </summary>
     public void Open()
     {
+        _targetPreselected = false;
+        Reset();
+        SelectedTarget = SignInTargets.FirstOrDefault();
+        IsOpen = true;
+    }
+
+    /// <summary>
+    /// Opens the slide-in for one tenant, chosen in Settings. The picker stays hidden —
+    /// the user already said which tenant this is by clicking its card.
+    /// </summary>
+    /// <param name="cloud">Cloud of the tenant to sign in to.</param>
+    /// <param name="tenantId">Tenant to sign in to.</param>
+    public void Open(EntraCloud cloud, string tenantId)
+    {
+        var target = SignInTargets.FirstOrDefault(
+            t => t.Cloud == cloud && string.Equals(t.TenantId, tenantId, StringComparison.OrdinalIgnoreCase));
+
+        // No target means the registration was added but the app has not restarted, so
+        // the startup snapshot never saw it. Fall back to the picker rather than opening
+        // a panel whose Sign-in button could only fail.
+        _targetPreselected = target is not null;
+        Reset();
+        SelectedTarget = target ?? SignInTargets.FirstOrDefault();
+        IsOpen = true;
+    }
+
+    private void Reset()
+    {
         ErrorMessage = null;
         IsConnecting = false;
-        SelectedTarget = SignInTargets.FirstOrDefault();
         IsAdvancedExpanded = false;
         DeviceCodeUserCode = null;
         DeviceCodeVerificationUri = null;
-        IsOpen = true;
+        OnPropertyChanged(nameof(IsTargetChoiceVisible));
     }
 
     partial void OnDeviceCodeUserCodeChanged(string? value)

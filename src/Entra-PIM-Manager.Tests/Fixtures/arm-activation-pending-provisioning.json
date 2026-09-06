@@ -1,0 +1,18 @@
+{
+  "properties": {
+    "scope": "/subscriptions/sub-1",
+    "roleDefinitionId": "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c",
+    "principalId": "user-oid-1",
+    "principalType": "User",
+    "requestType": "SelfActivate",
+    "status": "PendingProvisioning",
+    "approvalId": null,
+    "scheduleInfo": {
+      "startDateTime": "2026-09-04T08:00:00Z",
+      "expiration": { "type": "AfterDuration", "endDateTime": null, "duration": "PT1H" }
+    }
+  },
+  "name": "0f7d0c3e-2f1a-4c8e-9b7d-1a2b3c4d5e6f",
+  "id": "/subscriptions/sub-1/providers/Microsoft.Authorization/RoleAssignmentScheduleRequests/0f7d0c3e-2f1a-4c8e-9b7d-1a2b3c4d5e6f",
+  "type": "Microsoft.Authorization/RoleAssignmentScheduleRequests"
+}

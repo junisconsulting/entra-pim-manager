@@ -1,6 +1,7 @@
 namespace EntraPimManager.AppAvalonia.ViewModels;
 
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using EntraPimManager.Core.Auth;
 
 /// <summary>
@@ -15,20 +16,68 @@ using EntraPimManager.Core.Auth;
 /// </remarks>
 public sealed partial class AccountListItemViewModel : ObservableObject
 {
+    private readonly Action<AccountListItemViewModel, string?> _rename;
+
     [ObservableProperty]
     private string? _tenantName;
 
-    public AccountListItemViewModel(SignedInAccount account)
+    /// <summary>
+    /// Short self-chosen name for this enrollment, or <c>null</c> when the user
+    /// has not set one. Owned by the shell (it persists the value); the row only
+    /// displays it and hands edits back through the rename callback.
+    /// </summary>
+    [ObservableProperty]
+    private string? _accountAlias;
+
+    /// <summary>True while the row's name line is swapped for the alias text box.</summary>
+    [ObservableProperty]
+    private bool _isRenaming;
+
+    /// <summary>Text-box content while renaming. Committed or discarded, never read otherwise.</summary>
+    [ObservableProperty]
+    private string _aliasDraft = string.Empty;
+
+    public AccountListItemViewModel(
+        SignedInAccount account,
+        Action<AccountListItemViewModel, string?> rename,
+        IRelayCommand<SignedInAccount?> select,
+        IAsyncRelayCommand<SignedInAccount?> remove)
     {
         ArgumentNullException.ThrowIfNull(account);
+        ArgumentNullException.ThrowIfNull(rename);
+        ArgumentNullException.ThrowIfNull(select);
+        ArgumentNullException.ThrowIfNull(remove);
         Account = account;
+        _rename = rename;
+        SelectCommand = select;
+        RemoveCommand = remove;
     }
 
-    /// <summary>The underlying account — bound by the SelectAccount / RemoveAccount commands.</summary>
+    /// <summary>The underlying account — passed as the parameter of the two commands below.</summary>
     public SignedInAccount Account { get; }
 
-    /// <summary>Display name of the enrolled identity (UI text).</summary>
-    public string DisplayName => Account.DisplayName ?? Account.Username;
+    /// <summary>
+    /// Makes this enrollment the active context. The shell's own command instance, held
+    /// here so the row template binds against its own data context.
+    /// </summary>
+    /// <remarks>
+    /// The row used to reach the shell by walking up to the enclosing items control. That
+    /// only worked while the account list was a flat top-level list — once rows sit inside
+    /// a tenant node, the walk finds the inner control instead and silently binds to the
+    /// wrong thing. Carrying the command is what the rest of the codebase does anyway.
+    /// </remarks>
+    public IRelayCommand<SignedInAccount?> SelectCommand { get; }
+
+    /// <summary>Removes this enrollment. See <see cref="SelectCommand"/> for why it lives here.</summary>
+    public IAsyncRelayCommand<SignedInAccount?> RemoveCommand { get; }
+
+    /// <summary>
+    /// Name line of the row (and the source of the avatar initials): the alias
+    /// when set, otherwise the identity's Entra display name, otherwise the UPN.
+    /// The UPN keeps its own line below, so this row never hides which account
+    /// it really is — the alias is a convenience, not a substitute.
+    /// </summary>
+    public string DisplayName => AccountAlias ?? Account.DisplayName ?? Account.Username;
 
     /// <summary>UPN / login of the enrolled identity (UI text).</summary>
     public string Username => Account.Username;
@@ -50,5 +99,25 @@ public sealed partial class AccountListItemViewModel : ObservableObject
     /// </summary>
     public bool IsDeviceCodeAccount => Account.AuthMethod == AuthMethod.DeviceCode;
 
+    [RelayCommand]
+    private void BeginRename()
+    {
+        AliasDraft = AccountAlias ?? string.Empty;
+        IsRenaming = true;
+    }
+
+    [RelayCommand]
+    private void CommitRename()
+    {
+        var trimmed = AliasDraft.Trim();
+        _rename(this, trimmed.Length == 0 ? null : trimmed);
+        IsRenaming = false;
+    }
+
+    [RelayCommand]
+    private void CancelRename() => IsRenaming = false;
+
     partial void OnTenantNameChanged(string? value) => OnPropertyChanged(nameof(TenantLabel));
+
+    partial void OnAccountAliasChanged(string? value) => OnPropertyChanged(nameof(DisplayName));
 }

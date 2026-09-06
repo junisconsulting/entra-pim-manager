@@ -1,80 +1,38 @@
 namespace EntraPimManager.Core.ErrorHandling;
 
+using EntraPimManager.Core.Arm;
 using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Models;
 using Microsoft.Graph.Models.ODataErrors;
 using Microsoft.Identity.Client;
 
 /// <summary>
-/// Translates Graph <see cref="ODataError"/> responses into <see cref="UserFacingError"/>
-/// based on the <c>error.code</c> and HTTP status. Raw Graph messages never reach the UI.
+/// Translates Graph <see cref="ODataError"/> and Azure Resource Manager
+/// <see cref="ArmRequestException"/> responses into <see cref="UserFacingError"/>
+/// based on the <c>error.code</c> and HTTP status. The two surfaces share most
+/// PIM error codes. Raw service messages never reach the UI.
 /// </summary>
 public static class PimErrorMapper
 {
+    private const string MfaMessage = "This activation requires MFA verification. Please re-authenticate.";
+    private const string JustificationMessage = "A justification is required.";
+    private const string TicketMessage = "A ticket reference is required.";
+    private const string DurationMessage = "The requested duration exceeds the allowed maximum.";
+    private const string RefreshMessage = "Eligibility no longer available. Please refresh the list.";
+    private const string GenericActivationMessage = "Activation failed. See the log file for details.";
+
     /// <summary>Maps a Graph error to a user-facing error.</summary>
     public static UserFacingError Map(ODataError error)
     {
         ArgumentNullException.ThrowIfNull(error);
+        return Map(error.Error?.Code ?? string.Empty, error.ResponseStatusCode, error.Error?.Message);
+    }
 
-        var code = error.Error?.Code ?? string.Empty;
-        var statusCode = error.ResponseStatusCode;
-
-        return code switch
-        {
-            "RoleAssignmentExists" or "RoleAssignmentInstanceAlreadyExists" or "RoleAssignmentAlreadyExists" =>
-                Error(ErrorSeverity.Info, "This role is already active."),
-
-            "JustificationRuleViolated" or "JustificationRequired" =>
-                Error(ErrorSeverity.Validation, "A justification is required.", "justification"),
-
-            "TicketingRuleViolated" or "TicketInfoRequired" =>
-                Error(ErrorSeverity.Validation, "A ticket reference is required.", "ticket"),
-
-            "MfaRuleViolated" or "MfaRuleNotSatisfied" or "MfaRequired" =>
-                Error(ErrorSeverity.StepUpRequired, "This activation requires MFA verification. Please re-authenticate."),
-
-            "MaximumDurationExceeded" or "ScheduleExpirationRuleViolated" =>
-                Error(ErrorSeverity.Validation, "The requested duration exceeds the allowed maximum.", "duration"),
-
-            "StartTimeInPast" or "InvalidStartDateTime" =>
-                Error(ErrorSeverity.Validation, "The start time is in the past. Please check the system clock."),
-
-            "InvalidScope" or "ScopeNotAllowed" =>
-                Error(ErrorSeverity.Fatal, "Invalid scope for this activation."),
-
-            "EligibilityNotFound" or "RoleAssignmentDoesNotExist" or "ResourceNotFound" =>
-                Error(ErrorSeverity.RefreshList, "Eligibility no longer available. Please refresh the list."),
-
-            "ConcurrentActivationInProgress" =>
-                Error(ErrorSeverity.RefreshList, "Another activation request is already in progress."),
-
-            "InsufficientPermissions" or "Authorization_RequestDenied" =>
-                Error(ErrorSeverity.Fatal, "Missing permission. Please contact your administrator."),
-
-            // The app asked for a scope this tenant never consented to. Only a
-            // tenant admin can fix it, and only on the App Registration — say
-            // which side the problem is on instead of "contact your admin".
-            "PermissionScopeNotGranted" =>
-                Error(ErrorSeverity.Fatal, "This tenant has not granted the App Registration all required permissions. An admin must re-grant admin consent for it."),
-
-            "RoleAssignmentApprovalRequired" =>
-                Error(ErrorSeverity.Info, "This activation requires approval. The request has been submitted."),
-
-            // RoleAssignmentRequestAcrsValidationFailed on the directory-role
-            // surface; substring match also covers whatever the group surface
-            // calls it — the exact code lands in the log either way.
-            _ when code.Contains("AcrsValidationFailed", StringComparison.OrdinalIgnoreCase) =>
-                Error(ErrorSeverity.StepUpRequired, "This activation requires additional identity verification, which could not be completed. Please try again."),
-
-            _ when statusCode == 429 =>
-                Error(ErrorSeverity.Throttled, "Too many requests. Please wait a moment."),
-
-            _ when statusCode is 500 or 503 =>
-                Error(ErrorSeverity.Fatal, "The Microsoft service is currently unavailable. Please try again later."),
-
-            _ =>
-                Error(ErrorSeverity.Fatal, "Activation failed. See the log file for details."),
-        };
+    /// <summary>Maps an Azure Resource Manager error to a user-facing error.</summary>
+    public static UserFacingError Map(ArmRequestException error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        return Map(error.Code, error.StatusCode, error.Detail);
     }
 
     /// <summary>
@@ -90,6 +48,7 @@ public static class PimErrorMapper
         return exception switch
         {
             ODataError odataError => Map(odataError),
+            ArmRequestException armError => Map(armError),
 
             // Must precede the MsalServiceException arm: a WAM prompt the user
             // dismissed can surface as either MsalClientException or
@@ -173,7 +132,137 @@ public static class PimErrorMapper
             return "Sign-in for this account is no longer valid (its App Registration may have changed). Remove the account in Settings and add it again.";
         }
 
+        // AADSTS65001: the tenant has not consented to a permission the app now
+        // requests — every scope change reopens this window. The refresh token
+        // stays valid and consent is checked at token issuance, so the account
+        // recovers by itself once an admin consents; say so instead of "see the log".
+        if (exception is MsalUiRequiredException
+            && exception.Message.Contains("AADSTS65001", StringComparison.Ordinal))
+        {
+            return "This tenant has not consented to the app's current permissions. An admin must grant admin consent for the App Registration; the account then recovers on its own.";
+        }
+
+        // Cancelled while acquiring the ARM token, not while waiting for Azure.
+        // Keeping the two apart is what the 2026-09-04 field case cost: a token
+        // problem reported as "the request timed out" sends the admin hunting for
+        // a network fault that isn't there.
+        if (exception is ArmSignInPendingException)
+        {
+            return "Signing in for this tenant's Azure permission didn't finish. If it keeps happening, the tenant has most likely not consented to the app's Azure permission — an admin must grant it.";
+        }
+
+        // Azure Resource Manager refused the read outright — typically
+        // AuthorizationFailed while the token lacks the Azure Service
+        // Management permission, or a tenant without any Azure subscriptions.
+        if (exception is ArmRequestException)
+        {
+            return "Azure Resource Manager rejected the request. See the log file for details.";
+        }
+
         return "Couldn't load eligibilities for this tenant. See the log file for details.";
+    }
+
+    private static UserFacingError Map(string code, int statusCode, string? message) => code switch
+    {
+        "RoleAssignmentExists" or "RoleAssignmentInstanceAlreadyExists" or "RoleAssignmentAlreadyExists" =>
+            Error(ErrorSeverity.Info, "This role is already active."),
+
+        "JustificationRuleViolated" or "JustificationRequired" =>
+            Error(ErrorSeverity.Validation, JustificationMessage, "justification"),
+
+        "TicketingRuleViolated" or "TicketInfoRequired" =>
+            Error(ErrorSeverity.Validation, TicketMessage, "ticket"),
+
+        "MfaRuleViolated" or "MfaRuleNotSatisfied" or "MfaRequired" =>
+            Error(ErrorSeverity.StepUpRequired, MfaMessage),
+
+        "MaximumDurationExceeded" or "ScheduleExpirationRuleViolated" =>
+            Error(ErrorSeverity.Validation, DurationMessage, "duration"),
+
+        "StartTimeInPast" or "InvalidStartDateTime" =>
+            Error(ErrorSeverity.Validation, "The start time is in the past. Please check the system clock."),
+
+        // ARM folds every policy failure into one code and names the failed
+        // rule in the message: 'The following policy rules failed: ["MfaRule"]'.
+        "RoleAssignmentRequestPolicyValidationFailed" => MapPolicyRuleFailure(message),
+
+        // ARM: self-deactivation inside Microsoft's 5-minute minimum active duration.
+        "ActiveDurationTooShort" =>
+            Error(ErrorSeverity.Validation, "The role was activated less than 5 minutes ago and cannot be deactivated yet."),
+
+        "InvalidRoleAssignmentRequestSchedule" =>
+            Error(ErrorSeverity.Validation, "The requested activation schedule was rejected. Check the duration and the system clock.", "duration"),
+
+        "InvalidScope" or "ScopeNotAllowed" =>
+            Error(ErrorSeverity.Fatal, "Invalid scope for this activation."),
+
+        "EligibilityNotFound" or "RoleAssignmentDoesNotExist" or "ResourceNotFound" =>
+            Error(ErrorSeverity.RefreshList, RefreshMessage),
+
+        "ConcurrentActivationInProgress" =>
+            Error(ErrorSeverity.RefreshList, "Another activation request is already in progress."),
+
+        "InsufficientPermissions" or "Authorization_RequestDenied" or "AuthorizationFailed" =>
+            Error(ErrorSeverity.Fatal, "Missing permission. Please contact your administrator."),
+
+        // The app asked for a scope this tenant never consented to. Only a
+        // tenant admin can fix it, and only on the App Registration — say
+        // which side the problem is on instead of "contact your admin".
+        "PermissionScopeNotGranted" =>
+            Error(ErrorSeverity.Fatal, "This tenant has not granted the App Registration all required permissions. An admin must re-grant admin consent for it."),
+
+        "RoleAssignmentApprovalRequired" =>
+            Error(ErrorSeverity.Info, "This activation requires approval. The request has been submitted."),
+
+        // RoleAssignmentRequestAcrsValidationFailed on the directory-role and
+        // ARM surfaces; substring match also covers whatever the group surface
+        // calls it — the exact code lands in the log either way.
+        _ when code.Contains("AcrsValidationFailed", StringComparison.OrdinalIgnoreCase) =>
+            Error(ErrorSeverity.StepUpRequired, "This activation requires additional identity verification, which could not be completed. Please try again."),
+
+        _ when statusCode == 429 =>
+            Error(ErrorSeverity.Throttled, "Too many requests. Please wait a moment."),
+
+        _ when statusCode is 500 or 503 =>
+            Error(ErrorSeverity.Fatal, "The Microsoft service is currently unavailable. Please try again later."),
+
+        _ =>
+            Error(ErrorSeverity.Fatal, GenericActivationMessage),
+    };
+
+    /// <summary>
+    /// ARM reports which end-user rule an activation violated only inside the
+    /// message text, so the rule name decides the severity and field hint.
+    /// </summary>
+    private static UserFacingError MapPolicyRuleFailure(string? message)
+    {
+        var rules = message ?? string.Empty;
+        if (rules.Contains("MfaRule", StringComparison.OrdinalIgnoreCase))
+        {
+            return Error(ErrorSeverity.StepUpRequired, MfaMessage);
+        }
+
+        if (rules.Contains("JustificationRule", StringComparison.OrdinalIgnoreCase))
+        {
+            return Error(ErrorSeverity.Validation, JustificationMessage, "justification");
+        }
+
+        if (rules.Contains("TicketingRule", StringComparison.OrdinalIgnoreCase))
+        {
+            return Error(ErrorSeverity.Validation, TicketMessage, "ticket");
+        }
+
+        if (rules.Contains("ExpirationRule", StringComparison.OrdinalIgnoreCase))
+        {
+            return Error(ErrorSeverity.Validation, DurationMessage, "duration");
+        }
+
+        if (rules.Contains("EligibilityRule", StringComparison.OrdinalIgnoreCase))
+        {
+            return Error(ErrorSeverity.RefreshList, RefreshMessage);
+        }
+
+        return Error(ErrorSeverity.Fatal, GenericActivationMessage);
     }
 
     /// <summary>
@@ -207,7 +296,7 @@ public static class PimErrorMapper
         {
             return Error(
                 ErrorSeverity.Fatal,
-                $"{msal.Message} Open Settings → App Registration and add an entry for that tenant.");
+                $"{msal.Message} Open Settings → Tenants and add an entry for that tenant.");
         }
 
         // Raised by MsalAuthService when Entra issued the token for a different
@@ -217,7 +306,7 @@ public static class PimErrorMapper
         {
             return Error(
                 ErrorSeverity.Fatal,
-                "The sign-in ended up in a different tenant than the selected entry. Check the entry's tenant id in Settings → App Registration and try again.");
+                "The sign-in ended up in a different tenant than the selected entry. Check the entry's tenant id in Settings → Tenants and try again.");
         }
 
         // AADSTS700016: the client id is unknown in the directory it was sent to.
@@ -228,7 +317,7 @@ public static class PimErrorMapper
         {
             return Error(
                 ErrorSeverity.Fatal,
-                "This app registration is unknown in the selected tenant. Check the entry's tenant id, client id and cloud in Settings → App Registration, and that admin consent was granted in that tenant.");
+                "This app registration is unknown in the selected tenant. Check the entry's tenant id, client id and cloud in Settings → Tenants, and that admin consent was granted in that tenant.");
         }
 
         // AADSTS7000218: the token endpoint demanded a client secret/assertion,

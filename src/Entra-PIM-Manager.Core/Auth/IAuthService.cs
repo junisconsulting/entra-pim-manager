@@ -84,11 +84,26 @@ public interface IAuthService
     /// <paramref name="claimsChallenge"/> is supplied, the token is re-requested
     /// to satisfy a Conditional Access challenge.
     /// </summary>
+    /// <param name="objectId">Object id of the enrolled user.</param>
+    /// <param name="tenantId">Tenant the token is requested for.</param>
+    /// <param name="cloud">Sovereign cloud the enrollment lives in.</param>
+    /// <param name="scopes">Scopes to request. Graph and ARM scopes are never mixed.</param>
+    /// <param name="claimsChallenge">Decoded claims JSON from a Conditional Access challenge, or null.</param>
+    /// <param name="silentOnly">
+    /// True to fail instead of opening a WAM prompt. Background reads pass this: the
+    /// interactive fallback runs while a process-wide lock is held, so an unanswered
+    /// prompt stalls every other account's token renewal until the caller's timeout —
+    /// and for a scope the tenant has not consented to, the prompt cannot succeed
+    /// anyway unless the user may self-consent. A user-initiated activation leaves it
+    /// false, because a Conditional Access step-up is exactly what the prompt is for.
+    /// </param>
+    /// <param name="ct">Cancellation token.</param>
     Task<AuthenticationResult> AcquireTokenForAccountAsync(
         string objectId,
         string tenantId,
         EntraCloud cloud,
         string[] scopes,
         string? claimsChallenge = null,
+        bool silentOnly = false,
         CancellationToken ct = default);
 }

@@ -9,8 +9,10 @@ using EntraPimManager.Core.Models;
 /// Never persisted across restarts — PIM policy ids change on implicit onboarding.
 /// </summary>
 /// <remarks>
-/// Cache keys are tenant-scoped (<c>{tenantId}:{kind}:{resourceId}</c>) so policies
-/// from different tenants cannot collide on the same role definition id.
+/// Cache keys are tenant-scoped (<c>{tenantId}:{kind}:{scopeId}:{resourceId}</c>) so
+/// policies from different tenants cannot collide on the same role definition id.
+/// The scope is part of the key because an Azure resource role carries a
+/// different policy at every scope it is assigned at.
 /// </remarks>
 public sealed class PolicyCache
 {
@@ -33,9 +35,9 @@ public sealed class PolicyCache
     /// Returns the cached policy for the given resource in the given tenant,
     /// or <c>null</c> if absent or expired.
     /// </summary>
-    public ActivationPolicy? Get(string tenantId, PimResourceKind kind, string resourceId)
+    public ActivationPolicy? Get(string tenantId, PimResourceKind kind, string resourceId, string scopeId)
     {
-        var key = BuildKey(tenantId, kind, resourceId);
+        var key = BuildKey(tenantId, kind, resourceId, scopeId);
         if (_entries.TryGetValue(key, out var entry) && entry.ExpiresAt > _timeProvider.GetUtcNow())
         {
             return entry.Policy;
@@ -45,17 +47,18 @@ public sealed class PolicyCache
     }
 
     /// <summary>Stores <paramref name="policy"/> under the tenant-scoped key with the cache TTL.</summary>
-    public void Set(string tenantId, PimResourceKind kind, string resourceId, ActivationPolicy policy)
+    public void Set(string tenantId, PimResourceKind kind, string resourceId, string scopeId, ActivationPolicy policy)
     {
-        var key = BuildKey(tenantId, kind, resourceId);
+        var key = BuildKey(tenantId, kind, resourceId, scopeId);
         _entries[key] = new CacheEntry(policy, _timeProvider.GetUtcNow() + Ttl);
     }
 
-    private static string BuildKey(string tenantId, PimResourceKind kind, string resourceId)
+    private static string BuildKey(string tenantId, PimResourceKind kind, string resourceId, string scopeId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceId);
-        return $"{tenantId}:{kind}:{resourceId}";
+        ArgumentException.ThrowIfNullOrWhiteSpace(scopeId);
+        return $"{tenantId}:{kind}:{scopeId}:{resourceId}";
     }
 
     private sealed record CacheEntry(ActivationPolicy Policy, DateTimeOffset ExpiresAt);

@@ -7,6 +7,45 @@ v1 out-of-scope list lives in `CONTRIBUTING.md`.
 
 ---
 
+## Azure role folding is unverified at the scale it was built for
+
+**Evidence:** `ShellViewModel.BuildGroupRows` folds an Azure role held on more than one scope
+into one `AzureRoleGroup` node ("Owner · 12 scopes"). The keying was wrong until 0.9.0 — ARM
+returns `roleDefinitionId` scope-prefixed, so every scope produced a distinct key and the folding
+never fired at all; `RoleDefinitionKey` now compares the trailing GUID only, the same thing
+`GetPolicyAsync` already did. That fix is covered by unit tests, but it has only been exercised
+against tenants holding a handful of Azure eligibilities. The case it exists for — an
+infrastructure team eligible on every subscription of a large estate, several hundred rows — has
+not been run against a real tenant. Deliberately deferred past 0.9.0 by the maintainer
+(2026-09-06): the tenant that would show it is not available yet, and a defect here is a
+follow-up patch, not a release blocker.
+
+**Addressed in 0.9.0, so do not re-diagnose it:** the policy prefetch used to warm one policy per
+(role, scope) with no bound — several hundred ARM `roleManagementPolicyAssignments` GETs per
+refresh on an estate this size — and `PolicyService.DefaultAfterReadFailure` logged each one's
+expected `AuthorizationFailed` as a warning. The prefetch is now capped at
+`ShellViewModel.PolicyPrefetchLimit` (pinned rows first, the rest lazily behind the row's spinner),
+and that expected code logs at Debug. What is still unverified is the folding itself.
+
+**Why it matters:** two failure modes look alike from a screenshot. If the keying regresses, the
+section shows hundreds of flat rows instead of a handful of nodes — the exact problem the folding
+was built to solve. If it over-folds, two genuinely different roles collapse into one node and a
+user activates at a scope they did not mean to. Note also that the list has **no virtualization
+anywhere** (every level is a plain `ItemsControl`, and the search hides rows via `IsVisible`
+rather than removing them), so the first expansion of a several-hundred-row section is where any
+lag would appear.
+
+**What makes the fix safe:** run `.claude/manual-test-checklist.md` §1d and §3 against a tenant
+with an Azure role held on many scopes — one node per role with the right scope count, the scopes
+correct inside it, activation hitting the intended scope (verified in the portal), and a role on
+a single scope still rendered as a plain row. Watch the first expansion for lag before reaching
+for virtualization: the section most likely to go flat into the hundreds is **ADMINISTRATIVE
+UNITS**, not Azure, because folding is gated on `Kind == AzureResourceRole` and AU-scoped
+directory roles get none. The cheaper fix there is the existing node pattern applied to AU roles,
+not a virtualizing rewrite of the list.
+
+---
+
 ## Releases are not code-signed — no signing exists anywhere in the pipeline
 
 **Evidence:** `.github/workflows/release.yml` contains no signing step, no certificate secret and
@@ -126,3 +165,136 @@ permissions — an admin must grant consent; the account recovers on its own aft
 it on a device-code enrollment in a tenant where consent was deliberately withheld. A re-enrollment button
 on the failing row is the larger follow-up; it needs the device-code UI flow driven from the
 account list, which does not exist yet.
+
+**Status 2026-09-04 (0.9.0):** the diagnostic arm is in (`DescribeFetchFailure` maps
+`AADSTS65001`; unit-tested). Still open: the field verification on a withheld-consent tenant, and
+the re-enrollment button.
+
+---
+
+## PIM for Azure Resources: assumptions not yet verified against a tenant
+
+**Evidence:** the ARM surface (`PimAzureResourceService`, 0.9.0) was written from the Microsoft
+Learn reference on a Linux host without an Azure test tenant. What the unit tests pin is the
+contract as documented; these points need one run against a real tenant (the manual checklist
+§0/§2/§3/§6 covers them). **Observed 2026-09-04 and no longer open:** the tenant-root `asTarget()`
+listing does return management-group *and* subscription scopes in one response, and it does expand
+group membership (`memberType: "Group"`, `principalId` = the group). Activation of a
+group-inherited subscription role with the user's own oid worked end to end. Still open: whether ARM honours
+`$filter=roleDefinitionId eq '…'` on `roleManagementPolicyAssignments` (the service also matches
+client-side, so a silently ignored filter only costs payload); whether an eligible-only user may
+read that policy at all (if not: `AuthorizationFailed` → default limits, ARM enforces the real
+rules on the request); a `SelfActivate` PUT without `scheduleInfo.startDateTime`; the `status`
+value a fresh 201 carries; the exact HTTP 400 body of `RoleAssignmentRequestAcrsValidationFailed`;
+the consent-prompt behaviour of an already-enrolled broker account in a tenant without the
+permission; `management.chinacloudapi.cn` end to end.
+
+**Why it matters:** each of these is a place where the docs and the service could disagree
+without any unit test noticing — the symptom would be an empty Azure list, a default-only
+activation form, or a 400 on activation.
+
+**What makes the fix safe:** run the checklist against a tenant with one eligible Azure role and
+record the observed status values and bodies as fixtures. Anything that differs is a one-line
+change in `PimAzureResourceService` plus the fixture.
+
+---
+
+## Azure resource roles activate at the eligibility's scope only (no JEA scope reduction)
+
+**Evidence:** the portal lets an eligible user activate "Contributor on subscription X" at one of
+its resource groups instead (`GET {scope}/providers/Microsoft.Authorization/eligibleChildResources`).
+`PimAzureResourceService.ActivateAsync` always PUTs at `Eligibility.ScopeId`.
+
+**Why it matters:** least privilege — a user who only needs one resource group gets the whole
+subscription.
+
+**What makes the fix safe:** a scope picker in the activation panel fed by the child-resources
+call, defaulting to the eligibility's own scope; the policy for the activation is the one at the
+chosen scope. Only worth building once a user asks for it.
+
+---
+
+## No proactive MFA step-up for ARM's MfaRule
+
+**Evidence:** an Azure role whose settings require MFA (without an authentication context) is
+rejected with `RoleAssignmentRequestPolicyValidationFailed ["MfaRule"]` when the ARM token was
+issued without MFA; `PimErrorMapper` maps it to StepUpRequired and the user re-authenticates and
+retries. This is parity with the Graph path, which handles the equivalent `MfaRuleViolated` the
+same way.
+
+**Why it matters:** one extra round trip and a confusing message for users whose sign-in did not
+involve MFA.
+
+**What makes the fix safe:** find out which claims request satisfies MfaRule on ARM (an `acrs`
+value from a Conditional Access authentication context is the documented mechanism; a bare
+`amr: mfa` claims request is not) before wiring anything — and keep it on the ARM token only.
+
+---
+
+## No per-tenant opt-out for the Azure surface
+
+**Evidence:** `EligibilityAggregator.FetchAzureSafeAsync` backs the ARM surface off for an hour
+after a failed token acquisition; a broker account in a tenant that never consents to Azure
+Service Management still sees one WAM consent prompt per app start. Chosen deliberately for
+0.9.0 (the 0.8.0 precedent accepted the same for a Graph scope).
+
+**Why it matters:** a tenant that uses PIM only for directory roles has no Azure roles to show
+and no reason to consent.
+
+**What makes the fix safe:** a boolean on `TenantAppRegistration` (default on), read by the
+aggregator before it touches ARM, validated like the other fields — only if a tenant actually
+asks; until then the backoff is the answer.
+
+## Tooltips inside the Settings account row never fire
+
+**Evidence:** the account row's content `Grid` (`TrayPopupWindow.axaml`, inside the
+`SelectAccountCommand` button) carries `IsHitTestVisible="False"` so the row click reaches the
+button. Every `ToolTip.Tip` declared inside it — the tenant GUID on the tenant line, the
+explanation on the "Device code" badge — therefore never receives a pointer and never shows.
+Noticed while adding the per-account alias in 0.9.0; left untouched to keep that diff surgical.
+
+**Why it matters:** the device-code badge is the only place the app explains why such an account
+cannot satisfy a Conditional Access authentication context, and that explanation is unreachable.
+
+**What makes the fix safe:** move both tooltips onto the enclosing `Button` (which is hit-testable)
+and check the row still selects the account on click and still starts a drag from the handle — the
+button's pointer capture is what the drag handle exists to work around.
+
+## The same Azure role at the same scope can appear twice
+
+**Evidence:** observed 2026-09-04 — an account eligible for `Owner` on a management group both
+directly and through a group gets two rows from ARM's `asTarget()` listing, identical in the UI
+(`memberType` is `Direct` on one and `Group` on the other, and the app carries neither). Listed as
+out of scope when 0.9.0 was planned; now seen in a real tenant.
+
+**Why it matters:** the rows are indistinguishable, so the user cannot tell why they hold the role
+twice or which assignment expires when. It is cosmetic beyond that: `MarkActiveEligibilities`
+(`ShellViewModel.cs`) keys on (kind, resourceId, scopeId, oid, tenantId), so activating either row
+marks **both** active and disables both — there is no double-activation trap, and the activation
+form is identical because the policy is per (role, scope).
+
+**What makes the fix safe:** carry `memberType` and, for `Group`, the group's display name from
+`expandedProperties.principal` into `PimEligibility`, and show it as a source line ("via
+grp-az-…"). That keeps both rows, which is the honest representation — a de-duplication would
+silently drop the fact that two independent assignments exist. Only worth it once a customer sees
+it outside a test.
+
+## Administrative units are named by object id, not display name
+
+**Evidence:** added in 0.9.0 — `PimEligibility.IsAdministrativeUnitScoped` splits AU-scoped
+directory roles into their own section, and the row reads `Administrative unit:
+{3f6b1c9e-…}`. Before this, an AU-scoped role was indistinguishable from the tenant-wide role of
+the same name; the id is a strict improvement, but it is not a name.
+
+**Why it matters:** an admin with roles on several units has to map GUIDs by hand, and the search
+box can only match the id. The information is there — Graph exposes `directoryScope` as a
+navigation property on `unifiedRoleEligibilityScheduleInstance` — so this is about permission, not
+plumbing.
+
+**What makes the fix safe:** establish first whether `$expand=directoryScope` (or a separate
+`/directory/administrativeUnits/{id}` read) is covered by the scopes already consented to. If it
+needs `AdministrativeUnit.Read.All`, that is a **new delegated permission and therefore a decision,
+not a detail** — it requires admin consent in every tenant again, and 0.9.0 already spends that
+budget on Azure Service Management. The `entra-pim-graph-api` skill warns that `$expand` fails
+silently on some PIM surfaces, so verify against a live tenant before relying on it, and keep the
+id as the fallback the way `TenantLabelFormatter` falls back to the tenant GUID.

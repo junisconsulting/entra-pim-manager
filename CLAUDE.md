@@ -7,8 +7,8 @@ this file is loaded every session and that one is not.
 
 ## Project
 
-A Windows tray application for activating Microsoft Entra PIM eligibilities (Directory Roles and
-PIM for Groups) across multiple tenants — without UAC, admin rights, or a service install.
+A Windows tray application for activating Microsoft Entra PIM eligibilities (Directory Roles, PIM
+for Groups, and PIM for Azure Resources) across multiple tenants — without UAC, admin rights, or a service install.
 Per-user install to `%LocalAppData%\Programs\Entra-PIM-Manager\`, WAM-broker auth, Velopack auto-update.
 Public repository under MIT (`LICENSE`); contributions are inbound=outbound, no CLA.
 
@@ -18,7 +18,8 @@ Assume every commit is world-readable: no tenant IDs, no internal hostnames, no 
 
 - `CONTRIBUTING.md` — build/test, code conventions, security conventions, PR process, out-of-scope list
 - `README.md` — user-facing feature set, install, app-registration summary
-- `docs/app-registration-setup.md` — the six delegated Graph scopes and the consent procedure
+- `docs/app-registration-setup.md` — the delegated permissions (Graph scopes plus Azure Service
+  Management) and the consent procedure
 - `docs/engineering-backlog.md` — known gaps and deferred work, with evidence pointers
 - `SECURITY.md` — vulnerability reporting
 
@@ -27,13 +28,14 @@ Assume every commit is world-readable: no tenant IDs, no internal hostnames, no 
 | Skill | Use for |
 | --- | --- |
 | `.claude/skills/entra-pim-graph-api/` | anything calling `roleManagement/*` or `identityGovernance/privilegedAccess/group/*` — endpoints, casing traps, error codes, policy rules |
+| `.claude/skills/azure-rbac-pim-arm-api/` | anything calling `management.azure.com/*/providers/Microsoft.Authorization/role*Schedule*` or `roleManagementPolicyAssignments` — PIM for Azure Resources: URLs, bodies, status values, error codes, differences from Graph |
 | `.claude/skills/msal-dotnet-desktop-wam/` | anything touching `Microsoft.Identity.Client`, the WAM broker, the token cache, or claims challenges |
 | `.claude/skills/verify/` | the pass/fail procedure after every code change |
 | `.claude/skills/release/` | cutting a release (tag → CI → GitHub release) |
 | `.claude/skills/retro/` | end-of-session sweep for learnings |
 
-Never write PIM Graph or MSAL desktop code from memory — both areas are full of obsolete patterns
-that are common in training data. The skills are the authority.
+Never write PIM Graph, PIM ARM or MSAL desktop code from memory — all three areas are full of
+obsolete patterns that are common in training data. The skills are the authority.
 
 ## Architecture (three projects, one layering boundary)
 
@@ -46,9 +48,10 @@ src/Entra-PIM-Manager.Tests         →  xUnit, Moq                         (tes
 `Core` must not reference Avalonia, WPF, or any other UI toolkit. That boundary is what keeps the
 tests fast and runnable on a non-Windows host.
 
-All Graph access goes through the service layer (`PimRoleService`, `PimGroupService`,
-`PolicyService`, `TenantInfoService`). Never call `HttpClient` directly against `graph.microsoft.com`
-— that bypasses auth, retry, and the claims-challenge handler.
+All Graph and ARM access goes through the service layer (`PimRoleService`, `PimGroupService`,
+`PimAzureResourceService`, `PolicyService`, `TenantInfoService`). Never call `HttpClient` directly
+against `graph.microsoft.com` or `management.azure.com` — that bypasses auth, retry, and the
+claims-challenge handler. ARM clients come from `IArmClientFactory`.
 
 Stack: .NET 8 LTS · Avalonia 12 + CommunityToolkit.Mvvm · MSAL.NET 4.66 + `Microsoft.Identity.Client.Broker`
 · Microsoft.Graph SDK v5 · Velopack 1.2 · Serilog · xUnit + Moq.
@@ -89,6 +92,11 @@ from `CONTRIBUTING.md` work as documented; the flags above are the Linux-host ad
   value to a local and comment the local instead. And **SA1204** (static members before non-static):
   a private static helper added below the instance methods fails the build — reorder it, or drop
   `static` / inline it.
+- Icons in XAML are **text glyphs** (`Text="&#x2605;"` in a `TextBlock`), not hand-drawn
+  `PathIcon` geometry. A path whose coordinates do not match the control's viewbox renders as a
+  half-visible smudge at 12-16 px, and nothing in the build catches it — the trap has already
+  cost two rounds in `TrayPopupWindow.axaml` (the close x, the pin star). Vector icons come from
+  the resource dictionary or not at all.
 - Comment intent, not mechanics: the maintainers are identity admins as much as developers.
 
 ## Security conventions
@@ -103,8 +111,11 @@ This is a privileged-access tool; these are not style preferences.
 - **No hardcoded tenant or client IDs.** Placeholders live in
   `src/Entra-PIM-Manager.App.Avalonia/appsettings.json` (committed); real values live in
   `appsettings.local.json` next to it (gitignored) or in the per-user config under `%LocalAppData%`.
-- **Delegated permissions only**, least privilege. The six scopes in that `appsettings.json` are the
-  whole surface — adding one is a decision, not a detail, and needs admin consent in every tenant.
+- **Delegated permissions only**, least privilege. The Graph scopes in that `appsettings.json` plus
+  the ARM scope derived per cloud in `EntraCloudInfo.ResourceManagerScopes` (Azure Service
+  Management → `user_impersonation`) are the whole surface — adding one is a decision, not a
+  detail, and needs admin consent in every tenant. Graph and ARM scopes are never mixed in one
+  token request.
 
 ## Platform facts
 
@@ -117,6 +128,9 @@ This is a privileged-access tool; these are not style preferences.
   Pre-0.7.0 per-cloud client ids are folded in at startup by `LegacyRegistrationMigration`.
 - Directory-role and PIM-for-Groups endpoints differ in casing and shape — see the
   `entra-pim-graph-api` skill rather than inferring symmetry.
+- PIM for Azure Resources is an ARM API (`management.azure.com`, api-version `2020-10-01`), not
+  Graph: PascalCase bodies, `PUT` under a client GUID, no validation-only mode, an unsatisfied
+  authentication context comes back as HTTP 400. See the `azure-rbac-pim-arm-api` skill.
 - `AvaloniaUseCompiledBindingsByDefault` is on: binding errors are build errors, not runtime surprises.
 
 ## Known gaps
@@ -140,5 +154,20 @@ A wrong doc is worse than no doc.
 Conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`
 
 Before committing a multi-file feature: run `/ponytail-review` on the diff, decide each finding with
-the user, then commit. This is deliberately NOT part of `verify` — verify is a deterministic
-pass/fail gate; the review is a judgment pass on the final diff.
+the user, then run a correctness pass with `/code-review` — ponytail-review explicitly excludes bugs,
+so neither pass substitutes for the other. Both are deliberately NOT part of `verify` — verify is a
+deterministic pass/fail gate; the reviews are judgment passes on the final diff.
+
+Pick the `/code-review` level by what the diff touches, not by its size. The deciding question:
+what does a mistake here cost the user's tenant or their machine?
+
+- **low** — Avalonia views, XAML, ViewModel wiring; refactors beyond what `-warnaserror`, StyleCop
+  and compiled bindings already prove
+- **medium** — read-only Graph / ARM call paths (listing eligibilities, policies, tenant info),
+  parsing and error mapping, changes to services or models with many callers
+- **high** — anything that mutates tenant state (activation, deactivation, schedule requests),
+  MSAL / token cache / scope / claims-challenge code, persisted settings and migrations, the
+  installer and autostart footprint (`HKCU\...\Run`, Velopack, per-user install paths)
+
+Skip the correctness pass only for docs- or typo-level diffs where the build is the whole proof.
+When a diff spans levels, the highest-touched level wins.

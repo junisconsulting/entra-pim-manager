@@ -12,6 +12,10 @@ namespace EntraPimManager.Core.Models;
 /// <param name="StartDateTime">When the activation started.</param>
 /// <param name="EndDateTime">When the activation expires — drives the countdown UI.</param>
 /// <param name="AssignmentScheduleId">Id of the underlying assignment schedule instance.</param>
+/// <param name="ScopeLabel">
+/// Human-readable scope for Azure resource roles (e.g. <c>Subscription: Prod</c>);
+/// <c>null</c> for the Graph surfaces. Display only — never used for matching.
+/// </param>
 public sealed record ActiveAssignment(
     PimResourceKind Kind,
     string DisplayName,
@@ -20,4 +24,5 @@ public sealed record ActiveAssignment(
     string PrincipalId,
     DateTimeOffset? StartDateTime,
     DateTimeOffset? EndDateTime,
-    string AssignmentScheduleId);
+    string AssignmentScheduleId,
+    string? ScopeLabel = null);

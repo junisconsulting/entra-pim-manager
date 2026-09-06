@@ -23,4 +23,4 @@ Anything relevant — related Entra PIM features, Microsoft Graph endpoints, rel
 
 ---
 
-Before opening a feature request, please check whether the topic is listed as out-of-scope in [CONTRIBUTING.md](../../CONTRIBUTING.md) — areas like approval workflows, Azure Resource Roles, or bulk activation are tracked as backlog rather than as accepted contributions.
+Before opening a feature request, please check whether the topic is listed as out-of-scope in [CONTRIBUTING.md](../../CONTRIBUTING.md) — areas like approval workflows or bulk activation are tracked as backlog rather than as accepted contributions.

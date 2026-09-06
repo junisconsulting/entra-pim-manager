@@ -15,6 +15,559 @@
         Background="Transparent"
         Topmost="True">
 
+  <Window.Resources>
+    <!-- One eligibility row. Shared by the plain list and by the children of a
+         role node, so the two can never drift apart. -->
+    <DataTemplate x:Key="EligibilityRowTemplate" DataType="vm:EligibilityItemViewModel">
+      <Border Classes="row" IsVisible="{Binding IsVisible}">
+       <Grid ColumnDefinitions="*,Auto">
+        <!-- The pin sits outside the activation button, not inside it: the row is
+             made non-clickable while its role is active, and pinning has to keep
+             working exactly then. -->
+        <Button Grid.Column="0"
+                Classes="ghost"
+                Command="{Binding ActivateCommand}"
+                IsHitTestVisible="{Binding CanActivate}"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch"
+                Padding="0">
+          <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+            <StackPanel Grid.Column="0"
+                        Opacity="{Binding LabelOpacity}">
+              <!-- Under a role node the heading is the scope: the role name is the
+                   node's own caption right above and would just repeat 400 times. -->
+              <!-- Medium, not SemiBold: this is the deepest level in the tree, and
+                   at SemiBold it weighed exactly as much as the tenant header three
+                   levels above it. -->
+              <!-- Wraps rather than ellipsis: role names are where the meaning is, and
+                   "App and Group Mgmt Operator - Re…" hides the very part that says
+                   which restricted variant this is. A second line is cheaper than
+                   opening the row to find out. -->
+              <TextBlock Text="{Binding PrimaryLabel}"
+                         FontSize="{DynamicResource FontBody}"
+                         FontWeight="Medium"
+                         Foreground="{DynamicResource TextPrimaryBrush}"
+                         TextWrapping="Wrap" />
+              <TextBlock Text="{Binding KindLabel}"
+                         FontSize="{DynamicResource FontSmall}"
+                         Foreground="{DynamicResource TextSecondaryBrush}"
+                         Margin="0,2,0,0"
+                         IsVisible="{Binding ShowKindLine}" />
+              <!-- Azure resource roles only: "Contributor" says nothing
+                   without the subscription / resource group it applies to. -->
+              <TextBlock Text="{Binding ScopeLabel}"
+                         FontSize="{DynamicResource FontSmall}"
+                         Foreground="{DynamicResource TextTertiaryBrush}"
+                         TextTrimming="CharacterEllipsis"
+                         IsVisible="{Binding ShowScopeLine}" />
+              <!-- Shortcut rows only: tenant and scope, because they stand outside
+                   the tenant group that would otherwise say so. -->
+              <TextBlock Text="{Binding ContextLine}"
+                         FontSize="{DynamicResource FontSmall}"
+                         Foreground="{DynamicResource TextSecondaryBrush}"
+                         TextTrimming="CharacterEllipsis"
+                         IsVisible="{Binding ContextLine,
+                                             Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <TextBlock Text="{Binding ActivationErrorText}"
+                         FontSize="{DynamicResource FontCaption}"
+                         FontWeight="Medium"
+                         Foreground="{DynamicResource DangerBrush}"
+                         TextWrapping="Wrap"
+                         Margin="0,3,0,0"
+                         IsVisible="{Binding ActivationErrorText,
+                                             Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+            <!-- Idle: chevron pointing into the activation panel. -->
+            <PathIcon Grid.Column="1"
+                      Data="M9 6l6 6-6 6"
+                      Width="14" Height="14"
+                      Foreground="{DynamicResource TextTertiaryBrush}"
+                      VerticalAlignment="Center"
+                      IsVisible="{Binding CanActivate}" />
+            <!-- Busy: spinner while the shell loads the policy + opens the panel.
+                 Visible during the 1-3s cold-cache window only; the prefetch
+                 usually has the policy ready by the time the user clicks. -->
+            <Border Grid.Column="1"
+                    Classes="spinner"
+                    Width="13" Height="13"
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding IsActivating}">
+              <Border.RenderTransform>
+                <RotateTransform />
+              </Border.RenderTransform>
+              <Path Data="M 6.5,1 A 5.5,5.5 0 1 1 1,6.5"
+                    Stroke="{DynamicResource AccentBrush}"
+                    StrokeThickness="1.6"
+                    StrokeLineCap="Round" />
+            </Border>
+            <Border Grid.Column="1"
+                    Background="{DynamicResource SuccessSoftBrush}"
+                    CornerRadius="4"
+                    Padding="6,2"
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding IsCurrentlyActive}">
+              <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                <Ellipse Width="6" Height="6"
+                         Fill="{DynamicResource SuccessBrush}"
+                         VerticalAlignment="Center" />
+                <TextBlock Text="Active"
+                           FontSize="10"
+                           FontWeight="Medium"
+                           Foreground="{DynamicResource SuccessBrush}" />
+              </StackPanel>
+            </Border>
+          </Grid>
+        </Button>
+
+        <Button Grid.Column="1"
+                Classes="ghost"
+                Padding="7,4"
+                Margin="0,0,2,0"
+                Command="{Binding TogglePinCommand}"
+                ToolTip.Tip="Pin to the top of the list">
+          <!-- Text glyphs, not a PathIcon: a hand-drawn pin outline renders as a
+               half-filled smudge at 12 px, the same reason the remove buttons in
+               this file use U+2715 instead of a path. Hollow when unpinned, solid
+               when pinned — same metrics, so the row does not jump on toggle. -->
+          <Panel>
+            <TextBlock Text="&#x2606;"
+                       FontSize="15"
+                       Foreground="{DynamicResource TextTertiaryBrush}"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Center"
+                       IsVisible="{Binding !IsPinned}" />
+            <TextBlock Text="&#x2605;"
+                       FontSize="15"
+                       Foreground="{DynamicResource AccentBrush}"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Center"
+                       IsVisible="{Binding IsPinned}" />
+          </Panel>
+        </Button>
+       </Grid>
+      </Border>
+    </DataTemplate>
+
+    <!-- One enrolled account, rendered inside its tenant card. The row reaches its
+         own commands (SelectCommand / RemoveCommand) rather than walking up to an
+         enclosing items control: nested inside a tenant, that walk would find the
+         inner control and silently bind to the wrong data context. -->
+    <DataTemplate x:Key="AccountRowTemplate" x:DataType="vm:AccountListItemViewModel">
+      <Border CornerRadius="6"
+              Background="{DynamicResource Surface2Brush}"
+              BorderBrush="{DynamicResource BorderSubtleBrush}"
+              BorderThickness="1"
+              Margin="0,0,0,4">
+        <Grid ColumnDefinitions="*,Auto,Auto">
+          <TextBox Grid.Column="0"
+                   Margin="6,4"
+                   FontSize="{DynamicResource FontSmall}"
+                   PlaceholderText="Alias, e.g. EADM"
+                   Text="{Binding AliasDraft}"
+                   IsVisible="{Binding IsRenaming}"
+                   KeyDown="OnAliasBoxKeyDown" />
+
+          <Button Grid.Column="0"
+                  Classes="ghost"
+                  HorizontalAlignment="Stretch"
+                  HorizontalContentAlignment="Left"
+                  Padding="10,8"
+                  IsVisible="{Binding !IsRenaming}"
+                  Command="{Binding SelectCommand}"
+                  CommandParameter="{Binding Account}">
+            <Grid ColumnDefinitions="Auto,*" IsHitTestVisible="False">
+              <Border Grid.Column="0"
+                      Width="30" Height="30"
+                      CornerRadius="15"
+                      Background="{DynamicResource AccentSoftBrush}"
+                      VerticalAlignment="Center">
+                <TextBlock Text="{Binding DisplayName, Converter={x:Static cv:InitialsConverter.Instance}}"
+                           FontSize="12"
+                           FontWeight="Bold"
+                           Foreground="{DynamicResource AccentBrush}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+              </Border>
+              <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="{Binding DisplayName}"
+                           FontSize="{DynamicResource FontBody}"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           TextTrimming="CharacterEllipsis" />
+                <!-- The UPN keeps its own line: the alias is a convenience, never a
+                     disguise for which identity this actually is. -->
+                <TextBlock Text="{Binding Username}"
+                           FontSize="{DynamicResource FontSmall}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           TextTrimming="PrefixCharacterEllipsis"
+                           ToolTip.Tip="{Binding Username}" />
+
+                <Border IsVisible="{Binding IsDeviceCodeAccount}"
+                        Background="{DynamicResource Surface1Brush}"
+                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="5,1"
+                        HorizontalAlignment="Left"
+                        Margin="0,4,0,0"
+                        ToolTip.Tip="Signed in with a device code. Roles protected by a Conditional Access authentication context cannot be activated with this sign-in method — remove the account and add it again using the standard sign-in.">
+                  <TextBlock Text="Device code"
+                             FontSize="{DynamicResource FontSmall}"
+                             FontWeight="Medium"
+                             Foreground="{DynamicResource TextSecondaryBrush}" />
+                </Border>
+              </StackPanel>
+            </Grid>
+          </Button>
+
+          <Button Grid.Column="1"
+                  Classes="ghost"
+                  Padding="10,6"
+                  IsVisible="{Binding !IsRenaming}"
+                  Click="OnRenameAccountClick"
+                  ToolTip.Tip="Rename this account">
+            <TextBlock Text="&#x270E;"
+                       FontSize="13"
+                       Foreground="{DynamicResource TextTertiaryBrush}"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Center" />
+          </Button>
+
+          <Button Grid.Column="1"
+                  Classes="ghost"
+                  Padding="10,6"
+                  IsVisible="{Binding IsRenaming}"
+                  Command="{Binding CommitRenameCommand}"
+                  ToolTip.Tip="Save the alias (Enter). An empty field clears it.">
+            <TextBlock Text="&#x2713;"
+                       FontSize="13"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource AccentBrush}"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Center" />
+          </Button>
+
+          <Button Grid.Column="2"
+                  Classes="ghost"
+                  Padding="10,6"
+                  CornerRadius="0,6,6,0"
+                  IsVisible="{Binding !IsRenaming}"
+                  Command="{Binding RemoveCommand}"
+                  CommandParameter="{Binding Account}"
+                  ToolTip.Tip="Remove this account">
+            <TextBlock Text="&#x2715;"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource DangerBrush}"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Center" />
+          </Button>
+        </Grid>
+      </Border>
+    </DataTemplate>
+
+    <!-- One tenant: its registration, its ticket system, and the accounts signed
+         into it. The drag handle sits here rather than on the account rows — the
+         tenant is what the list is ordered by, and the flat account order is
+         derived from it on drop. A tenant nobody is signed into has no place in
+         that flat order, so it carries no handle. -->
+    <DataTemplate x:Key="TenantNodeTemplate" x:DataType="vm:TenantNodeViewModel">
+      <Border Background="{DynamicResource Surface1Brush}"
+              BorderBrush="{DynamicResource BorderSubtleBrush}"
+              BorderThickness="1"
+              CornerRadius="6"
+              Padding="0,0,0,6"
+              DragDrop.AllowDrop="True"
+              DragDrop.DragOver="OnTenantRowDragOver"
+              DragDrop.Drop="OnTenantRowDrop">
+        <StackPanel Spacing="6">
+
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+            <Border Grid.Column="0"
+                    Width="22"
+                    Background="Transparent"
+                    Cursor="SizeAll"
+                    IsVisible="{Binding HasAccounts}"
+                    ToolTip.Tip="Drag to reorder tenants"
+                    PointerPressed="OnTenantRowPointerPressed"
+                    PointerMoved="OnTenantRowPointerMoved"
+                    PointerReleased="OnTenantRowPointerReleased">
+              <TextBlock Text="&#x22EE;&#x22EE;"
+                         FontSize="14"
+                         FontWeight="Bold"
+                         Foreground="{DynamicResource TextTertiaryBrush}"
+                         HorizontalAlignment="Center"
+                         VerticalAlignment="Center" />
+            </Border>
+
+            <StackPanel Grid.Column="1" Spacing="3" Margin="0,10,0,0">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBlock Grid.Column="0"
+                           Text="{Binding Title}"
+                           FontSize="{DynamicResource FontBody}"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center"
+                           ToolTip.Tip="{Binding TenantId}" />
+                <Border Grid.Column="1"
+                        Background="{DynamicResource AccentSoftBrush}"
+                        CornerRadius="4"
+                        Padding="6,2"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding !IsChina}">
+                  <TextBlock Text="{Binding CloudName}"
+                             FontSize="10"
+                             FontWeight="Medium"
+                             Foreground="{DynamicResource AccentTextBrush}" />
+                </Border>
+                <Border Grid.Column="1"
+                        Background="{DynamicResource WarningSoftBrush}"
+                        CornerRadius="4"
+                        Padding="6,2"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding IsChina}">
+                  <TextBlock Text="{Binding CloudName}"
+                             FontSize="10"
+                             FontWeight="Medium"
+                             Foreground="{DynamicResource WarningBrush}" />
+                </Border>
+              </Grid>
+              <StackPanel Orientation="Horizontal" Spacing="5">
+                <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                         Fill="{DynamicResource SuccessBrush}"
+                         IsVisible="{Binding IsVerified}" />
+                <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                         Fill="{DynamicResource WarningBrush}"
+                         IsVisible="{Binding !IsVerified}" />
+                <TextBlock Text="{Binding Status}"
+                           FontSize="{DynamicResource FontSmall}"
+                           Foreground="{DynamicResource TextTertiaryBrush}"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" />
+              </StackPanel>
+            </StackPanel>
+
+            <Button Grid.Column="2"
+                    Classes="ghost"
+                    Padding="10,6"
+                    VerticalAlignment="Top"
+                    Command="{Binding ToggleConfigCommand}"
+                    ToolTip.Tip="App Registration and ticket system for this tenant">
+              <TextBlock Text="&#x2699;"
+                         FontSize="14"
+                         Foreground="{DynamicResource TextTertiaryBrush}"
+                         VerticalAlignment="Center"
+                         HorizontalAlignment="Center" />
+            </Button>
+
+            <Button Grid.Column="3"
+                    Classes="ghost"
+                    Padding="10,6"
+                    CornerRadius="0,6,0,0"
+                    VerticalAlignment="Top"
+                    IsVisible="{Binding HasRegistration}"
+                    Command="{Binding RemoveCommand}"
+                    ToolTip.Tip="Remove this tenant's App Registration. Accounts already signed in keep their entry.">
+              <TextBlock Text="&#x2715;"
+                         FontSize="12"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource DangerBrush}"
+                         VerticalAlignment="Center"
+                         HorizontalAlignment="Center" />
+            </Button>
+          </Grid>
+
+          <!-- Configuration. The tenant id is shown, not edited: it is this card's
+               identity, so changing it names a different tenant — that is a remove
+               and an add, not an edit. -->
+          <StackPanel IsVisible="{Binding IsConfigExpanded}" Spacing="6" Margin="12,2,12,4">
+            <TextBlock FontFamily="Consolas, Cascadia Mono, monospace"
+                       FontSize="{DynamicResource FontSmall}"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       TextTrimming="CharacterEllipsis">
+              <Run Text="Tenant " Foreground="{DynamicResource TextTertiaryBrush}" /><Run Text="{Binding TenantId}" />
+            </TextBlock>
+            <TextBox Text="{Binding ClientIdDraft}"
+                     PlaceholderText="Client id — 00000000-0000-0000-0000-000000000000"
+                     FontSize="{DynamicResource FontBody}" />
+            <TextBox Text="{Binding LabelDraft}"
+                     PlaceholderText="Label (optional)"
+                     FontSize="{DynamicResource FontBody}" />
+            <TextBox Text="{Binding TicketSystemDraft}"
+                     PlaceholderText="Ticket system (optional) — e.g. ServiceNow"
+                     ToolTip.Tip="Prefilled into the activation form for this tenant when a role requires a ticket. Takes effect immediately and stays editable per activation."
+                     FontSize="{DynamicResource FontBody}" />
+            <Button Classes="primary"
+                    HorizontalAlignment="Right"
+                    Content="Save"
+                    Command="{Binding SaveCommand}" />
+          </StackPanel>
+
+          <ItemsControl ItemsSource="{Binding Accounts}"
+                        Margin="12,0,8,0"
+                        ItemTemplate="{StaticResource AccountRowTemplate}" />
+
+          <Button Classes="ghost"
+                  Margin="12,0,8,0"
+                  HorizontalAlignment="Stretch"
+                  HorizontalContentAlignment="Left"
+                  Padding="10,6"
+                  IsEnabled="{Binding CanAddAccount}"
+                  Command="{Binding AddAccountCommand}"
+                  ToolTip.Tip="{Binding AddAccountHint}">
+            <TextBlock Text="+ Add account…"
+                       FontSize="{DynamicResource FontSmall}"
+                       VerticalAlignment="Center" />
+          </Button>
+        </StackPanel>
+      </Border>
+    </DataTemplate>
+
+
+    <!-- One Azure resource role with every scope the account holds it on. Hoisted out
+         of the tenant template so the section template below stays readable. -->
+    <DataTemplate x:Key="AzureRoleNodeTemplate" x:DataType="vm:AzureRoleGroup">
+      <StackPanel IsVisible="{Binding IsVisible}">
+        <Button Classes="ghost"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch"
+                Padding="6,4"
+                Command="{Binding ToggleExpansionCommand}">
+          <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+            <PathIcon Grid.Column="0"
+                      Data="M9 6l6 6-6 6"
+                      Width="11" Height="11"
+                      Foreground="{DynamicResource TextTertiaryBrush}"
+                      VerticalAlignment="Center"
+                      IsVisible="{Binding !IsExpanded}" />
+            <PathIcon Grid.Column="0"
+                      Data="M6 9l6 6 6-6"
+                      Width="11" Height="11"
+                      Foreground="{DynamicResource TextTertiaryBrush}"
+                      VerticalAlignment="Center"
+                      IsVisible="{Binding IsExpanded}" />
+            <TextBlock Grid.Column="1"
+                       Margin="8,0,0,0"
+                       Text="{Binding DisplayName}"
+                       FontSize="{DynamicResource FontBody}"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}"
+                       TextWrapping="Wrap"
+                       VerticalAlignment="Center" />
+            <StackPanel Grid.Column="2"
+                        Orientation="Horizontal"
+                        Spacing="6"
+                        VerticalAlignment="Center">
+              <!-- A collapsed node must still admit that one of its scopes is
+                   granting access right now. -->
+              <Border Background="{DynamicResource SuccessSoftBrush}"
+                      CornerRadius="4"
+                      Padding="6,2"
+                      IsVisible="{Binding HasActive}">
+                <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                  <Ellipse Width="6" Height="6"
+                           Fill="{DynamicResource SuccessBrush}"
+                           VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding ActiveLabel}"
+                             FontSize="10"
+                             FontWeight="Medium"
+                             Foreground="{DynamicResource SuccessBrush}" />
+                </StackPanel>
+              </Border>
+              <TextBlock Text="{Binding ScopeCountLabel}"
+                         FontSize="{DynamicResource FontSmall}"
+                         Foreground="{DynamicResource TextTertiaryBrush}"
+                         VerticalAlignment="Center" />
+            </StackPanel>
+          </Grid>
+        </Button>
+
+        <ItemsControl ItemsSource="{Binding Items}"
+                      IsVisible="{Binding IsExpanded}"
+                      ItemTemplate="{StaticResource EligibilityRowTemplate}"
+                      Margin="18,0,0,0" />
+      </StackPanel>
+    </DataTemplate>
+
+    <!-- One kind of eligibility inside a tenant: directory roles, administrative units,
+         groups, Azure resources. The header states the kind once, so the rows beneath it
+         no longer have to repeat it — except for groups, where membership and ownership
+         share a section and the row's kind line is the flag. -->
+    <DataTemplate x:Key="EligibilitySectionTemplate" x:DataType="vm:EligibilitySection">
+      <StackPanel IsVisible="{Binding IsVisible}" Margin="0,0,0,2">
+        <Button Classes="ghost"
+                HorizontalAlignment="Stretch"
+                HorizontalContentAlignment="Stretch"
+                Padding="6,3"
+                Command="{Binding ToggleExpansionCommand}">
+          <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+            <PathIcon Grid.Column="0"
+                      Data="M9 6l6 6-6 6"
+                      Width="10" Height="10"
+                      Foreground="{DynamicResource TextTertiaryBrush}"
+                      VerticalAlignment="Center"
+                      IsVisible="{Binding !IsExpanded}" />
+            <PathIcon Grid.Column="0"
+                      Data="M6 9l6 6 6-6"
+                      Width="10" Height="10"
+                      Foreground="{DynamicResource TextTertiaryBrush}"
+                      VerticalAlignment="Center"
+                      IsVisible="{Binding IsExpanded}" />
+            <!-- Caption style, like PINNED and ELIGIBILITIES: a section header labels
+                 the block beneath it, it does not compete with it. The title arrives
+                 already upper-cased — Avalonia has no text-transform. -->
+            <TextBlock Grid.Column="1"
+                       Margin="8,0,0,0"
+                       Text="{Binding Title}"
+                       FontSize="{DynamicResource FontCaption}"
+                       FontWeight="Medium"
+                       LetterSpacing="0.5"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       TextTrimming="CharacterEllipsis"
+                       VerticalAlignment="Center" />
+            <StackPanel Grid.Column="2"
+                        Orientation="Horizontal"
+                        Spacing="6"
+                        VerticalAlignment="Center">
+              <!-- Folding a section away must not fold away the fact that something
+                   behind it is granting access. -->
+              <Border Background="{DynamicResource SuccessSoftBrush}"
+                      CornerRadius="4"
+                      Padding="6,2"
+                      IsVisible="{Binding HasActive}">
+                <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                  <Ellipse Width="6" Height="6"
+                           Fill="{DynamicResource SuccessBrush}"
+                           VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding ActiveLabel}"
+                             FontSize="10"
+                             FontWeight="Medium"
+                             Foreground="{DynamicResource SuccessBrush}" />
+                </StackPanel>
+              </Border>
+              <TextBlock Text="{Binding MatchCount, StringFormat='({0})'}"
+                         FontSize="{DynamicResource FontCaption}"
+                         Foreground="{DynamicResource TextTertiaryBrush}"
+                         VerticalAlignment="Center" />
+            </StackPanel>
+          </Grid>
+        </Button>
+
+        <ItemsControl ItemsSource="{Binding RoleGroups}"
+                      IsVisible="{Binding IsExpanded}"
+                      ItemTemplate="{StaticResource AzureRoleNodeTemplate}"
+                      Margin="14,0,0,0" />
+
+        <ItemsControl ItemsSource="{Binding Items}"
+                      IsVisible="{Binding IsExpanded}"
+                      ItemTemplate="{StaticResource EligibilityRowTemplate}"
+                      Margin="14,0,0,0" />
+      </StackPanel>
+    </DataTemplate>
+
+  </Window.Resources>
+
   <!-- Outer rounded shell with drop shadow — gives the popup a "lifted" feel. -->
   <Border CornerRadius="12"
           Background="{DynamicResource SurfaceBaseBrush}"
@@ -131,10 +684,15 @@
                                      FontWeight="SemiBold"
                                      Foreground="{DynamicResource TextPrimaryBrush}"
                                      TextTrimming="CharacterEllipsis" />
-                          <TextBlock Text="{Binding Username}"
+                          <!-- Alias when the user set one, UPN otherwise. The UPN is
+                               trimmed in the middle (a 380 px window cuts off exactly
+                               the tail that distinguishes two admin accounts), with
+                               the full value one hover away. -->
+                          <TextBlock Text="{Binding AliasOrUpn}"
                                      FontSize="{DynamicResource FontSmall}"
                                      Foreground="{DynamicResource TextSecondaryBrush}"
-                                     TextTrimming="CharacterEllipsis" />
+                                     TextTrimming="PrefixCharacterEllipsis"
+                                     ToolTip.Tip="{Binding Username}" />
                           <!-- Tenant · kind as ONE bound string. Three TextBlocks in a
                                horizontal StackPanel would never ellipsize: that panel
                                measures children against infinite width, so a long
@@ -144,7 +702,7 @@
                                      FontSize="{DynamicResource FontSmall}"
                                      Foreground="{DynamicResource TextTertiaryBrush}"
                                      TextTrimming="CharacterEllipsis"
-                                     ToolTip.Tip="{Binding TenantId}" />
+                                     ToolTip.Tip="{Binding MetaTooltip}" />
                           <TextBlock Text="{Binding DeactivationErrorText}"
                                      FontSize="{DynamicResource FontCaption}"
                                      FontWeight="Medium"
@@ -297,9 +855,9 @@
                            VerticalAlignment="Center" />
               </Grid>
 
-              <!-- First-run empty state: App Registration not configured.
-                   CTA opens Settings → the App Registration section is at
-                   the top, so a simple open is enough (no scroll-to needed). -->
+              <!-- First-run empty state: no tenant configured. CTA opens Settings →
+                   the TENANTS section is at the top and forces itself open while
+                   nothing is configured, so a simple open is enough. -->
               <Border CornerRadius="8"
                       Background="{DynamicResource Surface1Brush}"
                       Padding="14"
@@ -318,13 +876,13 @@
                   <Button Classes="primary"
                           Command="{Binding OpenSettingsPanelCommand}"
                           HorizontalAlignment="Center">
-                    <TextBlock Text="Configure App Registration" />
+                    <TextBlock Text="Set up your first tenant" />
                   </Button>
                 </StackPanel>
               </Border>
 
-              <!-- Empty state: configured but no accounts enrolled yet. CTA
-                   opens Settings where the ACCOUNTS section lives. -->
+              <!-- Empty state: configured but no accounts enrolled yet. CTA opens
+                   Settings, where each tenant card carries its own "Add account". -->
               <Border CornerRadius="8"
                       Background="{DynamicResource Surface1Brush}"
                       Padding="14"
@@ -363,14 +921,45 @@
                 </Grid>
               </Border>
 
+              <!-- Shortcuts: pinned first, then the last activations. Both are views
+                   over the rows below, so the long list stays the exception path for
+                   anyone who works with the same handful of roles every day. Hidden
+                   while a search is running — the same hit twice is only noise. -->
+              <StackPanel Spacing="4" IsVisible="{Binding HasShortcuts}">
+                <TextBlock Text="PINNED"
+                           FontSize="{DynamicResource FontCaption}"
+                           FontWeight="Medium"
+                           Foreground="{DynamicResource TextTertiaryBrush}"
+                           Margin="2,2,0,0"
+                           IsVisible="{Binding PinnedItems.Count}" />
+                <ItemsControl ItemsSource="{Binding PinnedItems}"
+                              ItemTemplate="{StaticResource EligibilityRowTemplate}" />
+
+                <TextBlock Text="RECENT"
+                           FontSize="{DynamicResource FontCaption}"
+                           FontWeight="Medium"
+                           Foreground="{DynamicResource TextTertiaryBrush}"
+                           Margin="2,4,0,0"
+                           IsVisible="{Binding RecentItems.Count}" />
+                <ItemsControl ItemsSource="{Binding RecentItems}"
+                              ItemTemplate="{StaticResource EligibilityRowTemplate}" />
+
+                <Border Height="1"
+                        Background="{DynamicResource BorderDividerBrush}"
+                        Margin="0,6,0,2" />
+              </StackPanel>
+
               <!-- Grouped list: one collapsible section per enrolled tenant.
                    IsVisible on the group hides it when filter matches nothing. -->
               <ItemsControl ItemsSource="{Binding EligibilityGroups}"
                             IsVisible="{Binding ShowEligibilityUi}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate DataType="vm:TenantEligibilityGroup">
-                    <StackPanel Spacing="4"
-                                Margin="0,0,0,6"
+                    <!-- Tight inside, loose between: the gap under a group has to be
+                         clearly larger than the gaps within it, or two tenants read as
+                         one list. -->
+                    <StackPanel Spacing="2"
+                                Margin="0,0,0,12"
                                 IsVisible="{Binding IsVisible}">
 
                       <!-- Header: clicking toggles IsExpanded. Chevron rotates
@@ -383,18 +972,20 @@
                               Padding="6,4"
                               Command="{Binding ToggleExpansionCommand}">
                         <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
-                          <!-- Collapsed: chevron-right -->
+                          <!-- Collapsed: chevron-right. Larger and a step brighter than
+                               the section chevron below it — this is the outermost level
+                               of the tree and has to read that way. -->
                           <PathIcon Grid.Column="0"
                                     Data="M9 6l6 6-6 6"
-                                    Width="12" Height="12"
-                                    Foreground="{DynamicResource TextTertiaryBrush}"
+                                    Width="13" Height="13"
+                                    Foreground="{DynamicResource TextSecondaryBrush}"
                                     VerticalAlignment="Center"
                                     IsVisible="{Binding !IsExpanded}" />
                           <!-- Expanded: chevron-down -->
                           <PathIcon Grid.Column="0"
                                     Data="M6 9l6 6 6-6"
-                                    Width="12" Height="12"
-                                    Foreground="{DynamicResource TextTertiaryBrush}"
+                                    Width="13" Height="13"
+                                    Foreground="{DynamicResource TextSecondaryBrush}"
                                     VerticalAlignment="Center"
                                     IsVisible="{Binding IsExpanded}" />
 
@@ -402,22 +993,52 @@
                                       Margin="8,0,0,0"
                                       VerticalAlignment="Center">
                             <TextBlock Text="{Binding TenantLabel}"
-                                       FontSize="{DynamicResource FontBody}"
+                                       FontSize="{DynamicResource FontSubtitle}"
                                        FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextPrimaryBrush}"
                                        TextTrimming="CharacterEllipsis"
                                        ToolTip.Tip="{Binding TenantId}" />
-                            <TextBlock Text="{Binding Username}"
+                            <TextBlock Text="{Binding AliasOrUpn}"
                                        FontSize="{DynamicResource FontSmall}"
                                        Foreground="{DynamicResource TextSecondaryBrush}"
-                                       TextTrimming="CharacterEllipsis" />
+                                       TextTrimming="PrefixCharacterEllipsis"
+                                       ToolTip.Tip="{Binding Username}" />
                           </StackPanel>
 
-                          <TextBlock Grid.Column="2"
-                                     Text="{Binding MatchCount, StringFormat='({0})'}"
-                                     FontSize="{DynamicResource FontSmall}"
-                                     Foreground="{DynamicResource TextTertiaryBrush}"
-                                     VerticalAlignment="Center" />
+                          <StackPanel Grid.Column="2"
+                                      Orientation="Horizontal"
+                                      Spacing="6"
+                                      VerticalAlignment="Center">
+                            <!-- Same pill the sections and role nodes carry. A tenant is
+                                 collapsed by default, and folding it away must not fold
+                                 away the fact that something inside it is granting
+                                 access right now. -->
+                            <Border Background="{DynamicResource SuccessSoftBrush}"
+                                    CornerRadius="4"
+                                    Padding="6,2"
+                                    IsVisible="{Binding HasActive}">
+                              <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+                                <Ellipse Width="6" Height="6"
+                                         Fill="{DynamicResource SuccessBrush}"
+                                         VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding ActiveLabel}"
+                                           FontSize="10"
+                                           FontWeight="Medium"
+                                           Foreground="{DynamicResource SuccessBrush}" />
+                              </StackPanel>
+                            </Border>
+                            <!-- The count sits in a pill here and flat on the sections:
+                                 three levels whose right-hand side looked identical is
+                                 half of why the tree read flat. -->
+                            <Border Background="{DynamicResource Surface2Brush}"
+                                    CornerRadius="10"
+                                    Padding="7,1">
+                              <TextBlock Text="{Binding MatchCount}"
+                                         FontSize="{DynamicResource FontCaption}"
+                                         Foreground="{DynamicResource TextSecondaryBrush}"
+                                         VerticalAlignment="Center" />
+                            </Border>
+                          </StackPanel>
                         </Grid>
                       </Button>
 
@@ -426,7 +1047,7 @@
                       <Border Background="{DynamicResource WarningSoftBrush}"
                               CornerRadius="4"
                               Padding="8,5"
-                              Margin="20,0,0,0"
+                              Margin="25,0,0,0"
                               IsVisible="{Binding LoadError,
                                           Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                         <TextBlock Text="{Binding LoadError, StringFormat='⚠ {0}'}"
@@ -435,93 +1056,25 @@
                                    TextWrapping="Wrap" />
                       </Border>
 
-                      <!-- Body: same row template as before; only shown when
-                           the group is expanded. -->
-                      <ItemsControl ItemsSource="{Binding Items}"
-                                    IsVisible="{Binding IsExpanded}"
-                                    Margin="20,0,0,0">
-                        <ItemsControl.ItemTemplate>
-                          <DataTemplate DataType="vm:EligibilityItemViewModel">
-                            <Border Classes="row"
-                                    IsHitTestVisible="{Binding CanActivate}">
-                              <Button Classes="ghost"
-                                      Command="{Binding ActivateCommand}"
-                                      HorizontalAlignment="Stretch"
-                                      HorizontalContentAlignment="Stretch"
-                                      Padding="0">
-                                <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
-                                  <StackPanel Grid.Column="0"
-                                              Opacity="{Binding LabelOpacity}">
-                                    <TextBlock Text="{Binding DisplayName}"
-                                               FontSize="{DynamicResource FontBody}"
-                                               FontWeight="SemiBold"
-                                               Foreground="{DynamicResource TextPrimaryBrush}"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0">
-                                      <TextBlock Text="{Binding KindLabel}"
-                                                 FontSize="{DynamicResource FontSmall}"
-                                                 Foreground="{DynamicResource TextSecondaryBrush}" />
-                                      <Border Background="{DynamicResource WarningSoftBrush}"
-                                              CornerRadius="3"
-                                              Padding="5,1"
-                                              IsVisible="{Binding ShowRoleAssignableWarning}">
-                                        <TextBlock Text="⚠ Role-assignable"
-                                                   FontSize="10"
-                                                   FontWeight="Medium"
-                                                   Foreground="{DynamicResource WarningBrush}" />
-                                      </Border>
-                                    </StackPanel>
-                                    <TextBlock Text="{Binding ActivationErrorText}"
-                                               FontSize="{DynamicResource FontCaption}"
-                                               FontWeight="Medium"
-                                               Foreground="{DynamicResource DangerBrush}"
-                                               TextWrapping="Wrap"
-                                               Margin="0,3,0,0"
-                                               IsVisible="{Binding ActivationErrorText,
-                                                                   Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                  </StackPanel>
-                                  <!-- Idle: chevron pointing into the activation panel. -->
-                                  <PathIcon Grid.Column="1"
-                                            Data="M9 6l6 6-6 6"
-                                            Width="14" Height="14"
-                                            Foreground="{DynamicResource TextTertiaryBrush}"
-                                            IsVisible="{Binding CanActivate}" />
-                                  <!-- Busy: spinner while the shell loads the policy + opens the panel.
-                                       Visible during the 1-3s cold-cache window only; the prefetch
-                                       usually has the policy ready by the time the user clicks. -->
-                                  <Border Grid.Column="1"
-                                          Classes="spinner"
-                                          Width="13" Height="13"
-                                          IsVisible="{Binding IsActivating}">
-                                    <Border.RenderTransform>
-                                      <RotateTransform />
-                                    </Border.RenderTransform>
-                                    <Path Data="M 6.5,1 A 5.5,5.5 0 1 1 1,6.5"
-                                          Stroke="{DynamicResource AccentBrush}"
-                                          StrokeThickness="1.6"
-                                          StrokeLineCap="Round" />
-                                  </Border>
-                                  <Border Grid.Column="1"
-                                          Background="{DynamicResource SuccessSoftBrush}"
-                                          CornerRadius="4"
-                                          Padding="6,2"
-                                          IsVisible="{Binding IsCurrentlyActive}">
-                                    <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                                      <Ellipse Width="6" Height="6"
-                                               Fill="{DynamicResource SuccessBrush}"
-                                               VerticalAlignment="Center" />
-                                      <TextBlock Text="Active"
-                                                 FontSize="10"
-                                                 FontWeight="Medium"
-                                                 Foreground="{DynamicResource SuccessBrush}" />
-                                    </StackPanel>
-                                  </Border>
-                                </Grid>
-                              </Button>
-                            </Border>
-                          </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                      </ItemsControl>
+                      <!-- One collapsible section per kind. This is what keeps a large
+                           tenant readable: four lines instead of several hundred, and a
+                           tenant below this one reachable without scrolling past them.
+
+                           The hairline on the left is the tree spine — it answers "where
+                           does this tenant end" while scrolling, which indentation on its
+                           own does not. BorderSubtle rather than BorderDivider: the
+                           divider token is #F4F4F5 against a #F7F7F7 page, so the rail
+                           would be invisible in light mode and nothing would report it.
+                           IsVisible sits on the border so the line never draws over
+                           nothing. -->
+                      <Border Margin="12,0,0,0"
+                              Padding="12,2,0,0"
+                              BorderThickness="1,0,0,0"
+                              BorderBrush="{DynamicResource BorderSubtleBrush}"
+                              IsVisible="{Binding IsExpanded}">
+                        <ItemsControl ItemsSource="{Binding Sections}"
+                                      ItemTemplate="{StaticResource EligibilitySectionTemplate}" />
+                      </Border>
                     </StackPanel>
                   </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -746,6 +1299,15 @@
                            FontSize="{DynamicResource FontSmall}"
                            Foreground="{DynamicResource WarningBrush}" />
               </Border>
+              <Border Background="{DynamicResource WarningSoftBrush}"
+                      CornerRadius="6"
+                      Padding="10,8"
+                      IsVisible="{Binding ShowRoleAssignableBanner}">
+                <TextBlock Text="⚠ This group can carry directory roles. Activating it may grant more than group membership."
+                           TextWrapping="Wrap"
+                           FontSize="{DynamicResource FontSmall}"
+                           Foreground="{DynamicResource WarningBrush}" />
+              </Border>
 
               <!-- Validation success -->
               <Border Background="{DynamicResource SuccessSoftBrush}"
@@ -778,7 +1340,8 @@
             <Button Grid.Column="0"
                     Classes="ghost"
                     Command="{Binding ValidateCommand}"
-                    IsEnabled="{Binding !IsBusy}">
+                    IsEnabled="{Binding !IsBusy}"
+                    IsVisible="{Binding CanValidate}">
               <Panel>
                 <TextBlock Text="Validate"
                            VerticalAlignment="Center"
@@ -880,8 +1443,8 @@
           <!-- Body -->
           <ScrollViewer Grid.Row="1" Margin="0,18,0,0" Classes="popup">
             <StackPanel Spacing="14">
-              <!-- Only shown when more than one App Registration (= tenant) is
-                   configured. With a single one there is nothing to choose. -->
+              <!-- Hidden when the tenant was already chosen in Settings, and when only
+                   one is configured — either way there is nothing to choose. -->
               <StackPanel IsVisible="{Binding IsTargetChoiceVisible}">
                 <TextBlock Text="Sign in with"
                            FontSize="{DynamicResource FontCaption}"
@@ -905,7 +1468,7 @@
                            Margin="0,6,0,0" />
               </StackPanel>
 
-              <TextBlock Text="The Windows account picker opens after Sign in. Choose an account that is a member or guest of the selected tenant — the same identity can be enrolled in several tenants. To sign in to a tenant that is not listed, add it under Settings → App Registration first."
+              <TextBlock Text="The Windows account picker opens after Sign in. Choose an account that is a member or guest of the selected tenant — the same identity can be enrolled in several tenants. To sign in to a tenant that is not listed, add it under Settings → Tenants first."
                          TextWrapping="Wrap"
                          FontSize="{DynamicResource FontSmall}"
                          Foreground="{DynamicResource TextTertiaryBrush}" />
@@ -1068,446 +1631,141 @@
           <ScrollViewer Grid.Row="1" Margin="0,18,0,0" Classes="popup">
             <StackPanel Spacing="10">
 
-              <!-- =========== APP REGISTRATION =========== -->
-              <!-- One list of every App Registration, each pinned to a tenant —
-                   this list is also the whitelist of tenants the user can sign
-                   in to. National clouds are isolated instances, so a
-                   registration exists in exactly one of them. Saved into
+              <!-- =========== TENANTS =========== -->
+              <!-- One card per tenant, with the accounts signed into it nested
+                   inside. The configuration is shared by every account in the
+                   tenant — one App Registration, one ticket system — so it lives
+                   one level above the rows it applies to rather than being
+                   repeated in each of them. The list is also the whitelist of
+                   tenants that can be signed in to. Registrations are saved to
                    %LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json
                    (outside the install dir so it survives Velopack updates) and
-                   takes effect on the next process start — MSAL's PCAs are built
-                   from the startup configuration. -->
+                   take effect on the next process start — MSAL's clients are
+                   built from the startup configuration. -->
               <Border Classes="settings-card">
               <StackPanel Spacing="8">
                 <!-- Header doubles as the collapse toggle. The green check is
                      only ever shown for a configuration a sign-in has actually
-                     proven — see SettingsPanelViewModel.IsAppRegistrationVerified. -->
+                     proven — see SettingsPanelViewModel.AreAppRegistrationsVerified. -->
                 <Button Classes="ghost"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Stretch"
                         Padding="0"
-                        Command="{Binding ToggleAppRegistrationSectionCommand}">
-                  <Grid ColumnDefinitions="Auto,Auto,*,Auto" VerticalAlignment="Center">
+                        Command="{Binding ToggleTenantsSectionCommand}">
+                  <Grid ColumnDefinitions="Auto,Auto,*,Auto">
                     <TextBlock Grid.Column="0"
-                               Text="APP REGISTRATION"
+                               Text="TENANTS"
                                FontSize="{DynamicResource FontCaption}"
                                FontWeight="Medium"
                                Foreground="{DynamicResource TextTertiaryBrush}"
                                VerticalAlignment="Center" />
-                    <!-- Same dot-plus-label badge the active-role rows use, so
-                         "green means confirmed" reads the same everywhere. A
-                         PathIcon check clips here: its glyph is far wider than
-                         it is tall, unlike the square chevrons next to it. -->
                     <Border Grid.Column="1"
                             Background="{DynamicResource SuccessSoftBrush}"
                             CornerRadius="4"
                             Padding="6,2"
                             Margin="8,0,0,0"
                             VerticalAlignment="Center"
-                            ToolTip.Tip="An account signed in successfully with every configured App Registration."
-                            IsVisible="{Binding AreAppRegistrationsVerified}">
-                      <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
-                        <Ellipse Width="6" Height="6"
-                                 Fill="{DynamicResource SuccessBrush}"
-                                 VerticalAlignment="Center" />
+                            IsVisible="{Binding AreAppRegistrationsVerified}"
+                            ToolTip.Tip="An account signed in successfully with every configured App Registration.">
+                      <StackPanel Orientation="Horizontal" Spacing="5">
+                        <Ellipse Width="6" Height="6" VerticalAlignment="Center"
+                                 Fill="{DynamicResource SuccessBrush}" />
                         <TextBlock Text="Verified"
                                    FontSize="10"
                                    FontWeight="Medium"
                                    Foreground="{DynamicResource SuccessBrush}" />
                       </StackPanel>
                     </Border>
-                    <!-- Collapsed: chevron-right. Expanded: chevron-down. -->
                     <PathIcon Grid.Column="3"
                               Data="M9 6l6 6-6 6"
-                              Width="12" Height="12"
+                              Width="10" Height="10"
                               Foreground="{DynamicResource TextTertiaryBrush}"
                               VerticalAlignment="Center"
-                              IsVisible="{Binding !IsAppRegistrationSectionExpanded}" />
+                              IsVisible="{Binding !IsTenantsSectionExpanded}" />
                     <PathIcon Grid.Column="3"
                               Data="M6 9l6 6 6-6"
-                              Width="12" Height="12"
+                              Width="10" Height="10"
                               Foreground="{DynamicResource TextTertiaryBrush}"
                               VerticalAlignment="Center"
-                              IsVisible="{Binding IsAppRegistrationSectionExpanded}" />
+                              IsVisible="{Binding IsTenantsSectionExpanded}" />
                   </Grid>
                 </Button>
 
-                <StackPanel Spacing="8"
-                            IsVisible="{Binding IsAppRegistrationSectionExpanded}">
-                <TextBlock Text="One entry per tenant: its id, the client id of the App Registration to use there, and the cloud. Only listed tenants can be signed in to."
-                           FontSize="{DynamicResource FontSmall}"
-                           Foreground="{DynamicResource TextSecondaryBrush}"
-                           TextWrapping="Wrap" />
+                <StackPanel Spacing="8" IsVisible="{Binding IsTenantsSectionExpanded}">
+                  <TextBlock Text="One card per tenant: its App Registration, its ticket system, and the accounts signed into it. A multi-tenant registration is listed once per tenant with the same client id."
+                             FontSize="{DynamicResource FontSmall}"
+                             Foreground="{DynamicResource TextTertiaryBrush}"
+                             TextWrapping="Wrap" />
 
-                <!-- One row per registration, read-only: title in the same
-                     wording as the "Sign in with" picker, client id, verification
-                     state, remove. Re-adding the same cloud + tenant replaces the
-                     entry — see SettingsPanelViewModel.AddRegistration. -->
-                <ItemsControl ItemsSource="{Binding Registrations}">
-                  <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                      <StackPanel Spacing="8" />
-                    </ItemsPanelTemplate>
-                  </ItemsControl.ItemsPanel>
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:AppRegistrationRowViewModel">
-                      <Border Background="{DynamicResource Surface1Brush}"
-                              BorderBrush="{DynamicResource BorderSubtleBrush}"
-                              BorderThickness="1"
-                              CornerRadius="6">
-                        <Grid ColumnDefinitions="*,Auto">
-                          <!-- Row body is a button, like the account rows: a
-                               click loads the entry into the form below for
-                               editing. -->
-                          <Button Grid.Column="0"
-                                  Classes="ghost"
-                                  HorizontalAlignment="Stretch"
-                                  HorizontalContentAlignment="Left"
-                                  Padding="10,8"
-                                  CornerRadius="6,0,0,6"
-                                  Command="{Binding $parent[ItemsControl].((vm:SettingsPanelViewModel)DataContext).EditRegistrationCommand}"
-                                  CommandParameter="{Binding}"
-                                  ToolTip.Tip="Click to edit">
-                            <StackPanel Spacing="3" IsHitTestVisible="False">
-                              <!-- Name + cloud chip. The chip colour is the one
-                                   thing that separates a Global entry from a
-                                   China one at a glance. -->
-                              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                <TextBlock Grid.Column="0"
-                                           Text="{Binding Title}"
-                                           FontSize="{DynamicResource FontBody}"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource TextPrimaryBrush}"
-                                           TextTrimming="CharacterEllipsis"
-                                           VerticalAlignment="Center" />
-                                <Border Grid.Column="1"
-                                        Background="{DynamicResource AccentSoftBrush}"
-                                        CornerRadius="4"
-                                        Padding="6,2"
-                                        VerticalAlignment="Center"
-                                        IsVisible="{Binding !IsChina}">
-                                  <TextBlock Text="{Binding CloudName}"
-                                             FontSize="10"
-                                             FontWeight="Medium"
-                                             Foreground="{DynamicResource AccentTextBrush}" />
-                                </Border>
-                                <Border Grid.Column="1"
-                                        Background="{DynamicResource WarningSoftBrush}"
-                                        CornerRadius="4"
-                                        Padding="6,2"
-                                        VerticalAlignment="Center"
-                                        IsVisible="{Binding IsChina}">
-                                  <TextBlock Text="{Binding CloudName}"
-                                             FontSize="10"
-                                             FontWeight="Medium"
-                                             Foreground="{DynamicResource WarningBrush}" />
-                                </Border>
-                              </Grid>
-                              <TextBlock FontFamily="Consolas, Cascadia Mono, monospace"
-                                         FontSize="{DynamicResource FontSmall}"
-                                         Foreground="{DynamicResource TextSecondaryBrush}"
-                                         TextTrimming="CharacterEllipsis">
-                                <Run Text="Tenant " Foreground="{DynamicResource TextTertiaryBrush}" /><Run Text="{Binding TenantId}" />
-                              </TextBlock>
-                              <TextBlock FontFamily="Consolas, Cascadia Mono, monospace"
-                                         FontSize="{DynamicResource FontSmall}"
-                                         Foreground="{DynamicResource TextSecondaryBrush}"
-                                         TextTrimming="CharacterEllipsis">
-                                <Run Text="Client " Foreground="{DynamicResource TextTertiaryBrush}" /><Run Text="{Binding ClientId}" />
-                              </TextBlock>
-                              <StackPanel Orientation="Horizontal" Spacing="5" Margin="0,2,0,0">
-                                <Ellipse Width="6" Height="6"
-                                         VerticalAlignment="Center"
-                                         Fill="{DynamicResource SuccessBrush}"
-                                         IsVisible="{Binding IsVerified}" />
-                                <Ellipse Width="6" Height="6"
-                                         VerticalAlignment="Center"
-                                         Fill="{DynamicResource WarningBrush}"
-                                         IsVisible="{Binding !IsVerified}" />
-                                <TextBlock Text="{Binding Status}"
-                                           FontSize="{DynamicResource FontSmall}"
-                                           Foreground="{DynamicResource TextTertiaryBrush}"
-                                           VerticalAlignment="Center" />
-                              </StackPanel>
-                            </StackPanel>
-                          </Button>
-                          <Button Grid.Column="1"
-                                  Classes="ghost"
-                                  Padding="10,6"
-                                  CornerRadius="0,6,6,0"
-                                  VerticalAlignment="Stretch"
-                                  Command="{Binding $parent[ItemsControl].((vm:SettingsPanelViewModel)DataContext).RemoveRegistrationCommand}"
-                                  CommandParameter="{Binding}"
-                                  ToolTip.Tip="Remove this registration">
-                            <TextBlock Text="✕"
-                                       FontSize="12"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource DangerBrush}"
-                                       VerticalAlignment="Center"
-                                       HorizontalAlignment="Center" />
-                          </Button>
-                        </Grid>
-                      </Border>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                  <!-- One banner for the whole section, above the cards: inside a
+                       collapsed configuration disclosure it would be invisible
+                       exactly when it matters. -->
+                  <Border Background="{DynamicResource SuccessSoftBrush}"
+                          CornerRadius="6"
+                          Padding="10,8"
+                          IsVisible="{Binding ShowRestartPrompt}">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                      <TextBlock Grid.Column="0"
+                                 Text="Saved. Restart the app to apply the change."
+                                 FontSize="{DynamicResource FontSmall}"
+                                 Foreground="{DynamicResource TextPrimaryBrush}"
+                                 TextWrapping="Wrap"
+                                 VerticalAlignment="Center" />
+                      <Button Grid.Column="1"
+                              Classes="primary"
+                              Content="Restart now"
+                              Command="{Binding RestartAppCommand}" />
+                    </Grid>
+                  </Border>
 
-                <!-- Add / edit form. The submit button enables once both ids are
-                     GUIDs (CanExecute on SaveRegistrationCommand). Clicking a row
-                     above loads it here; the caption + Cancel then show which one. -->
-                <StackPanel Spacing="6">
-                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding IsEditing}">
-                    <TextBlock Grid.Column="0"
-                               Text="{Binding EditingTitle, StringFormat='Editing {0}'}"
-                               FontSize="{DynamicResource FontSmall}"
-                               FontWeight="Medium"
-                               Foreground="{DynamicResource TextPrimaryBrush}"
-                               TextTrimming="CharacterEllipsis"
-                               VerticalAlignment="Center" />
-                    <Button Grid.Column="1"
-                            Classes="ghost"
-                            Padding="8,4"
-                            Content="Cancel"
-                            Command="{Binding CancelEditCommand}" />
-                  </Grid>
-                  <TextBox Text="{Binding NewTenantId}"
-                           PlaceholderText="Tenant id — 00000000-0000-0000-0000-000000000000"
-                           FontSize="{DynamicResource FontBody}" />
-                  <TextBox Text="{Binding NewClientId}"
-                           PlaceholderText="Client id — 00000000-0000-0000-0000-000000000000"
-                           FontSize="{DynamicResource FontBody}" />
-                  <TextBox Text="{Binding NewLabel}"
-                           PlaceholderText="Label (optional)"
-                           FontSize="{DynamicResource FontBody}" />
-                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                    <ComboBox Grid.Column="0"
-                              ItemsSource="{Binding CloudOptions}"
-                              SelectedItem="{Binding NewTenantCloud}"
-                              HorizontalAlignment="Left"
-                              VerticalAlignment="Center">
-                      <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="vm:SettingsPanelViewModel+CloudOption">
-                          <TextBlock Text="{Binding Label}" />
-                        </DataTemplate>
-                      </ComboBox.ItemTemplate>
-                    </ComboBox>
-                    <Button Grid.Column="1"
-                            Classes="primary"
-                            Content="{Binding SubmitLabel}"
-                            Command="{Binding SaveRegistrationCommand}" />
-                  </Grid>
-                </StackPanel>
+                  <ItemsControl ItemsSource="{Binding Nodes}"
+                                ItemTemplate="{StaticResource TenantNodeTemplate}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Spacing="8" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                  </ItemsControl>
 
-                <!-- Restart-required banner. Visible right after a successful
-                     save. The restart button replaces the running process so
-                     MSAL re-initialises against the new client id. -->
-                <Border IsVisible="{Binding ShowRestartPrompt}"
-                        Background="{DynamicResource SuccessSoftBrush}"
-                        CornerRadius="6"
-                        Padding="10,8">
-                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                    <TextBlock Grid.Column="0"
-                               Text="Saved. Restart the app to apply the change."
-                               FontSize="{DynamicResource FontSmall}"
-                               TextWrapping="Wrap"
-                               VerticalAlignment="Center" />
-                    <Button Grid.Column="1"
-                            Classes="primary"
-                            Content="Restart now"
-                            Command="{Binding RestartAppCommand}" />
-                  </Grid>
-                </Border>
-                </StackPanel>
-              </StackPanel>
-              </Border>
-
-              <!-- =========== ACCOUNTS =========== -->
-              <!-- Section first: account management is the primary reason to
-                   open Settings in the new shell (the HERO-bar account-switcher
-                   slide-in was removed in Phase 2). Collapsible because the
-                   account cards take a lot of vertical space with multiple
-                   enrollments — Phase 5 added the toggle. -->
-              <Border Classes="settings-card">
-              <StackPanel Spacing="8">
-                <Button Classes="ghost"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Stretch"
-                        Padding="0"
-                        Command="{Binding ToggleAccountsSectionCommand}">
-                  <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
-                    <TextBlock Grid.Column="0"
-                               Text="ACCOUNTS"
+                  <!-- Adding a tenant. Always reachable, and the only thing on
+                       screen when nothing is configured yet — the first-run state
+                       must not be an empty list with no way forward. -->
+                  <StackPanel Spacing="6">
+                    <TextBlock Text="Add a tenant"
                                FontSize="{DynamicResource FontCaption}"
                                FontWeight="Medium"
-                               Foreground="{DynamicResource TextTertiaryBrush}"
-                               VerticalAlignment="Center" />
-                    <!-- Collapsed: chevron-right. Expanded: chevron-down. -->
-                    <PathIcon Grid.Column="1"
-                              Data="M9 6l6 6-6 6"
-                              Width="12" Height="12"
-                              Foreground="{DynamicResource TextTertiaryBrush}"
-                              VerticalAlignment="Center"
-                              IsVisible="{Binding !IsAccountsSectionExpanded}" />
-                    <PathIcon Grid.Column="1"
-                              Data="M6 9l6 6 6-6"
-                              Width="12" Height="12"
-                              Foreground="{DynamicResource TextTertiaryBrush}"
-                              VerticalAlignment="Center"
-                              IsVisible="{Binding IsAccountsSectionExpanded}" />
-                  </Grid>
-                </Button>
-
-                <!-- Body: hidden when the section is collapsed. Wrapping
-                     StackPanel keeps the per-child IsVisible bindings (empty
-                     state vs. list) intact. -->
-                <StackPanel Spacing="8"
-                            IsVisible="{Binding IsAccountsSectionExpanded}">
-
-                <!-- Enrolled-accounts list. Each row: avatar (initials), name,
-                     UPN, tenant label, and a small ✕ to remove just this
-                     enrollment. Clicking the row body selects the account as
-                     the active context (legacy behaviour from the switcher). -->
-                <ItemsControl ItemsSource="{Binding Accounts}"
-                              IsVisible="{Binding HasAccounts}">
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate DataType="vm:AccountListItemViewModel">
-                      <Border CornerRadius="6"
-                              Background="{DynamicResource Surface2Brush}"
-                              BorderBrush="{DynamicResource BorderSubtleBrush}"
-                              BorderThickness="1"
-                              Margin="0,0,0,4"
-                              DragDrop.AllowDrop="True"
-                              DragDrop.DragOver="OnAccountRowDragOver"
-                              DragDrop.Drop="OnAccountRowDrop">
-                        <Grid ColumnDefinitions="Auto,*,Auto">
-                          <!-- Drag handle: dedicated affordance + dedicated
-                               pointer-capture source. Putting the drag
-                               handlers on the row itself doesn't work because
-                               the select-account Button captures the pointer
-                               on press, swallowing PointerMoved before we can
-                               detect the drag threshold. -->
-                          <Border Grid.Column="0"
-                                  Width="22"
-                                  Background="Transparent"
-                                  Cursor="SizeAll"
-                                  ToolTip.Tip="Drag to reorder"
-                                  PointerPressed="OnAccountRowPointerPressed"
-                                  PointerMoved="OnAccountRowPointerMoved"
-                                  PointerReleased="OnAccountRowPointerReleased">
-                            <TextBlock Text="⋮⋮"
-                                       FontSize="14"
-                                       FontWeight="Bold"
-                                       Foreground="{DynamicResource TextTertiaryBrush}"
-                                       HorizontalAlignment="Center"
-                                       VerticalAlignment="Center" />
-                          </Border>
-
-                          <Button Grid.Column="1"
-                                  Classes="ghost"
-                                  HorizontalAlignment="Stretch"
-                                  HorizontalContentAlignment="Left"
-                                  Padding="6,8,10,8"
-                                  Command="{Binding $parent[ItemsControl].((vm:SettingsPanelViewModel)DataContext).SelectAccountCommand}"
-                                  CommandParameter="{Binding Account}">
-                            <Grid ColumnDefinitions="Auto,*" IsHitTestVisible="False">
-                              <Border Grid.Column="0"
-                                      Width="30" Height="30"
-                                      CornerRadius="15"
-                                      Background="{DynamicResource AccentSoftBrush}"
-                                      VerticalAlignment="Center">
-                                <TextBlock Text="{Binding DisplayName,
-                                                          Converter={x:Static cv:InitialsConverter.Instance}}"
-                                           FontSize="12"
-                                           FontWeight="Bold"
-                                           Foreground="{DynamicResource AccentBrush}"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center" />
-                              </Border>
-                              <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding DisplayName}"
-                                           FontSize="{DynamicResource FontBody}"
-                                           FontWeight="SemiBold"
-                                           Foreground="{DynamicResource TextPrimaryBrush}"
-                                           TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding Username}"
-                                           FontSize="{DynamicResource FontSmall}"
-                                           Foreground="{DynamicResource TextSecondaryBrush}"
-                                           TextTrimming="CharacterEllipsis" />
-                                <TextBlock Text="{Binding TenantLabel}"
-                                           FontSize="{DynamicResource FontCaption}"
-                                           FontWeight="Medium"
-                                           Foreground="{DynamicResource TextTertiaryBrush}"
-                                           TextTrimming="CharacterEllipsis"
-                                           Margin="0,2,0,0"
-                                           ToolTip.Tip="{Binding TenantId}" />
-
-                                <!-- Device-code enrollments are limited (no CA
-                                     auth-context step-up); the badge makes an
-                                     otherwise invisible account property visible. -->
-                                <Border IsVisible="{Binding IsDeviceCodeAccount}"
-                                        Background="{DynamicResource Surface1Brush}"
-                                        BorderBrush="{DynamicResource BorderSubtleBrush}"
-                                        BorderThickness="1"
-                                        CornerRadius="4"
-                                        Padding="5,1"
-                                        HorizontalAlignment="Left"
-                                        Margin="0,4,0,0"
-                                        ToolTip.Tip="Signed in with a device code. Roles protected by a Conditional Access authentication context cannot be activated with this sign-in method — remove the account and add it again using the standard sign-in.">
-                                  <TextBlock Text="Device code"
-                                             FontSize="{DynamicResource FontSmall}"
-                                             FontWeight="Medium"
-                                             Foreground="{DynamicResource TextSecondaryBrush}" />
-                                </Border>
-                              </StackPanel>
-                            </Grid>
-                          </Button>
-                          <!-- Per-row remove. Same U+2715 glyph approach as
-                               the favourites list — PathIcon's Fill doesn't
-                               render the open X path. -->
-                          <Button Grid.Column="2"
-                                  Classes="ghost"
-                                  Padding="10,6"
-                                  CornerRadius="0,6,6,0"
-                                  Command="{Binding $parent[ItemsControl].((vm:SettingsPanelViewModel)DataContext).RemoveAccountCommand}"
-                                  CommandParameter="{Binding Account}"
-                                  ToolTip.Tip="Remove this account">
-                            <TextBlock Text="✕"
-                                       FontSize="12"
-                                       FontWeight="SemiBold"
-                                       Foreground="{DynamicResource DangerBrush}"
-                                       VerticalAlignment="Center"
-                                       HorizontalAlignment="Center" />
-                          </Button>
-                        </Grid>
-                      </Border>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
-                <!-- Empty-state caption inside the section — keeps the section
-                     header visible so the action buttons still make sense. -->
-                <TextBlock Text="No accounts connected yet."
-                           FontSize="{DynamicResource FontSmall}"
-                           Foreground="{DynamicResource TextTertiaryBrush}"
-                           IsVisible="{Binding !HasAccounts}" />
-
-                <!-- Single add-account entry point. The slide-in offers the
-                     optional tenant field and the device-code option (Advanced). -->
-                <StackPanel Spacing="2" Margin="0,4,0,0">
-                  <Button Classes="ghost"
-                          HorizontalAlignment="Stretch"
-                          HorizontalContentAlignment="Left"
-                          Padding="10,8"
-                          Command="{Binding OpenAddAccountPanelCommand}">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                      <PathIcon Data="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-                                Width="14" Height="14" />
-                      <TextBlock Text="Add account…"
-                                 FontSize="{DynamicResource FontBody}"
-                                 VerticalAlignment="Center" />
-                    </StackPanel>
-                  </Button>
-                </StackPanel>
+                               Foreground="{DynamicResource TextTertiaryBrush}" />
+                    <TextBox Text="{Binding NewTenantId}"
+                             PlaceholderText="Tenant id — 00000000-0000-0000-0000-000000000000"
+                             FontSize="{DynamicResource FontBody}" />
+                    <TextBox Text="{Binding NewClientId}"
+                             PlaceholderText="Client id — 00000000-0000-0000-0000-000000000000"
+                             FontSize="{DynamicResource FontBody}" />
+                    <TextBox Text="{Binding NewLabel}"
+                             PlaceholderText="Label (optional)"
+                             FontSize="{DynamicResource FontBody}" />
+                    <TextBox Text="{Binding NewTicketSystem}"
+                             PlaceholderText="Ticket system (optional) — e.g. ServiceNow"
+                             ToolTip.Tip="Prefilled into the activation form for this tenant when a role requires a ticket. Takes effect immediately and stays editable per activation."
+                             FontSize="{DynamicResource FontBody}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                      <ComboBox Grid.Column="0"
+                                ItemsSource="{Binding CloudOptions}"
+                                SelectedItem="{Binding NewTenantCloud}"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Center">
+                        <ComboBox.ItemTemplate>
+                          <DataTemplate x:DataType="vm:SettingsPanelViewModel+CloudOption">
+                            <TextBlock Text="{Binding Label}" />
+                          </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                      </ComboBox>
+                      <Button Grid.Column="1"
+                              Classes="primary"
+                              Content="Add"
+                              Command="{Binding AddTenantCommand}" />
+                    </Grid>
+                  </StackPanel>
                 </StackPanel>
               </StackPanel>
               </Border>

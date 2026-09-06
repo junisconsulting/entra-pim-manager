@@ -115,6 +115,10 @@ public static class NetworkProbeCatalog
         var graphRoot = new Uri(EntraCloudInfo.GraphBaseUrl(cloud)).GetLeftPart(UriPartial.Authority) + "/";
         probes.Add(Probe(graphRoot, "Microsoft Graph"));
 
+        // PIM for Azure Resources goes through Azure Resource Manager, a
+        // separate host that is blocked independently of Graph in some networks.
+        probes.Add(Probe(EntraCloudInfo.ResourceManagerBaseUrl(cloud) + "/", "Azure Resource Manager"));
+
         return new NetworkProbeGroup(EntraCloudInfo.DisplayName(cloud), IsOptional: false, probes);
     }
 

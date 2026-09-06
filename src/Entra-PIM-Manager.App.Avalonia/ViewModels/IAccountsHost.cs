@@ -2,11 +2,11 @@ namespace EntraPimManager.AppAvalonia.ViewModels;
 
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.Input;
-using EntraPimManager.Core.Auth;
+using EntraPimManager.Core.Configuration;
 
 /// <summary>
 /// Account-management surface exposed by <see cref="ShellViewModel"/> and
-/// consumed by <see cref="SettingsPanelViewModel"/>'s ACCOUNTS section.
+/// consumed by <see cref="SettingsPanelViewModel"/>'s TENANTS section.
 /// </summary>
 /// <remarks>
 /// Settings used to be a leaf view model that only depended on user-settings
@@ -19,16 +19,17 @@ using EntraPimManager.Core.Auth;
 /// </remarks>
 public interface IAccountsHost
 {
-    /// <summary>Enrolled accounts in stable order, wrapped for the row template.</summary>
+    /// <summary>
+    /// Enrolled accounts in stable order, wrapped for the row template. The tenant tree
+    /// groups these very instances — it never copies them, because the shell pushes
+    /// resolved tenant names and alias edits into the rows it reaches through here.
+    /// </summary>
     ObservableCollection<AccountListItemViewModel> Accounts { get; }
 
-    /// <summary>Removes the passed account.</summary>
-    IAsyncRelayCommand<SignedInAccount?> RemoveAccountCommand { get; }
-
-    /// <summary>Opens the single "Add account" slide-in (broker primary, device
-    /// code under Advanced; tenant field optional).</summary>
-    IRelayCommand OpenAddAccountPanelCommand { get; }
-
-    /// <summary>Selects the passed account as the active context.</summary>
-    IRelayCommand<SignedInAccount?> SelectAccountCommand { get; }
+    /// <summary>
+    /// Opens the "Add account" slide-in for one tenant (broker primary, device code
+    /// under Advanced). The tenant comes from the card the button sits in, so the
+    /// slide-in has nothing left to ask.
+    /// </summary>
+    IRelayCommand<TenantSlot?> OpenAddAccountPanelCommand { get; }
 }

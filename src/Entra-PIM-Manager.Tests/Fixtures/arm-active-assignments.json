@@ -1,0 +1,48 @@
+{
+  "value": [
+    {
+      "properties": {
+        "linkedRoleEligibilityScheduleId": "sched-1",
+        "assignmentType": "Activated",
+        "scope": "/subscriptions/sub-1",
+        "roleDefinitionId": "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c",
+        "principalId": "user-oid-1",
+        "principalType": "User",
+        "status": "Provisioned",
+        "roleAssignmentScheduleId": "/subscriptions/sub-1/providers/Microsoft.Authorization/RoleAssignmentSchedules/as-1",
+        "startDateTime": "2026-09-04T08:00:00Z",
+        "endDateTime": "2026-09-04T16:00:00Z",
+        "memberType": "Direct",
+        "expandedProperties": {
+          "scope": { "id": "/subscriptions/sub-1", "displayName": "Pay-As-You-Go", "type": "subscription" },
+          "roleDefinition": { "id": "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c", "displayName": "Contributor", "type": "BuiltInRole" },
+          "principal": { "id": "user-oid-1", "displayName": "User Account", "type": "User" }
+        }
+      },
+      "name": "arm-assign-1",
+      "id": "/subscriptions/sub-1/providers/Microsoft.Authorization/RoleAssignmentScheduleInstances/arm-assign-1",
+      "type": "Microsoft.Authorization/RoleAssignmentScheduleInstances"
+    },
+    {
+      "properties": {
+        "assignmentType": "Assigned",
+        "scope": "/subscriptions/sub-1",
+        "roleDefinitionId": "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7",
+        "principalId": "user-oid-1",
+        "principalType": "User",
+        "status": "Provisioned",
+        "startDateTime": "2025-01-01T00:00:00Z",
+        "endDateTime": null,
+        "memberType": "Direct",
+        "expandedProperties": {
+          "scope": { "id": "/subscriptions/sub-1", "displayName": "Pay-As-You-Go", "type": "subscription" },
+          "roleDefinition": { "id": "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7", "displayName": "Reader", "type": "BuiltInRole" },
+          "principal": { "id": "user-oid-1", "displayName": "User Account", "type": "User" }
+        }
+      },
+      "name": "arm-assign-permanent",
+      "id": "/subscriptions/sub-1/providers/Microsoft.Authorization/RoleAssignmentScheduleInstances/arm-assign-permanent",
+      "type": "Microsoft.Authorization/RoleAssignmentScheduleInstances"
+    }
+  ]
+}

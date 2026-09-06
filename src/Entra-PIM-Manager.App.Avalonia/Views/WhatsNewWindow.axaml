@@ -1,0 +1,82 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EntraPimManager.AppAvalonia.ViewModels"
+        x:Class="EntraPimManager.AppAvalonia.Views.WhatsNewWindow"
+        x:DataType="vm:WhatsNewViewModel"
+        Title="What's new in Entra PIM Manager"
+        Width="420"
+        Height="520"
+        CanResize="False"
+        ShowInTaskbar="True"
+        WindowStartupLocation="CenterScreen"
+        WindowDecorations="BorderOnly"
+        TransparencyLevelHint="Mica,AcrylicBlur,None"
+        Background="Transparent"
+        Topmost="True">
+
+  <!-- Rounded shell with drop shadow — matches the first-run and update windows. -->
+  <Border CornerRadius="12"
+          Background="{DynamicResource SurfaceBaseBrush}"
+          BoxShadow="{DynamicResource ShadowPopup}"
+          Margin="8">
+    <Grid RowDefinitions="Auto,*,Auto" Margin="18,16">
+
+      <StackPanel Grid.Row="0" Spacing="2" Margin="0,0,0,12">
+        <TextBlock Text="What's new"
+                   FontSize="{DynamicResource FontSubtitle}"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextPrimaryBrush}" />
+        <TextBlock Text="{Binding VersionText}"
+                   FontSize="{DynamicResource FontSmall}"
+                   Foreground="{DynamicResource TextSecondaryBrush}" />
+      </StackPanel>
+
+      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ItemsControl ItemsSource="{Binding Notes}" Margin="0,0,8,0">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="vm:WhatsNewViewModel+ReleaseNoteItem">
+              <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,8">
+                <!-- Bullet glyph as its own column so wrapped lines stay aligned. -->
+                <TextBlock Grid.Column="0"
+                           Text="•"
+                           Margin="0,0,7,0"
+                           Foreground="{DynamicResource AccentBrush}"
+                           IsVisible="{Binding IsBullet}" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Text}"
+                           TextWrapping="Wrap"
+                           FontSize="{DynamicResource FontSmall}"
+                           Foreground="{DynamicResource TextSecondaryBrush}"
+                           IsVisible="{Binding !IsHeading}" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding Text}"
+                           TextWrapping="Wrap"
+                           Margin="0,6,0,0"
+                           FontSize="{DynamicResource FontBody}"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimaryBrush}"
+                           IsVisible="{Binding IsHeading}" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,14,0,0">
+        <Button Grid.Column="0"
+                Classes="ghost"
+                Padding="0"
+                HorizontalAlignment="Left"
+                Click="OnOpenReleaseNotes">
+          <TextBlock Text="For more details, see the releases on GitHub"
+                     FontSize="{DynamicResource FontSmall}"
+                     Foreground="{DynamicResource AccentTextBrush}" />
+        </Button>
+        <Button Grid.Column="1"
+                Classes="primary"
+                Content="OK"
+                Click="OnConfirm" />
+      </Grid>
+    </Grid>
+  </Border>
+</Window>

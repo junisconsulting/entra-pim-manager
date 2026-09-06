@@ -1,0 +1,34 @@
+{
+  "value": [
+    {
+      "properties": {
+        "scope": "/subscriptions/sub-1",
+        "roleDefinitionId": "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/acdd72a7-3385-48ef-bd42-f606fba81ae7",
+        "policyId": "/subscriptions/sub-1/providers/Microsoft.Authorization/roleManagementPolicies/policy-reader",
+        "effectiveRules": [
+          { "isExpirationRequired": true, "maximumDuration": "PT1H", "id": "Expiration_EndUser_Assignment", "ruleType": "RoleManagementPolicyExpirationRule", "target": { "caller": "EndUser", "operations": [ "All" ], "level": "Assignment" } }
+        ]
+      },
+      "name": "policy-reader_acdd72a7-3385-48ef-bd42-f606fba81ae7",
+      "type": "Microsoft.Authorization/RoleManagementPolicyAssignment"
+    },
+    {
+      "properties": {
+        "scope": "/subscriptions/sub-1",
+        "roleDefinitionId": "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c",
+        "policyId": "/subscriptions/sub-1/providers/Microsoft.Authorization/roleManagementPolicies/policy-contributor",
+        "effectiveRules": [
+          { "isExpirationRequired": true, "maximumDuration": "P365D", "id": "Expiration_Admin_Eligibility", "ruleType": "RoleManagementPolicyExpirationRule", "target": { "caller": "Admin", "operations": [ "All" ], "level": "Eligibility" } },
+          { "enabledRules": [ "Justification" ], "id": "Enablement_Admin_Assignment", "ruleType": "RoleManagementPolicyEnablementRule", "target": { "caller": "Admin", "operations": [ "All" ], "level": "Assignment" } },
+          { "setting": { "isApprovalRequired": true, "approvalMode": "SingleStage" }, "id": "Approval_EndUser_Assignment", "ruleType": "RoleManagementPolicyApprovalRule", "target": { "caller": "EndUser", "operations": [ "All" ], "level": "Assignment" } },
+          { "isEnabled": true, "claimValue": "c1", "id": "AuthenticationContext_EndUser_Assignment", "ruleType": "RoleManagementPolicyAuthenticationContextRule", "target": { "caller": "EndUser", "operations": [ "All" ], "level": "Assignment" } },
+          { "enabledRules": [ "MultiFactorAuthentication", "Justification", "Ticketing" ], "id": "Enablement_EndUser_Assignment", "ruleType": "RoleManagementPolicyEnablementRule", "target": { "caller": "EndUser", "operations": [ "All" ], "level": "Assignment" } },
+          { "isExpirationRequired": true, "maximumDuration": "PT4H", "id": "Expiration_EndUser_Assignment", "ruleType": "RoleManagementPolicyExpirationRule", "target": { "caller": "EndUser", "operations": [ "All" ], "level": "Assignment" } },
+          { "notificationType": "Email", "recipientType": "Admin", "id": "Notification_Admin_EndUser_Assignment", "ruleType": "RoleManagementPolicyNotificationRule", "target": { "caller": "EndUser", "operations": [ "All" ], "level": "Assignment" } }
+        ]
+      },
+      "name": "policy-contributor_b24988ac-6180-42a0-ab88-20f7382dd24c",
+      "type": "Microsoft.Authorization/RoleManagementPolicyAssignment"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "AuthorizationFailed",
+    "message": "The client 'user@example.com' with object id 'user-oid-1' does not have authorization to perform action 'Microsoft.Authorization/roleManagementPolicyAssignments/read' over scope '/subscriptions/sub-1' or the scope is invalid."
+  }
+}

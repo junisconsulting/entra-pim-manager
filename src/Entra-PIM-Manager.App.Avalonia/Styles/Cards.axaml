@@ -16,8 +16,8 @@
   </Style>
 
   <!-- ===== Settings card (subtle outlined container) =====           -->
-  <!-- Used in the Settings slide-in to group APP REGISTRATION,         -->
-  <!-- ACCOUNTS, APPEARANCE, BEHAVIOR and NOTIFICATIONS into discrete   -->
+  <!-- Used in the Settings slide-in to group TENANTS, APPEARANCE,      -->
+  <!-- BEHAVIOR and NOTIFICATIONS into discrete                         -->
   <!-- visually-delineated blocks. Background stays transparent so it   -->
   <!-- inherits the slide-in's Surface1; a 1 px BorderSubtle stroke +   -->
   <!-- rounded corners draws the boundary without conflicting with the  -->

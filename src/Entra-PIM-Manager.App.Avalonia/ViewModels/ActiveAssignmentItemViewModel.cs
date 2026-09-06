@@ -48,6 +48,13 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
     private string? _tenantName;
 
     /// <summary>
+    /// Short self-chosen name for the enrollment this row belongs to, pushed in
+    /// by the shell. <c>null</c> when the user has set no alias.
+    /// </summary>
+    [ObservableProperty]
+    private string? _accountAlias;
+
+    /// <summary>
     /// True while we're waiting for Graph to confirm the activation; the row
     /// renders a spinner instead of the countdown and hides the deactivate
     /// button. Reset to false once <see cref="ShellViewModel.UpdateActiveAssignments"/>
@@ -104,6 +111,15 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
 
     /// <summary>UPN of the identity that activated this role.</summary>
     public string Username => Account.Username;
+
+    /// <summary>
+    /// What the card renders under the role name: the alias when set, the UPN
+    /// otherwise. Deliberately falls back to the UPN and not to
+    /// <see cref="AccountLabel"/> — with two enrollments of the same person the
+    /// Entra display name is identical and would say nothing. The full UPN stays
+    /// reachable as the line's tooltip.
+    /// </summary>
+    public string AliasOrUpn => AccountAlias ?? Username;
 
     /// <summary>Tenant GUID of the enrollment this activation belongs to.</summary>
     public string TenantId => Account.TenantId;
@@ -167,11 +183,13 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
         PimResourceKind.DirectoryRole => "Directory role",
         PimResourceKind.GroupMembership => "Group membership",
         PimResourceKind.GroupOwnership => "Group ownership",
+        PimResourceKind.AzureResourceRole => "Azure resource role",
         _ => string.Empty,
     };
 
     /// <summary>
-    /// Tenant and resource kind as one string for the row's meta line.
+    /// Tenant, resource kind and — for Azure resource roles — the scope as one
+    /// string for the row's meta line.
     /// </summary>
     /// <remarks>
     /// Composed here rather than laid out as three controls in the view on purpose:
@@ -179,10 +197,30 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
     /// so <c>TextTrimming</c> never engages and a long tenant name (e.g. a CJK one)
     /// overflows its grid column and paints over the countdown. One TextBlock bound
     /// to one string trims correctly at any width.
+    /// <para/>
+    /// Azure resource roles drop the kind: their scope already reads
+    /// "Subscription: …", so the kind only steals the width the scope needs — and
+    /// the scope is what makes "Contributor" mean anything.
     /// </remarks>
-    public string MetaLine => string.IsNullOrEmpty(KindLabel)
-        ? TenantLabel
-        : $"{TenantLabel} · {KindLabel}";
+    public string MetaLine
+    {
+        get
+        {
+            var kind = Assignment.Kind == PimResourceKind.AzureResourceRole ? null : KindLabel;
+            return string.Join(
+                " · ",
+                new[] { TenantLabel, kind, Assignment.ScopeLabel }.Where(part => !string.IsNullOrEmpty(part)));
+        }
+    }
+
+    /// <summary>
+    /// Tooltip for the meta line: the tenant GUID, plus the full ARM scope id for
+    /// Azure resource roles — the trimmed "Subscription: …" is a display name, and
+    /// the scope path is what an operator actually needs to copy.
+    /// </summary>
+    public string MetaTooltip => Assignment.Kind == PimResourceKind.AzureResourceRole
+        ? $"{TenantId}{Environment.NewLine}{Assignment.ScopeId}"
+        : TenantId;
 
     /// <summary>
     /// Wall-clock time this row was constructed. Used by the shell's pending
@@ -218,7 +256,8 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
             PrincipalId: eligibility.PrincipalId,
             StartDateTime: now,
             EndDateTime: now + duration,
-            AssignmentScheduleId: string.Empty);
+            AssignmentScheduleId: string.Empty,
+            ScopeLabel: eligibility.ScopeLabel);
 
         return new ActiveAssignmentItemViewModel(placeholder, account, deactivate)
         {
@@ -300,6 +339,8 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
         OnPropertyChanged(nameof(TenantLabel));
         OnPropertyChanged(nameof(MetaLine));
     }
+
+    partial void OnAccountAliasChanged(string? value) => OnPropertyChanged(nameof(AliasOrUpn));
 
     partial void OnIsPendingChanged(bool value) => OnPropertyChanged(nameof(IsBusy));
 

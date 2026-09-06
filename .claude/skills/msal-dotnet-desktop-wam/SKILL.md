@@ -151,6 +151,16 @@ public async Task<AuthenticationResult> AcquireTokenAsync(
 }
 ```
 
+**A background read must not take the interactive branch.** The serialising lock these apps put
+around token acquisition is held across `AcquireTokenInteractive`, so a dialog nobody answers stalls
+every *other* account's renewal until the caller's timeout — with several enrollments the whole
+refresh dies before the last one is tried. Give the method a `silentOnly` flag and set it wherever a
+timer, not a click, started the call: `catch (MsalUiRequiredException) when (!silentOnly)`. The
+caller then reports "this tenant has not consented" instead of opening a prompt that, for an
+admin-consent-only scope such as Azure Service Management `user_impersonation`, could not have
+succeeded anyway. A claims challenge is the exception — that one follows a click, and the step-up
+prompt is the whole point.
+
 Why each piece matters:
 
 - **`Prompt.SelectAccount`** — forces WAM to show the account picker. Without this, WAM defaults to whatever single candidate it knows about, and the picker collapses to the auth-method screen with no way back to account selection.
@@ -279,6 +289,33 @@ Reference the manifest from `.csproj`:
   <ApplicationManifest>app.manifest</ApplicationManifest>
 </PropertyGroup>
 ```
+
+## A second resource next to Graph (Azure Resource Manager)
+
+Entra PIM Manager acquires tokens for two audiences: Microsoft Graph and Azure Resource Manager
+(`https://management.azure.com/user_impersonation`; China: `https://management.chinacloudapi.cn/user_impersonation`,
+both from `EntraCloudInfo.ResourceManagerScopes`). Rules that follow from MSAL:
+
+- **One audience per token request.** Never put Graph and ARM scopes into the same `AcquireToken*`
+  call. Keep separate scope arrays and separate `AcquireTokenSilent` calls; the same `IAccount` and
+  the same DPAPI cache serve both — the refresh token is multi-resource.
+- **Consent once, at enrollment:** `AcquireTokenInteractive(graphScopes).WithExtraScopesToConsent(armScopes)`
+  shows one consent prompt for both resources without requesting a mixed token. The method exists
+  only on the interactive builder; `AcquireTokenWithDeviceCode` has no equivalent, so device-code
+  enrollments depend on tenant admin consent for the ARM permission.
+- **Already-enrolled accounts** get ARM tokens silently as soon as the tenant has consented
+  (consent is evaluated at token issuance). Without consent, silent fails with
+  `MsalUiRequiredException` / `AADSTS65001` and the broker path falls back to interactive — the
+  aggregator backs the ARM surface off for an hour after such a failure so the 60 s refresh does
+  not become a prompt loop.
+- **A cancelled acquisition is not a network fault.** When a surface timeout cancels a token call
+  that went interactive, the failure surfaces as `TaskCanceledException` with an inner
+  `SocketException(995)` — indistinguishable from a slow endpoint unless you catch it at the token
+  call. Field case 2026-09-04: a tenant without ARM consent reported "the request timed out" for
+  hours. `ArmBearerTokenHandler` therefore wraps that cancellation in `ArmSignInPendingException`
+  so the message can name the prompt instead of the network.
+- **Claims challenges are per resource:** the acrs claims for an ARM activation go into the ARM
+  token request only (`ArmBearerTokenHandler.ClaimsOption`), never into the Graph one.
 
 ## Reference files
 

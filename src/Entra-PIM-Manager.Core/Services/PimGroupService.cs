@@ -162,7 +162,9 @@ public sealed class PimGroupService : IPimGroupService
             return request.Justification;
         }
 
-        var ticketText = $"[Ticket: {request.Ticket.TicketSystem} {request.Ticket.TicketNumber}]";
+        var ticketText = string.IsNullOrWhiteSpace(request.Ticket.TicketSystem)
+            ? $"[Ticket: {request.Ticket.TicketNumber}]"
+            : $"[Ticket: {request.Ticket.TicketSystem} {request.Ticket.TicketNumber}]";
         return string.IsNullOrWhiteSpace(request.Justification)
             ? ticketText
             : $"{request.Justification} {ticketText}";

@@ -39,6 +39,22 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveAsync_PublishesCurrentBeforeTheWriteFinishes()
+    {
+        // Most callers save fire-and-forget and compose their next change from Current
+        // moments later. If Current only caught up after the file write, that next
+        // change would be built on the previous value and silently revert this one.
+        var store = CreateStore();
+        var saved = UserSettings.Default with { ExpiryWarningMinutes = 15 };
+
+        var pending = store.SaveAsync(saved);
+        var seenWhileWriting = store.Current.ExpiryWarningMinutes;
+        await pending;
+
+        Assert.Equal(15, seenWhileWriting);
+    }
+
+    [Fact]
     public async Task LoadAsync_WithNoFile_LeavesDefaults()
     {
         var store = CreateStore();
@@ -364,6 +380,114 @@ public sealed class UserSettingsServiceTests : IDisposable
         await second.LoadAsync();
 
         Assert.Equal(LogLevelPreference.Debug, second.Current.LogLevel);
+    }
+
+    [Fact]
+    public async Task SaveAsync_PersistsAccountAliasesPerEnrollment()
+    {
+        // Asserted key by key: UserSettings is a record, so its Dictionary member
+        // compares by reference and whole-record equality would never hold across
+        // a round-trip.
+        var aliased = UserSettings.Default with
+        {
+            AccountAliases = new Dictionary<string, string>
+            {
+                ["oid-1|tenant-1|Global"] = "EADM",
+                ["oid-1|tenant-2|Global"] = "Guest",
+            },
+        };
+
+        var first = CreateStore();
+        await first.SaveAsync(aliased);
+
+        var second = CreateStore();
+        await second.LoadAsync();
+
+        Assert.NotNull(second.Current.AccountAliases);
+        Assert.Equal("EADM", second.Current.AccountAliases!["oid-1|tenant-1|Global"]);
+        Assert.Equal("Guest", second.Current.AccountAliases!["oid-1|tenant-2|Global"]);
+    }
+
+    [Fact]
+    public async Task SaveAsync_PersistsPinnedAndRecentEligibilities()
+    {
+        var shortcuts = UserSettings.Default with
+        {
+            PinnedEligibilities = ["oid-1|tenant-1|Global|3|role-a|/subscriptions/sub-1"],
+            RecentEligibilities = ["oid-1|tenant-1|Global|0|role-b|/", "oid-1|tenant-1|Global|3|role-a|/subscriptions/sub-1"],
+        };
+
+        var first = CreateStore();
+        await first.SaveAsync(shortcuts);
+
+        var second = CreateStore();
+        await second.LoadAsync();
+
+        Assert.Equal(shortcuts.PinnedEligibilities, second.Current.PinnedEligibilities);
+
+        // Order carries the meaning here — the most recent activation comes first.
+        Assert.Equal(shortcuts.RecentEligibilities, second.Current.RecentEligibilities);
+    }
+
+    [Fact]
+    public async Task SaveAsync_PersistsTicketSystemsPerTenant()
+    {
+        var configured = UserSettings.Default with
+        {
+            TicketSystems = new Dictionary<string, string>
+            {
+                ["tenant-1"] = "ServiceNow",
+                ["tenant-2"] = "Jira",
+            },
+        };
+
+        var first = CreateStore();
+        await first.SaveAsync(configured);
+
+        var second = CreateStore();
+        await second.LoadAsync();
+
+        Assert.NotNull(second.Current.TicketSystems);
+        Assert.Equal("ServiceNow", second.Current.TicketSystemFor("tenant-1"));
+        Assert.Equal("Jira", second.Current.TicketSystemFor("tenant-2"));
+    }
+
+    [Fact]
+    public void TicketSystemFor_UnknownOrUnconfiguredTenant_ReturnsNull()
+    {
+        Assert.Null(UserSettings.Default.TicketSystemFor("tenant-1"));
+        Assert.Null(UserSettings.Default.TicketSystemFor(null));
+
+        var configured = UserSettings.Default with
+        {
+            TicketSystems = new Dictionary<string, string> { ["tenant-1"] = "ServiceNow" },
+        };
+        Assert.Null(configured.TicketSystemFor("tenant-2"));
+
+        // A GUID's casing differs between the Settings form, MSAL and a hand-edited
+        // file; the deserialized dictionary is case-sensitive, so the lookup must not be.
+        Assert.Equal("ServiceNow", configured.TicketSystemFor("TENANT-1"));
+    }
+
+    [Fact]
+    public async Task LoadAsync_LegacyFileWithoutAccountAliases_LeavesItUnset()
+    {
+        // Backwards-compat: a settings.json written before per-account aliases has
+        // no AccountAliases. It must stay null so every row falls back to the UPN.
+        const string legacyJson = """
+            {
+              "Theme": "System",
+              "DefaultDurationHours": 1.0,
+              "ExpiryWarningEnabled": true,
+              "ExpiryWarningMinutes": 5
+            }
+            """;
+        await File.WriteAllTextAsync(_filePath, legacyJson);
+        var store = CreateStore();
+
+        await store.LoadAsync();
+
+        Assert.Null(store.Current.AccountAliases);
     }
 
     private UserSettingsService CreateStore()

@@ -4,9 +4,9 @@ using EntraPimManager.Core.Auth;
 
 /// <summary>
 /// Factory for service bundles scoped to a single enrolled account. Each
-/// bundle owns its own <c>GraphServiceClient</c> (and therefore its own auth
-/// context, retry middleware, claims-challenge handler) plus per-account
-/// instances of the PIM read/write and group-resolver services.
+/// bundle owns its own <c>GraphServiceClient</c> and ARM <c>HttpClient</c> (and
+/// therefore its own auth context, retry middleware, claims-challenge handler)
+/// plus per-account instances of the PIM read/write and group-resolver services.
 /// </summary>
 /// <remarks>
 /// Bundles are cached by <see cref="SignedInAccount.ObjectId"/> for the
@@ -27,4 +27,5 @@ public interface IAccountScopedServices
 public sealed record AccountScopedServiceBundle(
     IPimRoleService RoleService,
     IPimGroupService GroupService,
+    IPimAzureResourceService AzureResourceService,
     IPolicyService PolicyService);
