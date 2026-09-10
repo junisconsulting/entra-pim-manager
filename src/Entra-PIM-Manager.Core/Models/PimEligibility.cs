@@ -33,6 +33,9 @@ public sealed record PimEligibility(
     /// <summary>Prefix Entra uses for a directory scope narrowed to an administrative unit.</summary>
     private const string AdministrativeUnitPrefix = "/administrativeUnits/";
 
+    /// <summary>Prefix of every ARM management-group scope.</summary>
+    private const string ManagementGroupPrefix = "/providers/Microsoft.Management/managementGroups/";
+
     /// <summary>
     /// True for a directory role that only applies inside one administrative unit rather
     /// than across the directory.
@@ -72,4 +75,17 @@ public sealed record PimEligibility(
     public string? AdministrativeUnitId => IsAdministrativeUnitScoped
         ? ScopeId[AdministrativeUnitPrefix.Length..]
         : null;
+
+    /// <summary>
+    /// True when the role may be activated on a management group or subscription
+    /// beneath this scope instead of on the whole scope.
+    /// </summary>
+    /// <remarks>
+    /// Only Azure resource roles held on a management group qualify. A subscription
+    /// eligibility could be narrowed to resource groups the same way; that is
+    /// deliberately not offered, so the picker stays a flat list of management groups
+    /// and subscriptions.
+    /// </remarks>
+    public bool CanNarrowScope => Kind == PimResourceKind.AzureResourceRole
+        && ScopeId.StartsWith(ManagementGroupPrefix, StringComparison.OrdinalIgnoreCase);
 }

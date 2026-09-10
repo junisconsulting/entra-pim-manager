@@ -11,6 +11,7 @@ A Windows tray application for activating Microsoft Entra Privileged Identity Ma
 ## Features
 
 - One-click activation of PIM eligibilities from the system tray — Entra directory roles, PIM for Groups, and Azure resource roles (Azure RBAC at management-group, subscription, resource-group or resource scope)
+- Narrowed Azure activations — a role held on a management group asks where it applies, with nothing preselected: pick single subscriptions, management groups, or deliberately the entire scope. A picked set can be saved under a name and starred, so it sits with your pinned roles for next time
 - Multi-tenant: sign in with multiple admin accounts; eligibilities and active assignments are grouped per tenant
 - One App Registration entry per tenant — a multi-tenant registration reused across tenants, a customer's own single-tenant registration, or a mix
 - Multi-cloud: Global and Entra China (21Vianet) side by side, each with its own App Registration
@@ -36,6 +37,8 @@ Download the latest installer from the [Releases](../../releases) page and run i
 
 When a new release is published, the app checks GitHub once a day, then prompts you to download and install it — you choose whether to restart now or apply on the next launch. Toggle this under **Settings → Updates**.
 
+Uninstalling removes everything: the app, the autostart entry, and your per-user data under `%LocalAppData%\junis\Entra-PIM-Manager` — settings, signed-in accounts and the cached tokens. Updates leave all of that untouched.
+
 ## Configure
 
 Before first use, an Entra App Registration must be created once (an admin task). Its client id is then entered into the app — no file editing required.
@@ -55,6 +58,24 @@ In short:
 > **Upgrading from 0.6.x?** The per-cloud client ids are folded into per-tenant entries automatically at first start (one per enrolled tenant, no re-sign-in). A client id without any enrolled tenant cannot be migrated and has to be added again with its tenant id — see [docs/app-registration-setup.md §8](docs/app-registration-setup.md#8-upgrading-from-06x).
 >
 > Running from source instead of an installer? Copy `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` to `appsettings.local.json` and fill in `TenantAppRegistrations` — a developer convenience that avoids retyping the ids in the UI on every run.
+
+## Enterprise deployment
+
+Rolling out to a team? Nobody has to type a client id. Two scripts:
+
+```powershell
+# Admin, once per tenant: creates the App Registration, grants consent,
+# and prints the endpoint command with the ids filled in
+./scripts/create-app-registration.ps1
+
+# On each endpoint, in the user's context: installs and configures
+./scripts/install-entra-pim-manager.ps1 -SetupExe .\Entra-PIM-Manager-win-Setup.exe `
+    -TenantId <guid> -ClientId <guid> -Label "Contoso" -TicketSystem "ServiceNow"
+```
+
+Installation and configuration are two separate steps — a silent install never starts the app, so the configuration is a second call that writes the entry and exits at once, which is what lets an Intune install command return. Deploy in the **user's** context; install and configuration are both per-user.
+
+Details, arguments and exit codes: [docs/unattended-deployment.md](docs/unattended-deployment.md).
 
 ## Build from source
 

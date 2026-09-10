@@ -356,6 +356,22 @@ public sealed class EligibilityAggregatorTests
     }
 
     /// <summary>One account whose Graph surfaces return one row each and whose Azure surface is the given mock.</summary>
+    [Fact]
+    public async Task GetEligibleChildScopesAsync_AsksTheAccountsAzureService()
+    {
+        var account = MakeAccount("oid-a", "tenant-a");
+        var expected = new[] { new EligibleChildScope("/subscriptions/sub-1", "lz-prod", "subscription") };
+        var azure = new Mock<IPimAzureResourceService>();
+        azure
+            .Setup(s => s.GetEligibleChildScopesAsync("/providers/Microsoft.Management/managementGroups/root", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+
+        var result = await BuildAggregator(account, azure.Object)
+            .GetEligibleChildScopesAsync(account, "/providers/Microsoft.Management/managementGroups/root");
+
+        Assert.Same(expected, result);
+    }
+
     private static EligibilityAggregator BuildAggregator(SignedInAccount account, IPimAzureResourceService azure)
     {
         var role = new Mock<IPimRoleService>();

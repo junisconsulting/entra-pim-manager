@@ -199,18 +199,54 @@ change in `PimAzureResourceService` plus the fixture.
 
 ---
 
-## Azure resource roles activate at the eligibility's scope only (no JEA scope reduction)
+## Narrowed Azure activation: ARM behaviour taken from the docs, not yet observed
 
-**Evidence:** the portal lets an eligible user activate "Contributor on subscription X" at one of
-its resource groups instead (`GET {scope}/providers/Microsoft.Authorization/eligibleChildResources`).
-`PimAzureResourceService.ActivateAsync` always PUTs at `Eligibility.ScopeId`.
+**Evidence:** 0.10.0 lets an Azure role held on a management group be activated on management
+groups and subscriptions beneath it (`ActivationPanelViewModel`, scope picker fed by
+`PimAzureResourceService.GetEligibleChildScopesAsync`, one `SelfActivate` PUT per ticked scope
+with the same body as a whole-scope activation). Written on a Linux host from the Microsoft
+Learn reference; the unit tests pin the documented contract. What the docs do not settle, each
+a small change once a tenant shows the answer:
 
-**Why it matters:** least privilege — a user who only needs one resource group gets the whole
-subscription.
+- **Settled 2026-09-08: `eligibleChildResources` returns direct children only.** At Tenant Root
+  Group the management groups came back and none of the subscriptions beneath them, while
+  `$filter=resourceType eq 'managementgroup'` was accepted. The app therefore walks the
+  hierarchy — one unfiltered read per management group, level by level, in parallel within a
+  level — and keeps the type check client-side. Still assumed: that an unfiltered read at a
+  management group lists nothing but management groups and subscriptions (anything else is
+  dropped, so the cost would be payload, not a wrong scope).
+- **Which role settings ARM evaluates.** Role settings are per (role, scope) and not inherited.
+  The panel uses the policy at the eligibility's scope (maximum duration, justification, ticket,
+  approval, authentication context). If ARM evaluates the policy at the chosen child scope
+  instead, a request can be refused for a limit the form never showed —
+  `RoleAssignmentRequestPolicyValidationFailed` / `ExpirationRule` for a shorter maximum, or
+  HTTP 400 `RoleAssignmentRequestAcrsValidationFailed` when the child demands an authentication
+  context the management group does not, in which case every retry fails the same way. The fix
+  for the latter is a reactive retry with the claims from the 400 body (the message carries
+  them URL-encoded), which would also rescue eligible-only users whose policy read comes back
+  `AuthorizationFailed`; a per-scope policy read before submit only helps users allowed to read it.
+- **The `roleDefinitionId` prefix at the child scope.** The request passes the eligibility's
+  management-group-prefixed id verbatim, the only valid form for a custom role defined there. If
+  ARM insists on a child-scope prefix for built-in roles, the error will name it.
+- **Whether ARM needs `linkedRoleEligibilityScheduleId` beneath the eligibility's scope.** The
+  reference calls it optional ("the system will pick a RoleEligibilitySchedule automatically")
+  and the app does not send it: for an eligibility inherited through a group the schedule's
+  principal is the group while `principalId` is the user, and whether ARM accepts that pairing
+  is unobserved. If a narrowed PUT fails with an eligibility-not-found style error, add it back
+  from the last segment of the instance's `properties.roleEligibilityScheduleId`.
+- **How the activated row reads back.** `roleAssignmentScheduleInstances?$filter=asTarget()`
+  should list it at the child scope. `ShellViewModel.PendingMatchKey` compares Azure rows by
+  definition GUID and case-insensitive scope, so the pending placeholder is replaced and the
+  eligibility row dimmed whatever prefix or casing the real row carries.
 
-**What makes the fix safe:** a scope picker in the activation panel fed by the child-resources
-call, defaulting to the eligibility's own scope; the policy for the activation is the one at the
-chosen scope. Only worth building once a user asks for it.
+**Why it matters:** the first point decides whether the feature works at all on a nested estate;
+the second decides whether a narrowed activation can be refused for a limit the form never showed.
+
+**What makes the fix safe:** run `.claude/manual-test-checklist.md` §3 (narrowed activation) on a
+tenant with an eligibility on a management group that has subscriptions under a child management
+group. Record the child-scopes response and the PUT response as fixtures next to
+`arm-eligible-child-scopes.json`. Then turn the "unobserved" notes in the `azure-rbac-pim-arm-api`
+skill (call 6) into observed facts.
 
 ---
 

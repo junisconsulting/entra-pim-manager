@@ -3,6 +3,7 @@
         xmlns:vm="using:EntraPimManager.AppAvalonia.ViewModels"
         xmlns:cv="using:EntraPimManager.AppAvalonia.Converters"
         xmlns:auth="using:EntraPimManager.Core.Auth"
+        xmlns:models="using:EntraPimManager.Core.Models"
         x:Class="EntraPimManager.AppAvalonia.Views.TrayPopupWindow"
         x:DataType="vm:ShellViewModel"
         Title="Entra PIM Manager"
@@ -283,11 +284,18 @@
         <StackPanel Spacing="6">
 
           <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+            <!-- The grip hides without accounts (there is nothing to reorder), but its
+                 22 px column always stays: it is the card's left gutter, and everything
+                 below aligns to it (Margin 12 + the buttons' 10 px padding). Collapsing
+                 it with IsVisible put the title flush against the border and out of line
+                 with "Add account" on exactly the cards that have no accounts yet.
+                 Hit-testing off rather than hidden, so the drag cursor and the tooltip
+                 go with the glyph. -->
             <Border Grid.Column="0"
                     Width="22"
                     Background="Transparent"
                     Cursor="SizeAll"
-                    IsVisible="{Binding HasAccounts}"
+                    IsHitTestVisible="{Binding HasAccounts}"
                     ToolTip.Tip="Drag to reorder tenants"
                     PointerPressed="OnTenantRowPointerPressed"
                     PointerMoved="OnTenantRowPointerMoved"
@@ -296,6 +304,7 @@
                          FontSize="14"
                          FontWeight="Bold"
                          Foreground="{DynamicResource TextTertiaryBrush}"
+                         IsVisible="{Binding HasAccounts}"
                          HorizontalAlignment="Center"
                          VerticalAlignment="Center" />
             </Border>
@@ -785,8 +794,10 @@
                              disabled for the first 5 min after activation:
                              Microsoft enforces a minimum active duration before
                              selfDeactivate is accepted ("The Active duration is
-                             too short. Minimum Required is 5 minutes."). The
-                             tooltip explains the policy and surfaces the
+                             too short. Minimum Required is 5 minutes."). Grey
+                             while that runs, red once it does not — a red button
+                             that ignores the click says the opposite of what it
+                             means. The tooltip carries the policy and the
                              remaining wait time. -->
                         <Button Grid.Column="3"
                                 Classes="icon danger"
@@ -801,10 +812,22 @@
                                hover, and PathIcon's inheritance picks that up
                                before the .icon.danger:pointerover override can
                                re-pin it. Inlining the brush on the glyph itself
-                               sidesteps the style-precedence quirk entirely. -->
-                          <PathIcon Data="M6 6h12v12H6z"
-                                    Width="11" Height="11"
-                                    Foreground="{DynamicResource DangerBrush}" />
+                               sidesteps the style-precedence quirk entirely.
+                               Which is also why the locked state is a second glyph
+                               rather than a :disabled rule — same reason, same trap,
+                               and the pin star above solves its two states the same
+                               way. Identical geometry, so nothing shifts when the
+                               five minutes are up. -->
+                          <Panel>
+                            <PathIcon Data="M6 6h12v12H6z"
+                                      Width="11" Height="11"
+                                      Foreground="{DynamicResource TextTertiaryBrush}"
+                                      IsVisible="{Binding IsInProvisioningWindow}" />
+                            <PathIcon Data="M6 6h12v12H6z"
+                                      Width="11" Height="11"
+                                      Foreground="{DynamicResource DangerBrush}"
+                                      IsVisible="{Binding !IsInProvisioningWindow}" />
+                          </Panel>
                         </Button>
                       </Grid>
 
@@ -921,10 +944,12 @@
                 </Grid>
               </Border>
 
-              <!-- Shortcuts: pinned first, then the last activations. Both are views
-                   over the rows below, so the long list stays the exception path for
-                   anyone who works with the same handful of roles every day. Hidden
-                   while a search is running — the same hit twice is only noise. -->
+              <!-- Shortcuts: what the user starred, then the last activations. Both are
+                   views over the rows below, so the long list stays the exception path
+                   for anyone who works with the same handful of roles every day. PINNED
+                   holds eligibilities and starred scope sets in one list — the star means
+                   the same thing either way. Hidden while a search is running — the same
+                   hit twice is only noise. -->
               <StackPanel Spacing="4" IsVisible="{Binding HasShortcuts}">
                 <TextBlock Text="PINNED"
                            FontSize="{DynamicResource FontCaption}"
@@ -1129,9 +1154,272 @@
             </StackPanel>
           </Grid>
 
-          <!-- Body -->
-          <ScrollViewer Grid.Row="1" Margin="0,18,0,0" Classes="popup">
+          <!-- Body. The scrollbar column is always there: with the docked bar of the
+               popup style, a bar that appears only once the content grows would shift
+               everything left by its width the moment a section expands. -->
+          <ScrollViewer Grid.Row="1" Margin="0,18,0,0" Classes="popup" VerticalScrollBarVisibility="Visible">
             <StackPanel Spacing="14">
+
+              <!-- Activate on. An Azure role held on a management group can be
+                   activated on the management groups and subscriptions beneath it
+                   instead of on everything — the portal's "Scope" tab. The list is a
+                   flyout so the panel does not grow (and jump) when it opens; the
+                   entire scope is the default, which is what clicking the row has
+                   always meant. Disabled while a batch runs: it has already read
+                   what was ticked. -->
+              <StackPanel IsVisible="{Binding CanNarrowScope}" Spacing="6">
+                <TextBlock Text="Activate on"
+                           FontSize="{DynamicResource FontCaption}"
+                           FontWeight="Medium"
+                           Foreground="{DynamicResource TextTertiaryBrush}" />
+                <Button Classes="secondary"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
+                        Padding="10,6"
+                        IsEnabled="{Binding !IsBusy}"
+                        Command="{Binding OpenScopePickerCommand}">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding ScopeSummary}"
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource TextPrimaryBrush}"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding !HasNoScopeSelection}" />
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding ScopeSummary}"
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center"
+                               IsVisible="{Binding HasNoScopeSelection}" />
+                    <TextBlock Grid.Column="1"
+                               Text="&#x25BE;"
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource TextSecondaryBrush}"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center" />
+                  </Grid>
+                  <Button.Flyout>
+                    <Flyout Placement="Bottom" ShowMode="Standard">
+                      <StackPanel Width="320" Spacing="6">
+                        <!-- Search first, then the scopes in order of how much they
+                             grant: subscriptions, then management groups, and the
+                             eligibility's own scope pinned at the bottom. Nothing is
+                             ticked when the panel opens — taking everything has to be
+                             chosen, not merely accepted. -->
+                        <TextBox Text="{Binding ScopeFilterText}"
+                                 PlaceholderText="Search management groups and subscriptions" />
+                        <TextBlock Text="Loading scopes…"
+                                   IsVisible="{Binding IsLoadingScopes}"
+                                   FontSize="{DynamicResource FontSmall}"
+                                   Foreground="{DynamicResource TextTertiaryBrush}" />
+                        <!-- Plain ItemsControl like every other list in the popup; a
+                             ticked row stays visible through the search, see
+                             ActivationPanelViewModel.ApplyScopeFilter. -->
+                        <ScrollViewer MaxHeight="240">
+                          <StackPanel>
+                            <ItemsControl ItemsSource="{Binding ScopeOptions}">
+                              <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:ScopeOptionViewModel">
+                                  <CheckBox IsChecked="{Binding IsSelected}"
+                                            IsVisible="{Binding IsVisible}"
+                                            Padding="6,2"
+                                            ToolTip.Tip="{Binding Scope.Id}">
+                                    <StackPanel>
+                                      <TextBlock Text="{Binding Name}"
+                                                 FontSize="{DynamicResource FontSmall}"
+                                                 Foreground="{DynamicResource TextPrimaryBrush}"
+                                                 TextTrimming="CharacterEllipsis" />
+                                      <TextBlock Text="{Binding Caption}"
+                                                 FontSize="{DynamicResource FontCaption}"
+                                                 Foreground="{DynamicResource TextTertiaryBrush}" />
+                                    </StackPanel>
+                                  </CheckBox>
+                                </DataTemplate>
+                              </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- The last row of the list, scrolling with it rather than
+                                 pinned under it: the eligibility's own scope, which
+                                 grants everything above it at once. -->
+                            <Border Height="1"
+                                    Margin="0,6"
+                                    Background="{DynamicResource BorderDividerBrush}" />
+                            <CheckBox IsChecked="{Binding IsEntireScope}" Padding="6,2">
+                              <StackPanel>
+                                <TextBlock Text="{Binding ScopeLabel}"
+                                           FontSize="{DynamicResource FontSmall}"
+                                           Foreground="{DynamicResource TextPrimaryBrush}"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="Entire scope — everything listed above"
+                                           FontSize="{DynamicResource FontCaption}"
+                                           Foreground="{DynamicResource TextTertiaryBrush}" />
+                              </StackPanel>
+                            </CheckBox>
+                          </StackPanel>
+                        </ScrollViewer>
+                      </StackPanel>
+                    </Flyout>
+                  </Button.Flyout>
+                </Button>
+
+                <!-- Outside the flyout on purpose: a failed scope read is exactly what
+                     the user does not see while the flyout is closed. -->
+                <TextBlock Text="{Binding ScopeNotice}"
+                           IsVisible="{Binding ScopeNotice,
+                                               Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           TextWrapping="Wrap"
+                           FontSize="{DynamicResource FontSmall}"
+                           Foreground="{DynamicResource WarningBrush}" />
+
+                <!-- What Activate will do, without opening the picker: one chip per
+                     ticked scope, ✕ unticks it. Empty while the entire scope is chosen. -->
+                <ItemsControl ItemsSource="{Binding SelectedScopeChips}" IsEnabled="{Binding !IsBusy}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                      <WrapPanel />
+                    </ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ScopeOptionViewModel">
+                      <Border CornerRadius="6"
+                              Background="{DynamicResource Surface2Brush}"
+                              BorderBrush="{DynamicResource BorderSubtleBrush}"
+                              BorderThickness="1"
+                              Margin="0,0,4,4"
+                              ToolTip.Tip="{Binding Caption}">
+                        <StackPanel Orientation="Horizontal">
+                          <TextBlock Text="{Binding Name}"
+                                     FontSize="{DynamicResource FontSmall}"
+                                     Foreground="{DynamicResource TextPrimaryBrush}"
+                                     Margin="8,4,2,4"
+                                     VerticalAlignment="Center" />
+                          <Button Classes="ghost"
+                                  Padding="6,2"
+                                  Command="{Binding $parent[ItemsControl].((vm:ActivationPanelViewModel)DataContext).RemoveScopeCommand}"
+                                  CommandParameter="{Binding}"
+                                  ToolTip.Tip="Remove">
+                            <TextBlock Text="✕"
+                                       FontSize="10"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextSecondaryBrush}"
+                                       VerticalAlignment="Center" />
+                          </Button>
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Favourite scope sets: the same chrome as the justification
+                     favourites below, so the two read as one idea. -->
+                <StackPanel Spacing="6"
+                            Margin="0,4,0,0"
+                            IsEnabled="{Binding !IsBusy}"
+                            IsVisible="{Binding HasScopeFavoritesOrSaveable}">
+                  <Border Background="{DynamicResource BorderDividerBrush}"
+                          Height="1" />
+                  <TextBlock Text="FAVOURITE SCOPES"
+                             FontSize="{DynamicResource FontCaption}"
+                             FontWeight="Medium"
+                             Foreground="{DynamicResource TextTertiaryBrush}"
+                             VerticalAlignment="Center" />
+
+                  <!-- Save row: a name is optional, the scope names stand in without one. -->
+                  <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding CanSaveScopeSelection}">
+                    <TextBox Grid.Column="0"
+                             Text="{Binding NewFavoriteName}"
+                             PlaceholderText="Name this selection (optional)"
+                             FontSize="{DynamicResource FontSmall}" />
+                    <Button Grid.Column="1"
+                            Classes="ghost"
+                            Padding="6,1"
+                            Margin="6,0,0,0"
+                            VerticalAlignment="Center"
+                            Command="{Binding SaveScopeSelectionCommand}"
+                            ToolTip.Tip="Save the ticked scopes as a reusable favourite for this role">
+                      <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="+"
+                                   FontSize="{DynamicResource FontSmall}"
+                                   FontWeight="Bold"
+                                   Foreground="{DynamicResource AccentTextBrush}"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="Save"
+                                   FontSize="{DynamicResource FontCaption}"
+                                   Foreground="{DynamicResource AccentTextBrush}"
+                                   VerticalAlignment="Center" />
+                      </StackPanel>
+                    </Button>
+                  </Grid>
+
+                  <ItemsControl ItemsSource="{Binding ScopeFavorites}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="models:ScopeFavorite">
+                        <Border CornerRadius="6"
+                                Background="{DynamicResource Surface2Brush}"
+                                BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                BorderThickness="1"
+                                Margin="0,0,0,4">
+                          <Grid ColumnDefinitions="*,Auto,Auto">
+                            <Button Grid.Column="0"
+                                    Classes="ghost"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Left"
+                                    Padding="10,6,6,6"
+                                    CornerRadius="6,0,0,6"
+                                    Command="{Binding $parent[ItemsControl].((vm:ActivationPanelViewModel)DataContext).ApplyScopeFavoriteCommand}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip.Tip="{Binding ScopesLabel}">
+                              <TextBlock Text="{Binding Label}"
+                                         FontSize="{DynamicResource FontSmall}"
+                                         Foreground="{DynamicResource TextPrimaryBrush}"
+                                         TextTrimming="CharacterEllipsis" />
+                            </Button>
+                            <!-- Same star as the list rows, and the same meaning: on the
+                                 main page under PINNED, or not. -->
+                            <Button Grid.Column="1"
+                                    Classes="ghost"
+                                    Padding="4,6"
+                                    Command="{Binding $parent[ItemsControl].((vm:ActivationPanelViewModel)DataContext).ToggleScopeFavoritePinCommand}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip.Tip="Show this set under PINNED on the main page">
+                              <Panel>
+                                <TextBlock Text="&#x2606;"
+                                           FontSize="14"
+                                           Foreground="{DynamicResource TextTertiaryBrush}"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Center"
+                                           IsVisible="{Binding !IsPinned}" />
+                                <TextBlock Text="&#x2605;"
+                                           FontSize="14"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Center"
+                                           IsVisible="{Binding IsPinned}" />
+                              </Panel>
+                            </Button>
+                            <Button Grid.Column="2"
+                                    Classes="ghost"
+                                    Padding="6,6,10,6"
+                                    CornerRadius="0,6,6,0"
+                                    Command="{Binding $parent[ItemsControl].((vm:ActivationPanelViewModel)DataContext).DeleteScopeFavoriteCommand}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip.Tip="Delete favourite">
+                              <TextBlock Text="✕"
+                                         FontSize="11"
+                                         FontWeight="SemiBold"
+                                         Foreground="{DynamicResource TextSecondaryBrush}"
+                                         VerticalAlignment="Center"
+                                         HorizontalAlignment="Center" />
+                            </Button>
+                          </Grid>
+                        </Border>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </StackPanel>
 
               <!-- Duration slider -->
               <StackPanel>

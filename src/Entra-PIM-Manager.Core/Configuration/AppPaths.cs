@@ -34,6 +34,14 @@ public static class AppPaths
     /// <summary>Persisted justification favorites file.</summary>
     public static string FavoritesFile { get; } = Path.Combine(DataDirectory, "favorites.json");
 
+    /// <summary>
+    /// Persisted sets of Azure activation scopes. Deliberately not part of
+    /// <see cref="SettingsFile"/>: that one falls back to defaults as a whole when it
+    /// cannot be read, and a favourite must not be able to cost the user their theme,
+    /// pins and tenant settings.
+    /// </summary>
+    public static string ScopeFavoritesFile { get; } = Path.Combine(DataDirectory, "scope-favorites.json");
+
     /// <summary>Persisted user settings file.</summary>
     public static string SettingsFile { get; } = Path.Combine(DataDirectory, "settings.json");
 

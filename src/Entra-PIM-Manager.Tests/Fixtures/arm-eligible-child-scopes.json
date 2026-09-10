@@ -1,0 +1,7 @@
+{
+  "value": [
+    { "name": "Landing zones", "id": "/providers/Microsoft.Management/managementGroups/mg-lz", "type": "managementgroup" },
+    { "name": "rg-stray", "id": "/subscriptions/sub-prod/resourceGroups/rg-stray", "type": "resourcegroup" },
+    { "name": "lz-root", "id": "/subscriptions/sub-root", "type": "subscription" }
+  ]
+}

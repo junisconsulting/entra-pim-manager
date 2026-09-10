@@ -55,6 +55,15 @@ public interface IEligibilityAggregator
         SignedInAccount account, ActiveAssignment assignment, CancellationToken ct = default);
 
     /// <summary>
+    /// Lists the management groups and subscriptions an Azure eligibility at
+    /// <paramref name="scopeId"/> may be activated on instead of the whole scope — see
+    /// <see cref="IPimAzureResourceService.GetEligibleChildScopesAsync"/>. Not softened
+    /// like the reads: the activation panel shows the failure inline.
+    /// </summary>
+    Task<IReadOnlyList<EligibleChildScope>> GetEligibleChildScopesAsync(
+        SignedInAccount account, string scopeId, CancellationToken ct = default);
+
+    /// <summary>
     /// Forgets the one-hour Azure backoff for <paramref name="account"/>, so the next
     /// read tries the Azure surface again instead of waiting the hour out.
     /// </summary>

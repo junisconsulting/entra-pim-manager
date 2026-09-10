@@ -82,6 +82,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     private readonly ITenantInfoService _tenantInfoService;
     private readonly IToastService _toastService;
     private readonly IUserSettingsService _userSettings;
+    private readonly IScopeFavoritesStore _scopeFavorites;
     private readonly EntraPimManagerOptions _options;
     private readonly ActivationPanelViewModel _activationPanel;
     private readonly AddTenantPanelViewModel _addTenantPanel;
@@ -170,6 +171,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         ITenantInfoService tenantInfoService,
         IToastService toastService,
         IUserSettingsService userSettings,
+        IScopeFavoritesStore scopeFavorites,
         IOptions<EntraPimManagerOptions> options,
         ActivationPanelViewModel activationPanel,
         AddTenantPanelViewModel addTenantPanel,
@@ -183,6 +185,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         _tenantInfoService = tenantInfoService;
         _toastService = toastService;
         _userSettings = userSettings;
+        _scopeFavorites = scopeFavorites;
         _options = options.Value;
         _activationPanel = activationPanel;
         _addTenantPanel = addTenantPanel;
@@ -205,7 +208,12 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         _countdownTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _countdownTimer.Tick += (_, _) => UpdateCountdowns();
 
-        _activationPanel.Closed += OnActivationPanelClosed;
+        _activationPanel.Activated += OnActivated;
+
+        // Scope favourites are written from the activation panel; the starred ones are
+        // rows on the main page, so they follow the store. Changed fires on the writing
+        // thread, hence the dispatch.
+        _scopeFavorites.Changed += () => Dispatcher.UIThread.Post(RebuildShortcutSections);
         _addTenantPanel.Closed += OnAddTenantPanelClosed;
 
         // Late-binding: Settings was constructed first by DI (it has no
@@ -573,13 +581,18 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
 
     /// <summary>Opens the Settings slide-in. Closes any other open slide-in first
     /// so the panel slots stay mutually exclusive. Sets <c>IsOpen=false</c>
-    /// directly on the other panels to slide them out without firing their
-    /// <c>Closed</c> events (which would re-run activation / tenant-add side
-    /// effects).</summary>
+    /// directly on the other panels, which fires no <c>Closed</c> and therefore
+    /// re-runs no activation / tenant-add side effects. An activation batch in
+    /// flight keeps its panel: a per-scope failure has nowhere else to be read, and
+    /// the panel's own Back button is gated the same way.</summary>
     [RelayCommand]
     private void OpenSettingsPanel()
     {
-        _activationPanel.IsOpen = false;
+        if (!_activationPanel.IsBusy)
+        {
+            _activationPanel.IsOpen = false;
+        }
+
         _addTenantPanel.IsOpen = false;
         _settingsPanel.Open();
     }
@@ -779,7 +792,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
                 ActiveAccount = account;
             }
 
-            _activationPanel.Open(account, item.Eligibility, policy);
+            _activationPanel.Open(account, item.Eligibility, policy, item.Favorite);
         }
         catch (Exception ex)
         {
@@ -932,44 +945,58 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         }
     }
 
-    private async void OnActivationPanelClosed(ActivationResult? result)
+    private async void OnActivated(IReadOnlyList<ActivationOutcome> outcomes)
     {
-        if (result is null || _activationPanel.Eligibility is not { } eligibility)
+        if (outcomes.Count == 0)
         {
             return;
         }
 
-        _toastService.ShowActivationResult(eligibility.DisplayName, result);
-
-        if (result.IsSuccess && _activationPanel.Account is { } activated)
+        // One toast per verdict, however many scopes: three "Owner is now active"
+        // in a row read like a stutter, and "active" over a scope that is only
+        // awaiting approval would be wrong — role settings differ per scope.
+        foreach (var verdict in outcomes.GroupBy(outcome => outcome.Result.Status == ActivationStatus.PendingApproval))
         {
-            RememberRecent(activated, eligibility);
+            var members = verdict.ToList();
+            _toastService.ShowActivationResult(ToastLabel(members), members[0].Result);
+        }
+
+        if (outcomes.FirstOrDefault(outcome => outcome.Result.IsSuccess) is { } granted)
+        {
+            RememberRecent(granted.Account, granted.Request.Eligibility);
         }
 
         // Graph PIM's read API is eventually consistent — show a placeholder
         // immediately, the next refresh swaps it for the real assignment
-        // (or the 30 s watchdog drops it).
-        if (ShouldShowPendingFor(result) && _activationPanel.Account is { } account)
+        // (or the 30 s watchdog drops it). One per scope for a narrowed
+        // activation, each naming its own scope.
+        var pendingShown = false;
+        foreach (var outcome in outcomes.Where(candidate => ShouldShowPendingFor(candidate.Result)))
         {
-            var duration = result.EndDateTime is { } end
+            var duration = outcome.Result.EndDateTime is { } end
                 ? end - DateTimeOffset.UtcNow
-                : TimeSpan.FromHours(_activationPanel.DurationHours);
+                : outcome.Request.Duration;
             var pending = ActiveAssignmentItemViewModel.CreatePending(
-                eligibility,
-                account,
+                outcome.Target,
+                outcome.Account,
                 duration,
                 DeactivateAsync);
-            _tenantNameCache.TryGetValue(account.TenantId, out var cachedName);
+            _tenantNameCache.TryGetValue(outcome.Account.TenantId, out var cachedName);
             pending.TenantName = cachedName;
-            pending.AccountAlias = AliasFor(account);
+            pending.AccountAlias = AliasFor(outcome.Account);
             ActiveAssignments.Insert(0, pending);
+            pendingShown = true;
+        }
+
+        if (pendingShown)
+        {
             UpdateActiveCount();
             MarkActiveEligibilities();
         }
 
         await RefreshAsync();
 
-        if (ShouldShowPendingFor(result))
+        if (pendingShown)
         {
             await Task.Delay(TimeSpan.FromSeconds(6));
             await RefreshAsync();
@@ -983,6 +1010,18 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     /// </summary>
     private bool ShouldShowPendingFor(ActivationResult result)
         => result.IsSuccess && result.Status != ActivationStatus.PendingApproval;
+
+    /// <summary>"Owner", "Owner · Subscription: lz-prod", or "Owner on 3 scopes".</summary>
+    private string ToastLabel(IReadOnlyList<ActivationOutcome> outcomes)
+    {
+        var role = outcomes[0].Request.Eligibility.DisplayName;
+        if (outcomes.Count > 1)
+        {
+            return $"{role} on {outcomes.Count} scopes";
+        }
+
+        return outcomes[0].IsNarrowed ? $"{role} · {outcomes[0].Target.ScopeLabel}" : role;
+    }
 
     /// <summary>
     /// Fires after the add-tenant slide-in finishes. On success we drop the new
@@ -1548,6 +1587,8 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     /// what the tenant groups actually hold: a key whose eligibility is gone — revoked,
     /// or its tenant failing to load — simply drops out instead of offering a row that
     /// would fail on click. Recent skips anything pinned so nothing shows up twice.
+    /// PINNED holds both kinds of shortcut: eligibilities, and the saved scope sets
+    /// over them that the user starred — one list, because that is what the star means.
     /// </summary>
     private void RebuildShortcutSections()
     {
@@ -1567,6 +1608,21 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             if (live.TryGetValue(key, out var row))
             {
                 PinnedItems.Add(Shortcut(row));
+            }
+        }
+
+        foreach (var favorite in _scopeFavorites.Current
+            .Where(favorite => favorite.IsPinned)
+            .OrderBy(favorite => favorite.CreatedAt))
+        {
+            var row = live.Values.FirstOrDefault(candidate => favorite.BelongsTo(
+                candidate.Account.ObjectId,
+                candidate.Account.TenantId,
+                candidate.Eligibility.ResourceId,
+                candidate.Eligibility.ScopeId));
+            if (row is not null)
+            {
+                PinnedItems.Add(Shortcut(row, favorite));
             }
         }
 
@@ -1592,18 +1648,30 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             && string.IsNullOrWhiteSpace(FilterText);
 
     /// <summary>A second row view model over the same eligibility, laid out for the top sections.</summary>
-    private EligibilityItemViewModel Shortcut(EligibilityItemViewModel row)
+    private EligibilityItemViewModel Shortcut(EligibilityItemViewModel row, ScopeFavorite? favorite = null)
         => new(row.Eligibility, row.Account, ActivateAsync, TogglePin)
         {
             TenantName = row.TenantName,
             IsShortcut = true,
-            IsPinned = row.IsPinned,
-            IsCurrentlyActive = row.IsCurrentlyActive,
+
+            // A favourite row is on the list because it is starred, and it is never
+            // dimmed: it stands for several scopes, and the eligibility above them
+            // being active says nothing about whether those are.
+            IsPinned = favorite is not null || row.IsPinned,
+            IsCurrentlyActive = favorite is null && row.IsCurrentlyActive,
+            Favorite = favorite,
         };
 
-    /// <summary>Pins or unpins one eligibility and rebuilds the sections.</summary>
+    /// <summary>Pins or unpins one eligibility — or one saved scope set — and rebuilds the sections.</summary>
     private void TogglePin(EligibilityItemViewModel row)
     {
+        if (row.Favorite is { } favorite)
+        {
+            // The store's Changed event rebuilds the sections; nothing to do here.
+            _ = SafeSetFavoritePinnedAsync(favorite);
+            return;
+        }
+
         var key = ShortcutKey(row.Account, row.Eligibility);
         if (!_pinnedKeys.Remove(key))
         {
@@ -1789,6 +1857,19 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         _ = SafePersistAsync(updated);
     }
 
+    /// <summary>Stars or unstars a saved scope set, logging rather than throwing on a failed write.</summary>
+    private async Task SafeSetFavoritePinnedAsync(ScopeFavorite favorite)
+    {
+        try
+        {
+            await _scopeFavorites.SetPinnedAsync(favorite.Id, !favorite.IsPinned).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Saving the starred state of a scope favourite failed");
+        }
+    }
+
     private async Task SafePersistAsync(UserSettings settings)
     {
         try
@@ -1841,11 +1922,15 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         // Carry inline deactivation-error captions across the rebuild so a
         // refresh that fires between the failed POST and the user's eyes
         // doesn't wipe the error signal off the row.
-        var errorTexts = ActiveAssignments
-            .Where(a => !string.IsNullOrEmpty(a.DeactivationErrorText))
-            .ToDictionary(
-                a => PendingMatchKey(a.Account, a.Assignment.Kind, a.Assignment.ResourceId, a.Assignment.ScopeId),
-                a => a.DeactivationErrorText);
+        // Indexer, not ToDictionary: two active rows can share a key — the same Azure
+        // role at the same scope, held directly and through a group — and a duplicate
+        // there would throw the whole refresh away over a carried-over caption.
+        var errorTexts = new Dictionary<(PimResourceKind, string, string, string, string), string?>();
+        foreach (var row in ActiveAssignments.Where(a => !string.IsNullOrEmpty(a.DeactivationErrorText)))
+        {
+            errorTexts[PendingMatchKey(row.Account, row.Assignment.Kind, row.Assignment.ResourceId, row.Assignment.ScopeId)] =
+                row.DeactivationErrorText;
+        }
 
         ActiveAssignments.Clear();
 
@@ -1898,37 +1983,39 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         UpdateActiveCount();
     }
 
+    /// <summary>
+    /// Identity of one assignment or eligibility for matching active rows against
+    /// pending rows and eligibility rows. An Azure role is compared by its definition
+    /// GUID alone and case-insensitively: an activation narrowed to a subscription is
+    /// requested with the management group's <c>roleDefinitionId</c>, the row ARM lists
+    /// afterwards may carry the subscription's, and ARM scope ids are not case-sensitive
+    /// — the same role at the same scope either way.
+    /// </summary>
     private (PimResourceKind Kind, string ResourceId, string ScopeId, string ObjectId, string TenantId)
         PendingMatchKey(SignedInAccount account, PimResourceKind kind, string resourceId, string scopeId)
-        => (kind, resourceId, scopeId, account.ObjectId, account.TenantId);
+        => kind == PimResourceKind.AzureResourceRole
+            ? (kind, RoleDefinitionKey(resourceId).ToLowerInvariant(), scopeId.ToLowerInvariant(), account.ObjectId, account.TenantId)
+            : (kind, resourceId, scopeId, account.ObjectId, account.TenantId);
 
     /// <summary>
     /// Flags any eligibility row whose (Kind, ResourceId, ScopeId, oid, tid)
     /// tuple matches an active assignment so the row can be dimmed and made
     /// non-clickable. Composite key includes account so the same identity in
-    /// two tenants never cross-poisons rows.
+    /// two tenants never cross-poisons rows; built by <see cref="PendingMatchKey"/>
+    /// so Azure rows match the way pending rows do.
     /// </summary>
     private void MarkActiveEligibilities()
     {
-        var activeKeys = new HashSet<(PimResourceKind, string, string, string, string)>(
-            ActiveAssignments.Select(row => (
-                row.Assignment.Kind,
-                row.Assignment.ResourceId,
-                row.Assignment.ScopeId,
-                row.Account.ObjectId,
-                row.Account.TenantId)));
+        var activeKeys = ActiveAssignments
+            .Select(row => PendingMatchKey(row.Account, row.Assignment.Kind, row.Assignment.ResourceId, row.Assignment.ScopeId))
+            .ToHashSet();
 
         foreach (var group in EligibilityGroups)
         {
             foreach (var item in group.Items)
             {
-                var key = (
-                    item.Eligibility.Kind,
-                    item.Eligibility.ResourceId,
-                    item.Eligibility.ScopeId,
-                    item.Account.ObjectId,
-                    item.Account.TenantId);
-                item.IsCurrentlyActive = activeKeys.Contains(key);
+                item.IsCurrentlyActive = activeKeys.Contains(
+                    PendingMatchKey(item.Account, item.Eligibility.Kind, item.Eligibility.ResourceId, item.Eligibility.ScopeId));
             }
 
             // Counted off the canonical flat list, so it stays correct no matter how
@@ -1952,15 +2039,10 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
 
         // The shortcut sections hold their own row instances over the same
         // eligibilities, so they need the same pass.
-        foreach (var item in PinnedItems.Concat(RecentItems))
+        foreach (var item in PinnedItems.Concat(RecentItems).Where(item => item.Favorite is null))
         {
-            var key = (
-                item.Eligibility.Kind,
-                item.Eligibility.ResourceId,
-                item.Eligibility.ScopeId,
-                item.Account.ObjectId,
-                item.Account.TenantId);
-            item.IsCurrentlyActive = activeKeys.Contains(key);
+            item.IsCurrentlyActive = activeKeys.Contains(
+                PendingMatchKey(item.Account, item.Eligibility.Kind, item.Eligibility.ResourceId, item.Eligibility.ScopeId));
         }
     }
 

@@ -17,6 +17,7 @@ Learn (api-version `2020-10-01`) on 2026-09-04; field verification is tracked in
 - Listing a user's eligible or active Azure RBAC roles across subscriptions and management groups
 - Activating or deactivating an Azure resource role (self-service)
 - Reading the PIM settings ("role management policy") of an Azure role at a scope
+- Narrowing an activation to management groups or subscriptions beneath the eligibility's scope
 - Mapping ARM CloudError codes to user-facing messages
 - Deciding which App Registration permission / MSAL scope an ARM call needs
 
@@ -36,7 +37,7 @@ Learn (api-version `2020-10-01`) on 2026-09-04; field verification is tracked in
 - No RBAC role is needed to *list* or *activate* one's own eligibilities; reading a policy may
   require more than eligibility (unverified — see backlog).
 
-## The five essential calls
+## The six essential calls
 
 ### 1. List my eligibilities — tenant root, every scope at once
 
@@ -110,6 +111,7 @@ Content-Type: application/json
   app treats like `PendingScheduleCreation` and resolves on the next list refresh.
   `properties.scheduleInfo.expiration.endDateTime` gives the expiry when present.
 - **There is no validation-only / dry-run mode.** Do not fake one.
+- To activate **beneath** the eligibility's scope, see call 6.
 
 ### 4. Deactivate
 
@@ -141,6 +143,38 @@ ids and fields are the same as Graph's:
 
 Ignore the `_Admin_*` and `Notification_*` rules. **The same role has a different policy at every
 scope** — cache per (tenant, role, scope), never per role alone.
+
+### 6. List the scopes an eligibility can be narrowed to
+
+```http
+GET /{scope}/providers/Microsoft.Authorization/eligibleChildResources?api-version=2020-10-01
+```
+
+The portal's "Scope" tab: an eligibility held on a management group may be activated on a
+management group or subscription beneath it instead, one held on a subscription on one of its
+resource groups. Each item is `{ id, name, type }` with `type` in lower case as in
+`expandedProperties.scope.type` (`managementgroup`, `subscription`, `resourcegroup`); follow
+`nextLink`. An optional `$filter` narrows by type — the reference documents
+`resourceType eq 'Subscription'` and `resourceType eq 'subscription' or resourceType eq
+'resourcegroup'`, and `'managementgroup'` is accepted too (observed 2026-09-08). **The listing is
+direct children only**: at a tenant root group whose estate the portal shows as dozens of
+subscriptions, the management groups came back and not one subscription (observed 2026-09-08).
+
+To offer a whole estate, walk it: read the scope, then every management group it returned,
+level by level (`PimAzureResourceService.GetEligibleChildScopesAsync` does this unfiltered, in
+parallel within a level, with the type check client-side). Entra PIM Manager never offers
+resource groups.
+
+To activate at the narrower scope, run the `SelfActivate` PUT of call 3 **at the child scope**
+with the same body. `linkedRoleEligibilityScheduleId` (the last segment of the eligibility
+instance's `properties.roleEligibilityScheduleId`) is documented optional — "the system will pick
+a RoleEligibilitySchedule automatically" — and the app does not send it: for an eligibility
+inherited through a group the schedule's principal is the group while `principalId` is the user,
+and whether ARM accepts that pairing is unobserved. `roleDefinitionId` stays exactly as the
+eligibility reported it. Several scopes are several PUTs — the URL carries one scope, there is no
+multi-scope request. The resulting active row lists at the child scope; deactivation is the usual
+PUT at that scope. Which role settings ARM evaluates for a narrowed request — the eligibility's
+scope or the child's — is likewise unobserved; settings are per (role, scope) and not inherited.
 
 ## Errors
 

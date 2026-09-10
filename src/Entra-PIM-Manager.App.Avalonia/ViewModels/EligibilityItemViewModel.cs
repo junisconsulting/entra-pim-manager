@@ -100,6 +100,13 @@ public sealed partial class EligibilityItemViewModel : ObservableObject
     /// </summary>
     public bool IsShortcut { get; init; }
 
+    /// <summary>
+    /// For a pinned scope favourite: the set of scopes the row stands for. Clicking
+    /// opens the activation panel with those scopes ticked, and the star unpins the
+    /// favourite rather than the eligibility. <c>null</c> on an ordinary row.
+    /// </summary>
+    public ScopeFavorite? Favorite { get; init; }
+
     /// <summary>Heading of the row: the scope inside a role node, the role name everywhere else.</summary>
     public string PrimaryLabel => IsInRoleGroup ? ScopeLabel ?? DisplayName : DisplayName;
 
@@ -117,9 +124,10 @@ public sealed partial class EligibilityItemViewModel : ObservableObject
     /// <summary>
     /// Tenant plus scope (or kind) for a shortcut row — without it three identical
     /// "Owner" rows would sit at the top of the list with nothing to tell them apart.
+    /// A favourite row names its scope set instead of the eligibility's scope.
     /// </summary>
     public string? ContextLine => IsShortcut
-        ? string.Join(" · ", new[] { TenantLabel, ScopeLabel ?? KindLabel }.Where(part => !string.IsNullOrEmpty(part)))
+        ? string.Join(" · ", new[] { TenantLabel, Favorite?.Label ?? ScopeLabel ?? KindLabel }.Where(part => !string.IsNullOrEmpty(part)))
         : null;
 
     /// <summary>Localized label for the resource kind.</summary>

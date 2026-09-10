@@ -325,8 +325,9 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
             RemainingText = $"{Math.Max(1, remaining.Seconds)}s";
         }
 
-        // Re-evaluate the provisioning-window-derived properties so the stop
-        // button re-enables itself automatically once the lockout expires.
+        // Re-evaluate the provisioning-window-derived properties so the stop button
+        // turns from grey to red and re-enables itself the moment the lockout expires,
+        // without waiting for a refresh.
         OnPropertyChanged(nameof(IsInProvisioningWindow));
         OnPropertyChanged(nameof(DeactivateTooltip));
     }

@@ -26,10 +26,16 @@ namespace EntraPimManager.Core.Models;
 /// Device-code enrollments cannot satisfy this: their token path drops claims
 /// by documented design (see MsalAuthService).
 /// </param>
+/// <param name="TargetScope">
+/// For Azure resource roles: the management group or subscription beneath the
+/// eligibility's scope to activate on instead of the whole scope. <c>null</c>
+/// activates at the eligibility's own scope. Ignored by the Graph surfaces.
+/// </param>
 public sealed record ActivationRequest(
     PimEligibility Eligibility,
     TimeSpan Duration,
     string? Justification,
     TicketInfo? Ticket,
     bool IsValidationOnly = false,
-    string? AuthContextClaim = null);
+    string? AuthContextClaim = null,
+    EligibleChildScope? TargetScope = null);

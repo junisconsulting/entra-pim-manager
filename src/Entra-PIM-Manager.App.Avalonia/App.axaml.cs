@@ -110,6 +110,9 @@ public partial class App : Application
         // depend on the cached Current value being populated here.
         var userSettings = Services.GetRequiredService<IUserSettingsService>();
         userSettings.LoadAsync().GetAwaiter().GetResult();
+
+        // Same reason: the shell reads the starred sets while it builds its first rows.
+        Services.GetRequiredService<IScopeFavoritesStore>().LoadAsync().GetAwaiter().GetResult();
         RequestedThemeVariant = ThemeMapper.ToVariant(userSettings.Current.Theme);
         ApplyLogLevel(userSettings.Current.LogLevel);
         userSettings.Changed += settings => ApplyLogLevel(settings.LogLevel);
@@ -335,6 +338,9 @@ public partial class App : Application
         builder.Services.AddSingleton<IJustificationFavoritesStore>(sp => new JustificationFavoritesStore(
             AppPaths.FavoritesFile,
             sp.GetRequiredService<ILogger<JustificationFavoritesStore>>()));
+        builder.Services.AddSingleton<IScopeFavoritesStore>(sp => new ScopeFavoritesStore(
+            AppPaths.ScopeFavoritesFile,
+            sp.GetRequiredService<ILogger<ScopeFavoritesStore>>()));
         builder.Services.AddSingleton<IUserSettingsService>(sp => new UserSettingsService(
             AppPaths.SettingsFile,
             sp.GetRequiredService<ILogger<UserSettingsService>>()));

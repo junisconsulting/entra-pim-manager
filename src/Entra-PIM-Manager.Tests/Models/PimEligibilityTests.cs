@@ -68,6 +68,27 @@ public sealed class PimEligibilityTests
         Assert.Null(Eligibility(PimResourceKind.AzureResourceRole, "/subscriptions/x").NarrowedScopeId);
     }
 
+    [Fact]
+    public void CanNarrowScope_AzureRoleOnAManagementGroup_IsTrue()
+    {
+        var eligibility = Eligibility(
+            PimResourceKind.AzureResourceRole,
+            "/providers/Microsoft.Management/managementGroups/root");
+
+        Assert.True(eligibility.CanNarrowScope);
+    }
+
+    [Theory]
+    [InlineData(PimResourceKind.AzureResourceRole, "/subscriptions/" + UnitId)]
+    [InlineData(PimResourceKind.AzureResourceRole, "/subscriptions/" + UnitId + "/resourceGroups/rg-prod")]
+    [InlineData(PimResourceKind.DirectoryRole, "/providers/Microsoft.Management/managementGroups/root")]
+    public void CanNarrowScope_AnythingElse_IsFalse(PimResourceKind kind, string scopeId)
+    {
+        // A subscription could be narrowed to its resource groups; that is deliberately
+        // not offered. A directory role never narrows, whatever its scope id looks like.
+        Assert.False(Eligibility(kind, scopeId).CanNarrowScope);
+    }
+
     private static PimEligibility Eligibility(PimResourceKind kind, string scopeId) => new(
         Kind: kind,
         DisplayName: "User Administrator",

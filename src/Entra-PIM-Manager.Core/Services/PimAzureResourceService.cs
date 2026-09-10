@@ -29,6 +29,11 @@ public sealed class PimAzureResourceService : IPimAzureResourceService
     private const string Provider = "providers/Microsoft.Authorization";
     private const string UnknownRoleName = "(unknown role)";
 
+    // Azure allows six levels of management groups below the root. The bound exists
+    // so a cycle ARM would never return still cannot loop forever.
+    private const int MaxHierarchyDepth = 8;
+    private const int ChildReadConcurrency = 6;
+
     // Same rule ids as the Graph policy surface.
     private const string ExpirationRuleId = "Expiration_EndUser_Assignment";
     private const string EnablementRuleId = "Enablement_EndUser_Assignment";
@@ -43,6 +48,10 @@ public sealed class PimAzureResourceService : IPimAzureResourceService
     private readonly HttpClient _arm;
     private readonly string _principalObjectId;
     private readonly ILogger<PimAzureResourceService> _logger;
+
+    // Bounds the fan-out of the hierarchy walk: a level with dozens of management
+    // groups must not open dozens of connections and invite a 429 at once.
+    private readonly SemaphoreSlim _childReads = new(ChildReadConcurrency, ChildReadConcurrency);
 
     /// <param name="arm">ARM client from <see cref="IArmClientFactory"/>, base address set to the cloud's host.</param>
     /// <param name="principalObjectId">
@@ -83,6 +92,45 @@ public sealed class PimAzureResourceService : IPimAzureResourceService
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<EligibleChildScope>> GetEligibleChildScopesAsync(string scopeId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(scopeId);
+
+        // eligibleChildResources answers with direct children only — observed
+        // 2026-09-08: at a tenant root group the management groups came back, none of
+        // the subscriptions beneath them. So the hierarchy is walked level by level,
+        // the management groups of a level read in parallel under a small cap. No type
+        // filter: at a management group the direct children are management groups and
+        // subscriptions, and the type check in the read keeps anything else out.
+        //
+        // The read at the eligibility's own scope decides whether there is a picker at
+        // all, so its failure is the caller's. One management group further down that
+        // refuses is logged and skipped — losing a subtree beats losing the estate.
+        var found = await ReadChildScopesAsync(scopeId, parentName: null, ct).ConfigureAwait(false);
+        var level = found.Where(scope => scope.IsManagementGroup).ToList();
+        for (var depth = 1; level.Count > 0 && depth < MaxHierarchyDepth; depth++)
+        {
+            var reads = level.Select(parent => ReadChildScopesSafeAsync(parent.Id, parent.Name, ct));
+            var children = (await Task.WhenAll(reads).ConfigureAwait(false)).SelectMany(page => page).ToList();
+            found.AddRange(children);
+            level = children.Where(scope => scope.IsManagementGroup).ToList();
+        }
+
+        // Smallest reach first: subscriptions, grouped under their management group —
+        // the flat picker's stand-in for a tree — and only then the management groups,
+        // each of which grants everything beneath it. The picker offers them in this
+        // order so the cheap answer is the one in reach.
+        return found
+            .Where(scope => scope.IsSubscription)
+            .OrderBy(scope => scope.ParentName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(scope => scope.Name, StringComparer.OrdinalIgnoreCase)
+            .Concat(found
+                .Where(scope => scope.IsManagementGroup)
+                .OrderBy(scope => scope.Name, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    /// <inheritdoc />
     public async Task<ActivationResult> ActivateAsync(ActivationRequest request, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -97,6 +145,13 @@ public sealed class PimAzureResourceService : IPimAzureResourceService
             throw new NotSupportedException("Azure Resource Manager has no validation-only mode.");
         }
 
+        // A narrowed activation runs at the chosen management group or subscription
+        // with the very same body: ARM resolves the eligibility above it by itself —
+        // linkedRoleEligibilityScheduleId is documented optional and deliberately not
+        // sent. For an eligibility inherited through a group the schedule's principal
+        // is the group while principalId is the user, and whether ARM accepts that
+        // pairing is unobserved.
+        var scope = request.TargetScope?.Id ?? request.Eligibility.ScopeId;
         var body = new
         {
             properties = new
@@ -131,7 +186,7 @@ public sealed class PimAzureResourceService : IPimAzureResourceService
 
         try
         {
-            var (requestName, properties) = await PutScheduleRequestAsync(request.Eligibility.ScopeId, body, claims, ct)
+            var (requestName, properties) = await PutScheduleRequestAsync(scope, body, claims, ct)
                 .ConfigureAwait(false);
             var schedule = Child(properties, "scheduleInfo");
             var start = Time(schedule, "startDateTime") ?? DateTimeOffset.UtcNow;
@@ -236,14 +291,7 @@ public sealed class PimAzureResourceService : IPimAzureResourceService
             return null;
         }
 
-        var kind = Text(scope, "type")?.ToLowerInvariant() switch
-        {
-            "subscription" => "Subscription",
-            "resourcegroup" => "Resource group",
-            "managementgroup" => "Management group",
-            _ => "Resource",
-        };
-        return $"{kind}: {name}";
+        return $"{EligibleChildScope.KindLabelFor(Text(scope, "type"))}: {name}";
     }
 
     private static ActivationPolicy ParsePolicyRules(JsonElement? rules)
@@ -363,6 +411,49 @@ public sealed class PimAzureResourceService : IPimAzureResourceService
             EndDateTime: Time(properties, "endDateTime"),
             AssignmentScheduleId: Text(item, "name") ?? string.Empty,
             ScopeLabel: BuildScopeLabel(Child(expanded, "scope"), scopeId));
+    }
+
+    /// <summary>
+    /// The direct children of one management group, or an empty list when ARM refuses
+    /// it — a scope the user may not read is not a reason to have no picker.
+    /// </summary>
+    private async Task<List<EligibleChildScope>> ReadChildScopesSafeAsync(string scopeId, string? parentName, CancellationToken ct)
+    {
+        try
+        {
+            return await ReadChildScopesAsync(scopeId, parentName, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogDebug(ex, "Reading the children of {Scope} failed; skipping that subtree", scopeId);
+            return [];
+        }
+    }
+
+    /// <summary>The direct children of one scope, all pages, resource groups and resources dropped.</summary>
+    private async Task<List<EligibleChildScope>> ReadChildScopesAsync(string scopeId, string? parentName, CancellationToken ct)
+    {
+        List<JsonElement> items;
+        await _childReads.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            items = await GetPagedAsync(
+                    $"{scopeId}/{Provider}/eligibleChildResources?api-version={ApiVersion}", ct)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _childReads.Release();
+        }
+
+        return items
+            .Select(item => new EligibleChildScope(
+                Text(item, "id") ?? string.Empty,
+                Text(item, "name") ?? LastSegment(Text(item, "id")) ?? string.Empty,
+                Text(item, "type") ?? string.Empty,
+                parentName))
+            .Where(scope => scope.Id.Length > 0 && (scope.IsManagementGroup || scope.IsSubscription))
+            .ToList();
     }
 
     /// <summary>Follows <c>nextLink</c> until the collection is exhausted.</summary>

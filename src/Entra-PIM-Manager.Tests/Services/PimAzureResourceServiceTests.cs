@@ -11,6 +11,9 @@ public sealed class PimAzureResourceServiceTests
 {
     private const string UserOid = "user-oid-1";
     private const string ContributorId = "/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c";
+    private const string RootManagementGroup = "/providers/Microsoft.Management/managementGroups/root";
+    private const string OwnerAtRootId = RootManagementGroup + "/providers/Microsoft.Authorization/roleDefinitions/8e3af657-a8ff-443c-a75c-2fe8c4bcb635";
+    private const string LandingZoneChildren = "{\"value\":[{\"name\":\"lz-prod\",\"id\":\"/subscriptions/sub-prod\",\"type\":\"subscription\"},{\"name\":\"lz-dev\",\"id\":\"/subscriptions/sub-dev\",\"type\":\"subscription\"}]}";
 
     [Fact]
     public async Task GetEligibleAzureRolesAsync_ListsAtTenantRootAndMapsScopeRoleAndLabel()
@@ -119,6 +122,110 @@ public sealed class PimAzureResourceServiceTests
         Assert.Contains("Fixing a locked account", body, StringComparison.Ordinal);
         Assert.DoesNotContain("startDateTime", body, StringComparison.Ordinal);
         Assert.DoesNotContain("isValidationOnly", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("linkedRoleEligibilityScheduleId", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ActivateAsync_WithATargetScope_PutsThereWithTheSameBody()
+    {
+        var handler = new FakeHttpMessageHandler(
+            FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("arm-activation-provisioned.json"), HttpStatusCode.Created));
+        var service = Build(handler);
+        var eligibility = new PimEligibility(
+            PimResourceKind.AzureResourceRole,
+            "Owner",
+            OwnerAtRootId,
+            RootManagementGroup,
+            UserOid,
+            null,
+            false,
+            "Management group: Tenant Root Group");
+        var request = new ActivationRequest(
+            eligibility,
+            TimeSpan.FromHours(1),
+            "Project work",
+            null,
+            TargetScope: new EligibleChildScope("/subscriptions/sub-prod", "lz-prod", "subscription"));
+
+        var result = await service.ActivateAsync(request);
+
+        Assert.True(result.IsSuccess);
+        var sent = handler.Requests[0];
+        Assert.StartsWith(
+            "https://management.azure.com/subscriptions/sub-prod/providers/Microsoft.Authorization/roleAssignmentScheduleRequests/",
+            sent.RequestUri!.ToString(),
+            StringComparison.Ordinal);
+
+        // The role definition id stays exactly as the eligibility reported it — a custom
+        // role defined on the management group has no other valid form — and nothing
+        // links the request to a schedule: ARM resolves the eligibility above the scope.
+        var body = handler.RequestBodies[0];
+        Assert.NotNull(body);
+        Assert.Contains($"\"roleDefinitionId\":\"{OwnerAtRootId}\"", body, StringComparison.Ordinal);
+        Assert.Contains("\"requestType\":\"SelfActivate\"", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("linkedRoleEligibilityScheduleId", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetEligibleChildScopesAsync_WalksTheManagementGroupsAndListsSubscriptionsFirst()
+    {
+        var handler = new FakeHttpMessageHandler(
+            FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("arm-eligible-child-scopes.json")),
+            FakeHttpMessageHandler.JsonResponse(LandingZoneChildren));
+        var service = Build(handler);
+
+        var result = await service.GetEligibleChildScopesAsync(RootManagementGroup);
+
+        // ARM answers with direct children only, so every management group it returns
+        // is read in turn — unfiltered, the type check is client-side.
+        Assert.Equal(2, handler.RequestCount);
+        Assert.Equal(
+            $"{RootManagementGroup}/providers/Microsoft.Authorization/eligibleChildResources",
+            handler.Requests[0].RequestUri!.AbsolutePath);
+        Assert.DoesNotContain("$filter", handler.Requests[0].RequestUri!.Query, StringComparison.Ordinal);
+        Assert.Equal(
+            "/providers/Microsoft.Management/managementGroups/mg-lz/providers/Microsoft.Authorization/eligibleChildResources",
+            handler.Requests[1].RequestUri!.AbsolutePath);
+
+        // The stray resource group must not become an activation scope. Subscriptions
+        // come first — the picker leads with the smallest grant — grouped under their
+        // management group; the management groups follow.
+        Assert.Collection(
+            result,
+            scope =>
+            {
+                Assert.Equal("lz-root", scope.Name);
+                Assert.Null(scope.ParentName);
+            },
+            scope =>
+            {
+                Assert.Equal("lz-dev", scope.Name);
+                Assert.Equal("Landing zones", scope.ParentName);
+            },
+            scope =>
+            {
+                Assert.Equal("lz-prod", scope.Name);
+                Assert.Equal("/subscriptions/sub-prod", scope.Id);
+                Assert.Equal("Subscription: lz-prod", scope.ScopeLabel);
+            },
+            scope =>
+            {
+                Assert.Equal("Landing zones", scope.Name);
+                Assert.True(scope.IsManagementGroup);
+                Assert.Null(scope.ParentName);
+            });
+    }
+
+    [Fact]
+    public async Task GetEligibleChildScopesAsync_WhenTheReadFails_Throws()
+    {
+        var handler = new FakeHttpMessageHandler(
+            FakeHttpMessageHandler.JsonResponse(FixtureLoader.Load("arm-error-authorization-failed.json"), HttpStatusCode.Forbidden));
+        var service = Build(handler);
+
+        var error = await Assert.ThrowsAsync<ArmRequestException>(() => service.GetEligibleChildScopesAsync(RootManagementGroup));
+
+        Assert.Equal("AuthorizationFailed", error.Code);
     }
 
     [Fact]

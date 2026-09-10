@@ -170,6 +170,14 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
     }
 
     /// <inheritdoc />
+    public Task<IReadOnlyList<EligibleChildScope>> GetEligibleChildScopesAsync(
+        SignedInAccount account, string scopeId, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        return _accountServices.GetServicesFor(account).AzureResourceService.GetEligibleChildScopesAsync(scopeId, ct);
+    }
+
+    /// <inheritdoc />
     public void ForgetAzureBackoff(SignedInAccount account)
     {
         ArgumentNullException.ThrowIfNull(account);

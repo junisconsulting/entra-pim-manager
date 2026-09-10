@@ -15,6 +15,15 @@ public interface IPimAzureResourceService
     /// <summary>Lists the Azure resource roles currently PIM-activated for the user.</summary>
     Task<IReadOnlyList<ActiveAssignment>> GetActiveAzureRolesAsync(CancellationToken ct = default);
 
+    /// <summary>
+    /// Lists every management group and subscription beneath <paramref name="scopeId"/>
+    /// on which the user's eligibility there may be activated instead of on the whole
+    /// scope — ARM's <c>eligibleChildResources</c>, which answers with direct children
+    /// only, walked down the hierarchy. Ordered by how much they grant: subscriptions
+    /// first, grouped under their management group, then the management groups.
+    /// </summary>
+    Task<IReadOnlyList<EligibleChildScope>> GetEligibleChildScopesAsync(string scopeId, CancellationToken ct = default);
+
     /// <summary>Submits a self-activation request for an Azure-resource-role eligibility.</summary>
     Task<ActivationResult> ActivateAsync(ActivationRequest request, CancellationToken ct = default);
 
