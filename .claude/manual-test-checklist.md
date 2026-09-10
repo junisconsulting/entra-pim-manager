@@ -5,8 +5,8 @@ ausgeführt werden (echte Tenant-Calls, WAM-Broker, Velopack-Install). Sie wird
 vor einem Release vollständig durchgearbeitet und abgezeichnet.
 
 - **Tester:** Daniel Hepe
-- **Datum:** 2026-09-06
-- **Build / Version:** 0.9.0 (getestet als `0.9.0-local.202609061109`)
+- **Datum:** 2026-09-10
+- **Build / Version:** 0.10.0 (getestet als `0.9.2-local.202609100458`)
 - **Tenant:** ______________________ (Test-Tenant, nicht Produktiv)
 
 > Automatisiert getestet (CI, nicht hier): Unit-Tests `Entra-PIM-Manager.Core`,
@@ -272,8 +272,49 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
       der Rolle im Azure-Portal; Toast, Pending-Zeile, echte Zeile nach dem Refresh;
       Portal → PIM → My roles → Azure resources → Active bestätigt sie.
 - [ ] Aktivierungspanel einer Azure-Rolle zeigt **keinen** „Validate"-Button.
+- [ ] **Eingeschränkte Aktivierung** (Azure-Rolle auf einer Management Group): das Panel zeigt
+      die Zeile „Activate on"; bei einer Rolle auf Subscription-Scope fehlt sie. Beim Öffnen des
+      Panels rutscht nichts nach links (Scrollbar-Spalte ist immer da).
+- [ ] Panel öffnen: der Dropdown-Text ist der graue Platzhalter „Select management groups or
+      subscriptions…" — **nichts ist vorausgewählt**, auch nicht der eigene Scope. Activate
+      ohne Auswahl → Meldung „Please choose where to activate…", **kein** Request (Portal
+      prüfen).
+- [ ] Dropdown öffnen: **ganz oben das Suchfeld**, darunter die Liste in aufsteigender
+      Reichweite — zuerst die Subscriptions mit „Subscription · under <MG>" gruppiert nach ihrer
+      Management Group (**auch die unter verschachtelten**), dann die Management Groups
+      alphabetisch, und als **letzter Eintrag der Liste** — mitscrollend, nicht fixiert —
+      „<Scope> / Entire scope". Kein Eintrag vom Typ Resource Group. Suche filtert nach Name und übergeordneter MG; angehakte Zeilen bleiben
+      sichtbar.
+- [ ] Eine Subscription anhaken → Chip erscheint unter dem Dropdown, Text „1 scope selected".
+      Letztes Häkchen entfernen → Auswahl ist wieder **leer**, nicht „Entire scope".
+      „Entire scope" anhaken → alle anderen ab und umgekehrt.
+- [ ] Während einer laufenden Aktivierung sind Dropdown, Chips und Favoriten-Chips gesperrt;
+      der Zurück-Pfeil reagiert nicht. Settings-Zahnrad währenddessen: das Aktivierungspanel
+      bleibt offen.
+- [ ] Zwei Subscriptions anhaken, Justification/Ticket ausfüllen, Activate: **zwei**
+      Pending-Zeilen mit „Subscription: …", **ein** Toast „<Rolle> on 2 scopes", nach dem Refresh
+      zwei echte Zeilen am jeweiligen Subscription-Scope. Portal → PIM → My roles → Azure
+      resources → Active zeigt beide am Subscription-Scope, nicht an der Management Group. Die
+      MG-Zeile in ELIGIBILITIES bleibt aktivierbar (nicht gedimmt).
+- [ ] Dieselbe Auswahl erneut aktivieren: Meldung im Panel nennt den Scope
+      (`RoleAssignmentExists`), das Panel bleibt offen.
+- [ ] Auswahl mit Namen speichern („+ Save") → Chip unter FAVOURITE SCOPES mit dem Namen,
+      **Stern gefüllt**, Tooltip zeigt die Scopes. Panel schließen → die Zeile steht **unter
+      PINNED** (keine eigene FAVOURITES-Sektion), „<Rolle>" mit „<Tenant> · <Name>" und
+      gefülltem Stern. Klick darauf öffnet das Panel mit genau diesen Scopes angehakt.
+- [ ] Stern auf der PINNED-Zeile → Zeile verschwindet, der Chip im Panel bleibt und sein Stern
+      ist hohl. Stern am Chip → die Zeile steht wieder unter PINNED. ✕ am Chip löscht den
+      Favoriten ganz; `settings.json` spiegelt `IsPinned` und das Löschen wider.
+- [ ] Zweiten Favoriten klicken, während einer angehakt ist → **nur** dessen Scopes sind
+      angehakt, die des ersten nicht mehr; die Chips unter dem Dropdown stimmen überein.
+- [ ] Rollen-Einstellung an einer Subscription strenger als an der Management Group (z. B.
+      max. 1 h statt 8 h): Aktivierung mit 2 h an genau dieser Subscription. Wird sie abgelehnt
+      (`ExpirationRule`), wertet ARM die Policy des Kind-Scopes aus → Backlog-Eintrag
+      aktualisieren.
+- [ ] Deaktivierung einer eingeschränkten Aktivierung nach ≥ 5 min erfolgreich.
 - [ ] Deaktivierung der Azure-Rolle nach ≥ 5 min erfolgreich; davor ist der
-      Stop-Button gesperrt.
+      Stop-Button gesperrt und **grau**, danach rot und klickbar — der Wechsel passiert
+      ohne Zutun, spätestens eine Sekunde nach Ablauf der fünf Minuten.
 
 ## 4. Tray-App & UI — Phase 4
 
@@ -356,7 +397,19 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
       nicht angeboten (Reputationsfenster unsignierter Builds; Log-Zeile
       „deferred until 72h"). Für diesen Testpunkt ein Release ≥ 72 h nutzen
       oder das Gate im Log als Deferral verifizieren.
-- [ ] Deinstallation entfernt den `HKCU\…\Run`-Autostart-Eintrag.
+- [ ] **Deinstallation räumt restlos auf — ab 0.10.0.** Danach existiert weder
+      `%LocalAppData%\junis\Entra-PIM-Manager` (samt `settings.json`, `accounts.json`,
+      `favorites.json`, `appsettings.local.json`, den `msal-*.cache`-Dateien und `logs\`)
+      noch der `HKCU\…\Run`-Wert `Entra PIM Manager`. Ist `%LocalAppData%\junis`
+      danach leer, ist auch er weg; liegt dort fremdes zweites Verzeichnis, bleibt
+      **es erhalten**.
+- [ ] Deinstallation **während die App läuft** → sie schlägt nicht fehl. Ein
+      gehaltenes Logfile darf höchstens Reste hinterlassen, nie einen Fehlerdialog
+      (der Hook schluckt seine Fehler; Velopack würde sonst mit `-1` abbrechen).
+- [ ] **Gegenprobe Update:** Setup.exe einer höheren Version über eine bestehende
+      Installation → Konten, Tenants und Einstellungen sind **danach noch da**. Der
+      Uninstall-Hook hängt an `--veloapp-uninstall`, das Update an `--veloapp-updated`
+      — verwechselt man das, löscht jedes Update die Konfiguration.
 
 ### 5b. In-Place-Upgrade von der Vorversion
 
@@ -417,6 +470,53 @@ gesetzt, mindestens ein Konto enrolled), dann die neue Version darüber installi
 - [ ] Fehlt die Notes-Datei für die laufende Version im Build, startet die App
       normal und zeigt schlicht kein Fenster (Log: „No release notes shipped…").
 - [ ] `LastSeenVersion` steht danach in `%LocalAppData%\…\settings.json`.
+
+## 5d. Unattended-Deployment — ab 0.10.0
+
+> Voraussetzung: eine per `scripts/create-app-registration.ps1` (oder von Hand)
+> angelegte App Registration, deren Tenant- und Client-ID vorliegen. Die Schritte
+> laufen im **Benutzerkontext**, nicht als SYSTEM. Siehe
+> `docs/unattended-deployment.md`.
+
+- [ ] **Ende zu Ende über das Skript:** `scripts/install-entra-pim-manager.ps1
+      -SetupExe … -TenantId … -ClientId … -Label "Contoso" -TicketSystem "ServiceNow"`
+      → läuft ohne Fehler durch und meldet „Done." Danach ab- und wieder anmelden →
+      App startet über Autostart, zeigt **nicht** den Konfigurations-CTA, und der
+      Tenant steht im „Sign in with"-Picker.
+- [ ] **Mehrwortiges Label:** `-Label "junis DEV"` → in der Tenant-Karte steht
+      „junis DEV", nicht „junis". Fällt das Quoting im Skript weg, kommen bei der App
+      zwei Argumente an und alles ab dem Leerzeichen wird stillschweigend verworfen.
+      Dasselbe mit `-TicketSystem "Jira Service Management"`.
+- [ ] **Label und Ticketsystem landen an getrennten Stellen:** Der Alias steht in
+      `appsettings.local.json` als `Label`, das Ticketsystem in `settings.json`
+      unter `TicketSystems` mit der Tenant-ID als Schlüssel. In Settings → TENANTS
+      zeigt die Karte beides an; die Aktivierungsmaske füllt das Ticketsystem vor.
+- [ ] **Stub-Weiterleitung (optional, nur zur Kenntnis):** derselbe Aufruf direkt
+      gegen `%LocalAppData%\Entra-PIM-Manager\Entra-PIM-Manager.exe` statt gegen
+      `…\current\…`. Funktioniert er, reicht der Stub Argumente durch — das Skript
+      nutzt ohnehin `current\`, es ändert also nichts, wenn er es nicht tut.
+- [ ] Der Config-Aufruf öffnet **kein** Fenster und der Prozess ist danach beendet
+      (`Get-Process Entra-PIM-Manager` liefert nichts). Sonst hängt jedes
+      Intune-Installkommando im Timeout.
+- [ ] **Exit-Codes** (`$LASTEXITCODE` nach `Start-Process -Wait`): gültiger Aufruf →
+      `0`; `--tenant-id` ohne `--client-id` → `1`; `--client-id not-a-guid` → `1`
+      **und die Config-Datei bleibt unverändert**. Letzteres ist der wichtigste
+      Punkt: eine geschriebene Nicht-GUID lässt die App bei jedem weiteren Start
+      still mit Code 1 sterben, ohne Fenster und ohne Meldung.
+- [ ] **Laufende Instanz:** Tray-App starten, dann den Config-Aufruf absetzen →
+      Datei wird geschrieben, Exit-Code `0`, und das Tray-Fenster springt **nicht**
+      auf. (Der Aufruf läuft bewusst vor dem Single-Instance-Gate.)
+- [ ] **Zweiter Tenant:** Aufruf mit anderer Tenant-ID → zwei Einträge in
+      `appsettings.local.json`. Gleiche Tenant-ID mit anderer Client-ID → weiterhin
+      **ein** Eintrag, Client-ID ersetzt.
+- [ ] Ein von Hand in Settings → TENANTS angelegter Eintrag und ein per
+      Kommandozeile angelegter sehen in der Datei **identisch** aus (Tenant-ID
+      kleingeschrieben, `Cloud` als `Global`/`China`, `Label` fehlt wenn leer).
+- [ ] `--cloud China` → Eintrag mit `"Cloud": "China"`; `--cloud 7` und
+      `--cloud Quatsch` → Exit-Code `1`, nichts geschrieben.
+- [ ] **Logs:** Nach dem Config-Aufruf steht **keine** Tenant- oder Client-ID in
+      einer neuen Logdatei (der Aufruf loggt gar nicht — es gibt so früh keinen
+      Logger).
 
 ## 6. Fehlerpfade & Hardening — Phase 6
 
@@ -484,6 +584,7 @@ Logdateien: `%LocalAppData%\Entra-PIM-Manager\logs\pim-manager-*.log`
 | 5 Packaging         | OK                     |  |
 | 5b In-Place-Upgrade | OK                     |  |
 | 5c What's new       | OK                     |  |
+| 5d Unattended-Deploy|                        |  |
 | 6 Fehlerpfade       | OK                     |  |
 | 7 Sicherheit & Logs | OK                     | Logmenge nach dem MSAL-Fix bestätigt |
 
