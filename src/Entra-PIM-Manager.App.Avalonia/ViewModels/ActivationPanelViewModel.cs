@@ -752,7 +752,11 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
     private async Task LoadScopesAsync(SignedInAccount account, PimEligibility eligibility)
     {
         var generation = _generation;
-        var cacheKey = $"{account.TenantId}|{eligibility.ScopeId}";
+
+        // Keyed by the enrollment, not just the tenant: two accounts in one tenant
+        // rarely hold the same eligibilities, and serving one the other's child
+        // scopes would offer scopes it cannot activate — and let a favourite save them.
+        var cacheKey = $"{account.ObjectId}|{account.TenantId}|{eligibility.ScopeId}";
         IReadOnlyList<EligibleChildScope> scopes = [];
         string? notice = null;
         var failed = false;
@@ -805,10 +809,20 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
         // A favourite that came with the panel, or was clicked while the list was
         // still on its way. It stays pending after a failed read, so the retry
         // applies it and Activate keeps refusing in the meantime.
-        if (_pendingFavorite is { } pending && ScopeOptions.Count > 0)
+        if (_pendingFavorite is { } pending && !failed)
         {
             _pendingFavorite = null;
-            ApplyScopeFavorite(pending);
+
+            // A read that succeeded with nothing beneath the scope leaves no row to
+            // tick, and ApplyScopeFavorite would put the favourite straight back into
+            // pending — Activate would then refuse forever, with a picker retry that
+            // cannot fire because the read never failed. Drop it: the notice above
+            // says why the list is empty, and the entire-scope tick stays an
+            // explicit decision the user has to make.
+            if (ScopeOptions.Count > 0)
+            {
+                ApplyScopeFavorite(pending);
+            }
         }
     }
 
