@@ -133,6 +133,24 @@ public sealed class UpdateController
 
     private async Task<UpdateCheckOutcome> CheckAsync(bool manual)
     {
+        // A download in flight, or one already finished and waiting for the restart,
+        // owns the prompt. Running the check through would reset it to Available with
+        // Progress 0 — discarding a finished download and offering the same version a
+        // second time. The honest answer to "is there an update" is the prompt that
+        // already exists: a deliberate press brings its window back, the daily poll
+        // leaves a window the user hid alone.
+        if (_pending is not null
+            && _viewModel.Stage is UpdatePromptViewModel.UpdateStage.Downloading
+                or UpdatePromptViewModel.UpdateStage.Ready)
+        {
+            if (manual)
+            {
+                Show();
+            }
+
+            return UpdateCheckOutcome.UpdateAvailable;
+        }
+
         _busy = true;
         try
         {
