@@ -397,6 +397,21 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
       nicht angeboten (Reputationsfenster unsignierter Builds; Log-Zeile
       „deferred until 72h"). Für diesen Testpunkt ein Release ≥ 72 h nutzen
       oder das Gate im Log als Deferral verifizieren.
+- [ ] **Settings → Updates → „Check for updates"** meldet jeden Ausgang mit
+      eigenem Satz — die vier sind nicht austauschbar, und genau ihre
+      Vermischung war der Grund, warum der Button in 0.6.0 entfernt wurde:
+  - [ ] aktuellste Version installiert → „You are running the latest version."
+  - [ ] neueres Release ≥ 72 h → Update-Prompt erscheint (Install / Later),
+        Statuszeile verweist darauf.
+  - [ ] neueres Release < 72 h → „not offered yet", **kein** Prompt, und
+        ausdrücklich nicht „latest version". Gegenprobe im Log: „deferred".
+  - [ ] Netzwerk getrennt → „Could not reach GitHub.", nicht „latest version".
+- [ ] Der Button prüft auch bei **ausgeschaltetem** „Automatic updates" — der
+      Schalter regelt das ungefragte Prüfen, nicht das Fragen dürfen.
+- [ ] Ein zuvor mit „Later" weggeklicktes Update erscheint auf Knopfdruck
+      wieder (die Session-Unterdrückung gilt nur für den Hintergrund-Check).
+- [ ] Statuszeile ist beim erneuten Öffnen der Settings wieder leer — ein
+      alter Befund darf nicht als aktuelle Aussage stehenbleiben.
 - [ ] **Deinstallation räumt restlos auf — ab 0.10.0.** Danach existiert weder
       `%LocalAppData%\junis\Entra-PIM-Manager` (samt `settings.json`, `accounts.json`,
       `favorites.json`, `appsettings.local.json`, den `msal-*.cache`-Dateien und `logs\`)

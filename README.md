@@ -35,7 +35,7 @@ A Windows tray application for activating Microsoft Entra Privileged Identity Ma
 
 Download the latest installer from the [Releases](../../releases) page and run it. The installer is per-user — no UAC prompt — and places the app under `%LocalAppData%\Programs\Entra-PIM-Manager\`.
 
-When a new release is published, the app checks GitHub once a day, then prompts you to download and install it — you choose whether to restart now or apply on the next launch. Toggle this under **Settings → Updates**.
+When a new release is published, the app checks GitHub once a day, then prompts you to download and install it — you choose whether to restart now or apply on the next launch. Toggle this under **Settings → Updates**, where **Check for updates** also runs a check on the spot and tells you what it found. A release is only offered once it is 72 hours old: builds are unsigned, and security tools block a binary they have not classified yet, so a fresher one would install and then fail to start.
 
 Uninstalling removes everything: the app, the autostart entry, and your per-user data under `%LocalAppData%\junis\Entra-PIM-Manager` — settings, signed-in accounts and the cached tokens. Updates leave all of that untouched.
 

@@ -15,9 +15,10 @@ using Microsoft.Extensions.Logging;
 /// Polls GitHub Releases (an initial check shortly after launch, then once a
 /// day), and when a newer version is found shows an always-on-top prompt
 /// anchored bottom-right above the tray. On accept it downloads in the
-/// background and offers "Restart now" or applies on the next launch. The whole
-/// feature is gated by <see cref="UserSettings.AutomaticUpdatesEnabled"/>
-/// (live-read each tick) and only runs inside a real Velopack install.
+/// background and offers "Restart now" or applies on the next launch. The
+/// polling half is gated by <see cref="UserSettings.AutomaticUpdatesEnabled"/>
+/// (live-read each tick); <see cref="CheckNowAsync"/> — the Settings button — is
+/// not. Either way, nothing runs outside a real Velopack install.
 /// </summary>
 public sealed class UpdateController
 {
@@ -49,8 +50,10 @@ public sealed class UpdateController
         UpdatePromptViewModel viewModel,
         IUpdateService updateService,
         IUserSettingsService settings,
+        SettingsPanelViewModel settingsPanel,
         ILogger<UpdateController> logger)
     {
+        ArgumentNullException.ThrowIfNull(settingsPanel);
         _window = window;
         _viewModel = viewModel;
         _updateService = updateService;
@@ -74,6 +77,11 @@ public sealed class UpdateController
         _window.RestartRequested += OnRestartRequested;
         _window.LaterRequested += OnLaterRequested;
 
+        // The Settings "Check for updates" button routes here (the VM has no
+        // direct controller dependency — it just raises this event and renders
+        // whatever outcome comes back).
+        settingsPanel.CheckForUpdatesRequested += CheckNowAsync;
+
         _timer = new DispatcherTimer { Interval = InitialDelay };
         _timer.Tick += OnTimerTick;
     }
@@ -96,41 +104,51 @@ public sealed class UpdateController
         _timer.Start();
     }
 
+    /// <summary>
+    /// Runs a check immediately and reports what it found. Backs the Settings
+    /// "Check for updates" button.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately ignores both brakes the background poll obeys. The
+    /// <see cref="UserSettings.AutomaticUpdatesEnabled"/> switch governs
+    /// unprompted checking, not the user's ability to ask; and a version
+    /// dismissed earlier this session was dismissed against a popup nobody
+    /// asked for, so a deliberate press must still be able to see it.
+    /// </remarks>
+    public Task<UpdateCheckOutcome> CheckNowAsync() => CheckAsync(manual: true);
+
     private async void OnTimerTick(object? sender, EventArgs e)
     {
         // The first tick fires after InitialDelay; from then on poll daily.
         _timer.Interval = PollInterval;
-        await CheckAsync();
-    }
 
-    private async Task CheckAsync()
-    {
         // Live-read so toggling the setting takes effect without a restart.
         if (_busy || !_settings.Current.AutomaticUpdatesEnabled)
         {
             return;
         }
 
+        await CheckAsync(manual: false);
+    }
+
+    private async Task<UpdateCheckOutcome> CheckAsync(bool manual)
+    {
         _busy = true;
         try
         {
-            var result = await _updateService.CheckAsync().ConfigureAwait(true);
-            if (result is null)
+            var (outcome, update) = await _updateService.CheckAsync().ConfigureAwait(true);
+            if (update is null || (!manual && _dismissedVersions.Contains(update.Version)))
             {
-                return;
+                return outcome;
             }
 
-            if (_dismissedVersions.Contains(result.Version))
-            {
-                return;
-            }
-
-            _pending = result;
+            _pending = update;
             _viewModel.Stage = UpdatePromptViewModel.UpdateStage.Available;
-            _viewModel.NewVersion = result.Version;
+            _viewModel.NewVersion = update.Version;
             _viewModel.CurrentVersion = _updateService.CurrentVersion ?? string.Empty;
             _viewModel.Progress = 0;
             Show();
+            return outcome;
         }
         finally
         {

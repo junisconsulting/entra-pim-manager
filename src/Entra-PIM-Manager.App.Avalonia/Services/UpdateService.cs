@@ -64,12 +64,12 @@ public sealed class UpdateService : IUpdateService
     public string? CurrentVersion => _manager?.CurrentVersion?.ToString();
 
     /// <inheritdoc />
-    public async Task<UpdateCheckResult?> CheckAsync(CancellationToken ct = default)
+    public async Task<(UpdateCheckOutcome Outcome, UpdateCheckResult? Update)> CheckAsync(CancellationToken ct = default)
     {
         if (!IsSupported)
         {
             _logger.LogDebug("Update check skipped — not a Velopack install");
-            return null;
+            return (UpdateCheckOutcome.NotSupported, null);
         }
 
         try
@@ -77,23 +77,22 @@ public sealed class UpdateService : IUpdateService
             var info = await _manager!.CheckForUpdatesAsync().ConfigureAwait(false);
             if (info is null)
             {
-                return null;
+                return (UpdateCheckOutcome.UpToDate, null);
             }
 
             var version = info.TargetFullRelease.Version.ToString();
-            if (!await IsOldEnoughAsync(version, ct).ConfigureAwait(false))
-            {
-                return null;
-            }
-
-            return new UpdateCheckResult(version, info);
+            var age = await CheckReleaseAgeAsync(version, ct).ConfigureAwait(false);
+            return age == UpdateCheckOutcome.UpdateAvailable
+                ? (age, new UpdateCheckResult(version, info))
+                : (age, null);
         }
         catch (Exception ex)
         {
-            // Network down, GitHub rate-limit, or no feed published yet — never
-            // surface this to the user; the next scheduled tick retries.
+            // Network down, GitHub rate-limit, or no feed published yet. The
+            // background tick just retries; a manual check reports it as a
+            // failed check rather than as "up to date".
             _logger.LogWarning(ex, "Update check failed");
-            return null;
+            return (UpdateCheckOutcome.Failed, null);
         }
     }
 
@@ -148,12 +147,15 @@ public sealed class UpdateService : IUpdateService
     }
 
     /// <summary>
-    /// True when the release tagged <c>v{version}</c> was published at least
-    /// <see cref="MinimumReleaseAge"/> ago. Unknown age counts as too young —
+    /// <see cref="UpdateCheckOutcome.UpdateAvailable"/> when the release tagged
+    /// <c>v{version}</c> was published at least <see cref="MinimumReleaseAge"/>
+    /// ago. An age that cannot be read is never treated as old enough —
     /// offering a possibly-fresh binary is exactly the failure this gate
-    /// prevents, and the next scheduled check retries anyway.
+    /// prevents — but it reports <see cref="UpdateCheckOutcome.Failed"/> rather
+    /// than <see cref="UpdateCheckOutcome.Deferred"/>: not knowing the age is a
+    /// different thing to tell the user than a release we know is too young.
     /// </summary>
-    private async Task<bool> IsOldEnoughAsync(string version, CancellationToken ct)
+    private async Task<UpdateCheckOutcome> CheckReleaseAgeAsync(string version, CancellationToken ct)
     {
         try
         {
@@ -166,7 +168,7 @@ public sealed class UpdateService : IUpdateService
                     "Release age lookup for {Version} returned HTTP {Status} — deferring the update",
                     version,
                     (int)response.StatusCode);
-                return false;
+                return UpdateCheckOutcome.Failed;
             }
 
             using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
@@ -179,15 +181,15 @@ public sealed class UpdateService : IUpdateService
                     version,
                     age.TotalHours,
                     MinimumReleaseAge.TotalHours);
-                return false;
+                return UpdateCheckOutcome.Deferred;
             }
 
-            return true;
+            return UpdateCheckOutcome.UpdateAvailable;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex, "Release age lookup for {Version} failed — deferring the update", version);
-            return false;
+            return UpdateCheckOutcome.Failed;
         }
     }
 }

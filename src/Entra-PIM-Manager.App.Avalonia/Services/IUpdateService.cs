@@ -15,10 +15,12 @@ public interface IUpdateService
     string? CurrentVersion { get; }
 
     /// <summary>
-    /// Returns the newest available update, or <c>null</c> when already up to
-    /// date, unsupported, or the feed is unreachable. Never throws.
+    /// Asks the feed what is available. <c>Update</c> is non-null only for
+    /// <see cref="UpdateCheckOutcome.UpdateAvailable"/>; every other outcome says
+    /// why nothing is on offer, which a manual check has to show the user
+    /// verbatim rather than flattening to "up to date". Never throws.
     /// </summary>
-    Task<UpdateCheckResult?> CheckAsync(CancellationToken ct = default);
+    Task<(UpdateCheckOutcome Outcome, UpdateCheckResult? Update)> CheckAsync(CancellationToken ct = default);
 
     /// <summary>Downloads the update's assets in the background, reporting 0..100 progress.</summary>
     Task DownloadAsync(UpdateCheckResult update, Action<int> onProgress, CancellationToken ct = default);

@@ -132,6 +132,16 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     private bool _showRestartPrompt;
 
     [ObservableProperty]
+    private bool _isUpdateCheckRunning;
+
+    /// <summary>
+    /// Outcome of the last manual update check, shown under the button. Empty
+    /// until one has run — pressing the button is the only thing that fills it.
+    /// </summary>
+    [ObservableProperty]
+    private string _updateCheckStatus = string.Empty;
+
+    [ObservableProperty]
     private bool _isNetworkCheckRunning;
 
     [ObservableProperty]
@@ -204,6 +214,13 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
     /// <summary>Raised when the panel closes — payload-less; the shell uses it to drop the exclusive-toggle.</summary>
     public event Action? Closed;
+
+    /// <summary>
+    /// Raised by the "Check for updates" button. <see cref="Tray.UpdateController"/>
+    /// subscribes to it and answers with what the check found; the VM has no direct
+    /// dependency on the updater.
+    /// </summary>
+    public event Func<Task<UpdateCheckOutcome>>? CheckForUpdatesRequested;
 
     /// <summary>
     /// Raised by "Copy report" with the report text. <see cref="Tray.TrayPopupController"/>
@@ -339,6 +356,10 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             SyncTenantNodes();
             ClearForm();
             ShowRestartPrompt = false;
+
+            // A verdict from an earlier visit says nothing about now — a release
+            // published since would make it read as a denial.
+            UpdateCheckStatus = string.Empty;
 
             // A fully proven setup honours whatever the user last chose; as long as any
             // tenant is unconfigured or unproven — or none exists yet — the section opens
@@ -638,6 +659,48 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to open the log folder at {LogDirectory}", LogDirectory);
+        }
+    }
+
+    /// <summary>
+    /// Asks the updater to look at GitHub right now, and reports what came back.
+    /// A found update surfaces the normal update prompt (with its install / later
+    /// choice) through <see cref="Tray.UpdateController"/>; every other outcome is
+    /// only ever visible here, which is why each one gets its own sentence.
+    /// </summary>
+    /// <remarks>
+    /// The four "nothing to install" outcomes are deliberately not collapsed into
+    /// one message. A release held back by the age gate, and a check that never
+    /// reached GitHub, both look like "up to date" from the outside — and a user
+    /// who was told that stops looking, which is the failure this wording exists
+    /// to prevent.
+    /// </remarks>
+    [RelayCommand]
+    private async Task CheckForUpdatesNow()
+    {
+        if (CheckForUpdatesRequested is not { } handler)
+        {
+            return;
+        }
+
+        IsUpdateCheckRunning = true;
+        UpdateCheckStatus = string.Empty;
+        try
+        {
+            var outcome = await handler.Invoke();
+            UpdateCheckStatus = outcome switch
+            {
+                UpdateCheckOutcome.UpdateAvailable => "An update is available — see the update window.",
+                UpdateCheckOutcome.UpToDate => "You are running the latest version.",
+                UpdateCheckOutcome.Deferred => "A newer version exists but is not offered yet: releases are"
+                    + " held back for 72 hours so security tools can classify them first.",
+                UpdateCheckOutcome.Failed => "Could not reach GitHub. Check the connection and try again.",
+                _ => "Updates only work in an installed version, not in a portable or development build.",
+            };
+        }
+        finally
+        {
+            IsUpdateCheckRunning = false;
         }
     }
 

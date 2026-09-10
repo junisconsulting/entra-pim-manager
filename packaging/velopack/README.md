@@ -130,12 +130,27 @@ Build-Pipeline sollte unsignierte Artefakte an dieser Stelle blockieren.
 ## Auto-Update
 
 Die App prüft die **GitHub-Releases** des Projekts auf eine neuere Version —
-einmal kurz nach dem Start und danach täglich. Umgesetzt über Velopacks
+einmal kurz nach dem Start, danach täglich, und auf Wunsch sofort über
+**Settings → Updates → „Check for updates"**. Umgesetzt über Velopacks
 `UpdateManager` mit einer `GithubSource` auf das öffentliche Repo (kein Token).
 Wird eine neuere Version gefunden, erscheint ein Popup; auf Wunsch wird das
 Update im Hintergrund heruntergeladen und nach „Jetzt neu starten" angewendet
 (oder still beim nächsten Start). Der Nutzer kann das Feature unter
 **Settings → Updates** ein-/ausschalten (`AutomaticUpdatesEnabled`, Default an).
+
+Der Schalter gilt nur für das **ungefragte** Prüfen; der Button prüft auch bei
+ausgeschaltetem Schalter, und er ignoriert die Session-Unterdrückung eines mit
+„Later" weggeklickten Updates.
+
+**Ein Release wird erst ab 72 h Alter angeboten** (`MinimumReleaseAge` in
+`UpdateService`) — unsignierte Builds werden von reputationsbasierten Kontrollen
+blockiert, ein frisches Paket würde also installiert und startete dann nicht.
+Deshalb unterscheidet `UpdateCheckOutcome` vier Ausgänge statt eines `null`:
+`UpToDate`, `Deferred`, `Failed`, `NotSupported`. Der Button zeigt jeden davon
+mit eigenem Text. Das ist kein Komfort: „aktuellste Version" zu melden, während
+ein Release nur zurückgehalten wird oder GitHub gar nicht erreichbar war, ist
+eine Falschaussage, auf die der Nutzer hin aufhört zu suchen — genau daran
+scheiterte der Button vor 0.6.0.
 
 Die Prüfung funktioniert **nur in einer echten Velopack-Installation** — bei
 `dotnet run` oder dem nackten `artifacts/win-x64`-Build ist `UpdateManager.IsInstalled`
