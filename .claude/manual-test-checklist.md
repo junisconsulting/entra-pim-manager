@@ -6,7 +6,7 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 
 - **Tester:** Daniel Hepe
 - **Datum:** 2026-09-10
-- **Build / Version:** 0.10.0 (getestet als `0.9.2-local.202609100458`)
+- **Build / Version:** 0.10.0 (getestet als `0.9.2-local.202609101121`)
 - **Tenant:** ______________________ (Test-Tenant, nicht Produktiv)
 
 > Automatisiert getestet (CI, nicht hier): Unit-Tests `Entra-PIM-Manager.Core`,
@@ -629,7 +629,7 @@ Logdateien: `%LocalAppData%\Entra-PIM-Manager\logs\pim-manager-*.log`
 | 5 Packaging         | OK                     |  |
 | 5b In-Place-Upgrade | OK                     |  |
 | 5c What's new       | OK                     |  |
-| 5d Unattended-Deploy|                        |  |
+| 5d Unattended-Deploy| OK                     |  |
 | 6 Fehlerpfade       | OK                     |  |
 | 7 Sicherheit & Logs | OK                     | Logmenge nach dem MSAL-Fix bestätigt |
 
