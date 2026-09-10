@@ -109,6 +109,10 @@ einer Subscription findet also die Rollen, die für sie gelten. **⟳** erzwingt
 nötig ist das aber selten: Die Liste hält sich selbst aktuell, auch bei Aktivierungen, Abläufen und
 Rollen, die anderswo beendet wurden. **⚙** öffnet die Einstellungen.
 
+Ganz unten steht die Version, die du benutzt. Sie ist ein Link: ein Klick öffnet genau dieses
+Release auf GitHub — „was hat sich eigentlich geändert" ist damit einen Klick entfernt statt eine
+Suche.
+
 ## Eine Rolle aktivieren
 
 Klick auf eine Rolle. Das Aktivierungsformular schiebt sich ein.

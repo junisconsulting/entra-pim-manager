@@ -104,6 +104,9 @@ subscription name finds the roles that apply to it. The **⟳** button forces a 
 list keeps itself current on its own: activations, expiries and roles ended elsewhere show up
 without you asking. **⚙** opens Settings.
 
+At the very bottom sits the version you are running. It is a link: clicking it opens that release on
+GitHub, so "what actually changed" is one click from the app rather than a search.
+
 ## Activate a role
 
 Click a role. The activation form slides in.

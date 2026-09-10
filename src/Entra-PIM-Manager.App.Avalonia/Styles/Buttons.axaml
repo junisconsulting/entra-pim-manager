@@ -2,12 +2,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
   <!--
-    Four button variants for the Entra PIM Manager popup.
+    Five button variants for the Entra PIM Manager popup.
 
     - `primary`   accent-coloured primary CTA (one per view)
     - `secondary` neutral surface, dezenter Border
     - `ghost`     transparent, hovered surface — for Cancel, Validate, Refresh-Text
     - `icon`      square 32x32, transparent, hover Surface2 — wraps a PathIcon
+    - `link`      inline text that navigates — no chrome, no padding, accent on hover
 
     All variants animate Background via a 120 ms BrushTransition on the inner
     ContentPresenter (Fluent buttons render their background there, so the
@@ -96,6 +97,31 @@
   </Style>
   <Style Selector="Button.ghost:pointerover">
     <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+
+  <!-- ===== Link ===== -->
+  <!-- Text that navigates, sitting inside a line of other text: no background,
+       no padding and no font of its own, so the host decides the size and the
+       button does not disturb the layout it sits in. Colour is the whole
+       affordance, the same signal the icon buttons give on hover. -->
+
+  <Style Selector="Button.link">
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" />
+  </Style>
+  <Style Selector="Button.link /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.link:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource AccentTextBrush}" />
+  </Style>
+  <Style Selector="Button.link:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
   </Style>
 
   <!-- ===== Icon (32x32) ===== -->

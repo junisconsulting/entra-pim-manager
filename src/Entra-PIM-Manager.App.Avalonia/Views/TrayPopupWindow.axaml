@@ -2469,11 +2469,17 @@
               BorderThickness="0,1,0,0"
               Padding="12,5,8,5">
         <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center">
-          <TextBlock Grid.Column="0"
-                     Text="{Binding VersionText}"
-                     FontSize="{DynamicResource FontCaption}"
-                     Foreground="{DynamicResource TextTertiaryBrush}"
-                     VerticalAlignment="Center" />
+          <!-- The version is the link to its own release notes. No Foreground on
+               the TextBlock: it has to inherit the button's, or the hover colour
+               never reaches it. -->
+          <Button Grid.Column="0"
+                  Classes="link"
+                  Command="{Binding OpenReleaseNotesCommand}"
+                  ToolTip.Tip="What changed in this version — opens the release on GitHub"
+                  VerticalAlignment="Center">
+            <TextBlock Text="{Binding VersionText}"
+                       FontSize="{DynamicResource FontCaption}" />
+          </Button>
           <TextBlock Grid.Column="2"
                      Text="junis GmbH"
                      FontSize="{DynamicResource FontCaption}"

@@ -719,15 +719,44 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
 
     /// <summary>Opens the GitHub project page in the user's default browser.</summary>
     [RelayCommand]
-    private void OpenGitHub()
+    private void OpenGitHub() => OpenInBrowser(GitHubProjectUrl, "GitHub project page");
+
+    /// <summary>
+    /// Opens the GitHub release this build came from — the footer version is the
+    /// link, so "what changed in the version I am running" is one click away.
+    /// </summary>
+    [RelayCommand]
+    private void OpenReleaseNotes()
+    {
+        // A build that never became a release has no tag to point at: the verify
+        // packages carry a "-local.<timestamp>" suffix and a plain `dotnet run`
+        // reports 1.0.0. Those get the releases list rather than a certain 404.
+        // The informational version is what carries the suffix; the assembly
+        // version behind VersionText has already dropped it.
+        var informational = Assembly.GetEntryAssembly()
+            ?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        var isTagged = informational is not null && !informational.Split('+')[0].Contains('-');
+
+        // VersionText already carries the "v" prefix the tags use.
+        var url = isTagged
+            ? $"{GitHubProjectUrl}/releases/tag/{VersionText}"
+            : $"{GitHubProjectUrl}/releases";
+        OpenInBrowser(url, "release page");
+    }
+
+    /// <summary>
+    /// Hands a URL to the user's default browser. Shared so the footer's two links
+    /// cannot drift apart in how they fail — neither is worth an error in the UI.
+    /// </summary>
+    private void OpenInBrowser(string url, string target)
     {
         try
         {
-            Process.Start(new ProcessStartInfo(GitHubProjectUrl) { UseShellExecute = true });
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to open GitHub project page");
+            _logger.LogWarning(ex, "Failed to open the {Target}", target);
         }
     }
 

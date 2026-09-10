@@ -427,6 +427,11 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
       der Knopf holt ihn zurück, statt ihn wegzuwerfen.
 - [ ] Statuszeile ist beim erneuten Öffnen der Settings wieder leer — ein
       alter Befund darf nicht als aktuelle Aussage stehenbleiben.
+- [ ] **Versionsnummer unten links** ist klickbar: Hover färbt sie in die Akzentfarbe und
+      der Cursor wird zur Hand; der Klick öffnet im Standardbrowser das Release zu genau
+      dieser Version (`/releases/tag/vX.Y.Z`). Aus einem lokalen Verify-Build heraus
+      (`-local.*`) landet man stattdessen auf der Release-Übersicht — **kein 404**.
+      Das Layout des Footers darf sich dabei nicht verschieben.
 - [ ] **Deinstallation räumt restlos auf — ab 0.10.0.** Danach existiert weder
       `%LocalAppData%\junis\Entra-PIM-Manager` (samt `settings.json`, `accounts.json`,
       `favorites.json`, `appsettings.local.json`, den `msal-*.cache`-Dateien und `logs\`)
