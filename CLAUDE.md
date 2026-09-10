@@ -9,7 +9,7 @@ this file is loaded every session and that one is not.
 
 A Windows tray application for activating Microsoft Entra PIM eligibilities (Directory Roles, PIM
 for Groups, and PIM for Azure Resources) across multiple tenants — without UAC, admin rights, or a service install.
-Per-user install to `%LocalAppData%\Programs\Entra-PIM-Manager\`, WAM-broker auth, Velopack auto-update.
+Per-user install to `%LocalAppData%\Entra-PIM-Manager\`, WAM-broker auth, Velopack auto-update.
 Public repository under MIT (`LICENSE`); contributions are inbound=outbound, no CLA.
 
 Assume every commit is world-readable: no tenant IDs, no internal hostnames, no credentials.
@@ -18,6 +18,9 @@ Assume every commit is world-readable: no tenant IDs, no internal hostnames, no 
 
 - `CONTRIBUTING.md` — build/test, code conventions, security conventions, PR process, out-of-scope list
 - `README.md` — user-facing feature set, install, app-registration summary
+- `docs/user-guide.md` + `docs/user-guide.de.md` — the end-user guide, EN and DE. Kept in sync with
+  each other; a user-visible change to the UI, a wording, or a workflow belongs in **both** in the
+  same commit
 - `docs/app-registration-setup.md` — the delegated permissions (Graph scopes plus Azure Service
   Management) and the consent procedure
 - `docs/engineering-backlog.md` — known gaps and deferred work, with evidence pointers

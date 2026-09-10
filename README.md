@@ -8,6 +8,13 @@ A Windows tray application for activating Microsoft Entra Privileged Identity Ma
   <img src="docs/screenshot3.png" alt="Entra PIM Manager screenshot 3" width="32%" />
 </p>
 
+## Using it
+
+New to the app? **[User guide](docs/user-guide.md)** — English · **[Anleitung](docs/user-guide.de.md)** — Deutsch.
+
+Covers signing in, activating a role, choosing Azure scopes, ending a role early, and what to do
+when something fails. The sections below are for the person setting it up.
+
 ## Features
 
 - One-click activation of PIM eligibilities from the system tray — Entra directory roles, PIM for Groups, and Azure resource roles (Azure RBAC at management-group, subscription, resource-group or resource scope)
@@ -21,7 +28,7 @@ A Windows tray application for activating Microsoft Entra Privileged Identity Ma
 - Search across role name, type, tenant and Azure scope — a subscription name finds its roles
 - Favorites for recurring justifications
 - Drag-and-drop reordering of accounts in Settings, and a short alias per account ("EADM") in place of a long UPN
-- Per-user install to `%LocalAppData%\Programs\Entra-PIM-Manager\` — no UAC, no HKLM, no Windows service
+- Per-user install to `%LocalAppData%\Entra-PIM-Manager\` — no UAC, no HKLM, no Windows service
 - Optional Windows autostart (enabled by default on first install, toggleable in Settings)
 - Velopack-based auto-update
 
@@ -33,7 +40,7 @@ A Windows tray application for activating Microsoft Entra Privileged Identity Ma
 
 ## Install
 
-Download the latest installer from the [Releases](../../releases) page and run it. The installer is per-user — no UAC prompt — and places the app under `%LocalAppData%\Programs\Entra-PIM-Manager\`.
+Download the latest installer from the [Releases](../../releases) page and run it. The installer is per-user — no UAC prompt — and places the app under `%LocalAppData%\Entra-PIM-Manager\`.
 
 When a new release is published, the app checks GitHub once a day, then prompts you to download and install it — you choose whether to restart now or apply on the next launch. Toggle this under **Settings → Updates**, where **Check for updates** also runs a check on the spot and tells you what it found. A release is only offered once it is 72 hours old: builds are unsigned, and security tools block a binary they have not classified yet, so a fresher one would install and then fail to start.
 
