@@ -1,0 +1,21 @@
+<!-- Signed in, no active role — a light taskbar: junis blue shield, white keyline and key.
+     The shield is monochrome on purpose: at 16 px the silhouette carries the
+     recognition, and the only colour that means anything here is the status dot.
+     The keyline is the opposite luminance of the shield, so an accent-coloured or
+     translucent taskbar that happens to match the shield still cannot swallow it. -->
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Scaled to 93 % so the outer half of the keyline fits inside the viewBox -->
+  <g transform="translate(16,16) scale(0.93) translate(-16,-16)">
+    <path fill="#0a1630" stroke="#ffffff" stroke-width="2.4" stroke-linejoin="round" d="M16 0.5 L30 4.5 L30 19 Q30 29 16 31.5 Q2 29 2 19 L2 4.5 Z"/>
+    <!-- Key drawn, not cut out: a hole would show the taskbar through it and
+         disappear whenever the taskbar is close to the shield's own tone. -->
+    <circle fill="#ffffff" cx="16" cy="12" r="5.2"/>
+    <circle fill="#0a1630" cx="16" cy="12" r="2.2"/>
+    <rect fill="#ffffff" x="14.6" y="16.8" width="2.8" height="9.2" rx="1.4"/>
+    <rect fill="#ffffff" x="17.4" y="20.5" width="3.2" height="2.2" rx="0.9"/>
+    <rect fill="#ffffff" x="17.4" y="23.8" width="2.4" height="2" rx="0.9"/>
+    <!-- Ring in the keyline colour separates the dot from the shield and the background -->
+    <circle fill="#ffffff" cx="25.5" cy="25.5" r="5.8"/>
+    <circle fill="#9ca3af" cx="25.5" cy="25.5" r="4.2"/>
+  </g>
+</svg>

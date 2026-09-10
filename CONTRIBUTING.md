@@ -26,6 +26,11 @@ The tray icons under `src/Entra-PIM-Manager.App.Avalonia/Assets/` are generated 
 their `.svg` sources — edit the SVG, then run `build/generate-tray-icons.sh` and commit
 the regenerated `.ico` files. The script needs `librsvg2-bin` and `imagemagick`.
 
+There are two per status, `-onlight` and `-ondark`, named for the taskbar they are drawn
+for; `TrayPopupController` picks between them from `SystemUsesLightTheme`. Edit both, or
+the two halves drift. Judge the result at 16 px on a real taskbar — light, dark, an
+accent colour close to each of the two tones, and translucency over a busy wallpaper.
+
 Two admin-facing scripts under `scripts/` support an unattended rollout, both needing
 PowerShell 7 — see `docs/unattended-deployment.md`:
 

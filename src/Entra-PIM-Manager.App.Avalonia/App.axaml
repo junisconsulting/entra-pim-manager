@@ -18,7 +18,7 @@
 
   <TrayIcon.Icons>
     <TrayIcons>
-      <TrayIcon Icon="/Assets/tray-icon-red.ico"
+      <TrayIcon Icon="/Assets/tray-icon-red-ondark.ico"
                 ToolTipText="Entra PIM Manager — not signed in"
                 IsVisible="True"
                 Clicked="OnTrayIconClicked">
