@@ -1,14 +1,19 @@
-<!-- State 3: Rolle läuft bald ab — amber Badge — Schild #0078d4 mit hellem Saum, damit es auf jeder Taskleistenfarbe trägt -->
+<!-- State 3: Rolle läuft bald ab — amber Badge — junis-Gelb #ffe536 auf junis-Blau #0a1630 -->
 <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-  <defs><mask id="km"><rect width="32" height="32" fill="white"/><circle cx="16" cy="12" r="5.2" fill="black"/><circle cx="16" cy="12" r="2.2" fill="white"/><rect x="14.6" y="16.8" width="2.8" height="9.2" rx="1.4" fill="black"/><rect x="17.4" y="20.5" width="3.2" height="2.2" rx="0.9" fill="black"/><rect x="17.4" y="23.8" width="2.4" height="2" rx="0.9" fill="black"/></mask></defs>
-  <!-- Alles um 10 % verkleinert, damit der Saum in die viewBox passt -->
-  <g transform="translate(16,16) scale(0.9) translate(-16,-16)">
-    <!-- Heller Saum unter dem Schild: hält die Silhouette sichtbar, wenn die Taskleiste selbst blau oder dunkel ist -->
-    <path fill="none" stroke="#ffffff" stroke-width="2.6" stroke-linejoin="round" d="M16 0.5 L30 4.5 L30 19 Q30 29 16 31.5 Q2 29 2 19 L2 4.5 Z"/>
-    <!-- Mitteltoniges Blau: kontrastiert gegen helle wie dunkle Taskleisten -->
-    <path opacity="1" mask="url(#km)" fill="#0078d4" d="M16 0.5 L30 4.5 L30 19 Q30 29 16 31.5 Q2 29 2 19 L2 4.5 Z"/>
-    <!-- Dunkler Ring trennt den Badge vom Schild und vom Hintergrund -->
-    <circle fill="#1a1a1a" cx="25.5" cy="25.5" r="5.8"/>
+  <!-- Um 7 % verkleinert, damit die äußere Hälfte der Kontur in die viewBox passt -->
+  <g transform="translate(16,16) scale(0.93) translate(-16,-16)">
+    <!-- Gelb trägt auf dunklen Taskleisten, die blaue Kontur auf hellen. Beide Farben
+         kontrastieren zueinander mit ~14:1, das Icon bleibt also auf jedem Untergrund lesbar. -->
+    <path fill="#ffe536" stroke="#0a1630" stroke-width="2.4" stroke-linejoin="round" d="M16 0.5 L30 4.5 L30 19 Q30 29 16 31.5 Q2 29 2 19 L2 4.5 Z"/>
+    <!-- Schlüssel in Blau gezeichnet, nicht ausgestanzt: ein Loch würde auf einer hellen
+         Taskleiste als Weiß auf Gelb verschwinden. -->
+    <circle fill="#0a1630" cx="16" cy="12" r="5.2"/>
+    <circle fill="#ffe536" cx="16" cy="12" r="2.2"/>
+    <rect fill="#0a1630" x="14.6" y="16.8" width="2.8" height="9.2" rx="1.4"/>
+    <rect fill="#0a1630" x="17.4" y="20.5" width="3.2" height="2.2" rx="0.9"/>
+    <rect fill="#0a1630" x="17.4" y="23.8" width="2.4" height="2" rx="0.9"/>
+    <!-- Blauer Ring trennt den Badge vom Schild und vom Hintergrund -->
+    <circle fill="#0a1630" cx="25.5" cy="25.5" r="5.8"/>
     <circle fill="#f59e0b" cx="25.5" cy="25.5" r="4.2"/>
   </g>
 </svg>
