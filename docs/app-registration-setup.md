@@ -20,6 +20,11 @@
 
 ## 1. Create the App Registration
 
+> **In a hurry?** `scripts/create-app-registration.ps1` automates §1–§4 of this guide
+> and prints the command lines an unattended rollout needs — see
+> [unattended-deployment.md](unattended-deployment.md). The steps below are the manual
+> equivalent, and remain the reference for what the script does.
+
 1. [Entra portal](https://entra.microsoft.com) → **Identity → Applications →
    App registrations → New registration**.
 2. **Name**: `Entra PIM Manager`.

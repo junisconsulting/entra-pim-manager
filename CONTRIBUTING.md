@@ -26,6 +26,17 @@ The tray icons under `src/Entra-PIM-Manager.App.Avalonia/Assets/` are generated 
 their `.svg` sources — edit the SVG, then run `build/generate-tray-icons.sh` and commit
 the regenerated `.ico` files. The script needs `librsvg2-bin` and `imagemagick`.
 
+Two admin-facing scripts under `scripts/` support an unattended rollout, both needing
+PowerShell 7 — see `docs/unattended-deployment.md`:
+
+- `create-app-registration.ps1` provisions the Entra App Registration an admin needs
+  before first use, and prints the endpoint command with the ids filled in. It needs the
+  `Microsoft.Graph.Applications` module, and reads the delegated scopes from
+  `src/Entra-PIM-Manager.App.Avalonia/appsettings.json` rather than repeating them —
+  when the app's permission surface changes, that file is the only place to edit.
+- `install-entra-pim-manager.ps1` runs on the endpoint: silent install, then the
+  configuration call, then a check that the entry actually reached the config file.
+
 ## Code conventions
 
 ### Language

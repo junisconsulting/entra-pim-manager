@@ -43,8 +43,26 @@ Das Skript:
 Das erzeugte Paket installiert **per-user** nach `%LocalAppData%\Entra-PIM-Manager` —
 ohne UAC, ohne Schreibzugriff auf `HKLM` oder `Program Files`, ohne Windows-Dienst
 und ohne Scheduled Task. Autostart wird beim ersten Start über den
-`HKCU`-Run-Key gesetzt (Velopack-`OnFirstRun`-Hook) und beim Deinstallieren wieder
-entfernt (`OnBeforeUninstallFastCallback`).
+`HKCU`-Run-Key gesetzt (Velopack-`OnFirstRun`-Hook).
+
+## Deinstallation
+
+Velopack entfernt nur, was es selbst angelegt hat: das Installationsverzeichnis, die
+Verknüpfungen und den Uninstall-Registry-Key. Vom Datenordner und vom Run-Key weiß es
+nichts — beide räumt der `OnBeforeUninstallFastCallback`-Hook in `Program.cs` weg:
+
+- `%LocalAppData%\junis\Entra-PIM-Manager` samt `settings.json`, `accounts.json`,
+  `favorites.json`, `scope-favorites.json`, `appsettings.local.json`, den
+  **MSAL-Token-Caches** und `logs\`
+- der `HKCU`-Run-Key-Wert `Entra PIM Manager`
+- der Hersteller-Ordner `%LocalAppData%\junis`, aber nur wenn er danach leer ist
+  (nicht-rekursives `Directory.Delete`, das bei fremden Daten wirft statt sie zu löschen)
+
+Der Hook feuert **ausschließlich** bei `--veloapp-uninstall`. Ein Update läuft über den
+separaten `--veloapp-updated`-Hook (in `VelopackApp.Run()` ein eigener Dictionary-Eintrag),
+Konfiguration und Anmeldungen überleben Updates also. Velopack gibt dem Hook 30 Sekunden
+und wertet eine geworfene Exception als **gescheiterte Deinstallation** (`Process.Exit(-1)`) —
+deshalb ist jeder Schritt best effort und schluckt seine Fehler.
 
 ## Erststart-Einrichtung (Autostart & Startmenü)
 
@@ -73,6 +91,28 @@ umschalten. Wie beim Autostart ist auch beim Startmenü-Eintrag das Artefakt sel
 > Settings-Toggle wirkungslos). Eine `AppUserModelId` setzt auch Velopacks Runtime-API
 > nicht, und der Toast-Stack registriert sich selbst über die Registry — die direkte
 > Verwaltung hat hier also keinen Nachteil.
+
+## Unbeaufsichtigte Installation
+
+`Setup.exe --silent` installiert ohne Dialoge — **startet die App danach aber nicht**.
+Nachgewiesen am Velopack-Setup-Log (1.2.0, Windows 11, 2026-09-09): der einzige
+Prozessstart im gesamten Lauf ist der Hook `--veloapp-install <version>`, der in
+`Program.Main` sofort wieder aussteigt; direkt danach meldet das Log
+`Installation completed successfully!`.
+
+Konsequenz für Rollouts: Der in der `setup.exe` dokumentierte Passthrough
+
+```text
+EXE_ARGS   Arguments to pass to the started executable. Must be preceded by '--'.
+```
+
+ist im Silent-Mode **wirkungslos** — er gilt für den normalen App-Start, den Silent
+überspringt. Eine unbeaufsichtigte Konfiguration läuft deshalb als zweiter Schritt über
+die installierte exe selbst (`--tenant-id` / `--client-id`), siehe
+`docs/unattended-deployment.md`. Nicht erneut über `Setup.exe -- …` versuchen.
+
+Der Erststart-Dialog aus dem vorigen Abschnitt erscheint davon unberührt beim ersten
+interaktiven Start: sein Auslöser ist allein der `.setup-pending`-Marker.
 
 ## Code-Signing
 
