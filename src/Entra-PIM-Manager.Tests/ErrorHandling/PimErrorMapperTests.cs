@@ -339,6 +339,34 @@ public sealed class PimErrorMapperTests
     }
 
     [Fact]
+    public void DescribeFetchFailure_DeviceStateCaOnDeviceCodeAccount_PointsAtTheStandardSignIn()
+    {
+        // Field case 2026-09-10: an ARM read on a device-code enrollment fails with
+        // AADSTS53001 every hour forever, because that token path carries no device
+        // claim. Refreshing can never help; only re-adding via the broker can.
+        var caption = PimErrorMapper.DescribeFetchFailure(
+            new MsalUiRequiredException("invalid_grant", "AADSTS53001: Device is not in required device state: domain_joined."),
+            AuthMethod.DeviceCode);
+
+        Assert.Contains("device-code sign-in cannot present", caption, StringComparison.Ordinal);
+        Assert.Contains("standard sign-in", caption, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DescribeFetchFailure_DeviceStateCaOnBrokerAccount_BlamesTheDeviceNotTheSignIn()
+    {
+        // Same policy, broker enrollment: re-adding the account lands in exactly the
+        // same place, so the advice must not be "sign in differently".
+        var caption = PimErrorMapper.DescribeFetchFailure(
+            new MsalUiRequiredException("invalid_grant", "AADSTS53000: Device is not in required device state: compliant."),
+            AuthMethod.Broker);
+
+        Assert.Contains("requires a managed device", caption, StringComparison.Ordinal);
+        Assert.DoesNotContain("add it again", caption, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("device-code", caption, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void DescribeFetchFailure_OtherFailure_StaysGeneric()
     {
         var caption = PimErrorMapper.DescribeFetchFailure(new InvalidOperationException("upstream blew up"));

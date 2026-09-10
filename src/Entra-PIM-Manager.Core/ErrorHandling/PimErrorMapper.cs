@@ -106,7 +106,7 @@ public static class PimErrorMapper
     /// with nothing to activate. Everything else stays generic; the detail is
     /// in the log.
     /// </summary>
-    public static string DescribeFetchFailure(Exception exception)
+    public static string DescribeFetchFailure(Exception exception, AuthMethod? authMethod = null)
     {
         ArgumentNullException.ThrowIfNull(exception);
 
@@ -140,6 +140,24 @@ public static class PimErrorMapper
             && exception.Message.Contains("AADSTS65001", StringComparison.Ordinal))
         {
             return "This tenant has not consented to the app's current permissions. An admin must grant admin consent for the App Registration; the account then recovers on its own.";
+        }
+
+        // AADSTS53000/53001: a Conditional Access policy demands a compliant or
+        // domain-joined device. A device-code token carries no device claim at
+        // all, so that enrollment can never satisfy the policy no matter how
+        // often the list is refreshed — name the sign-in method as the cause and
+        // point at the broker. On a broker account the device really is the
+        // problem, so say that instead of sending the user off to re-add an
+        // account that would land in exactly the same place. MsalException, not
+        // MsalUiRequiredException: MSAL's UiRequired throttle wraps the original
+        // in a different type on every repeat of the same failure.
+        if (exception is MsalException
+            && (exception.Message.Contains("AADSTS53001", StringComparison.Ordinal)
+                || exception.Message.Contains("AADSTS53000", StringComparison.Ordinal)))
+        {
+            return authMethod == AuthMethod.DeviceCode
+                ? "A Conditional Access policy requires a managed device, which device-code sign-in cannot present. Remove this account in Settings and add it again using the standard sign-in."
+                : "A Conditional Access policy requires a managed device (domain-joined or compliant) and this device does not meet it.";
         }
 
         // Cancelled while acquiring the ARM token, not while waiting for Azure.
