@@ -242,6 +242,13 @@ nichts tun.
 schnell mit dem Alltagskonto statt mit dem Admin-Konto angemeldet. Stimmt das Konto, ist die
 Berechtigung tatsächlich nicht da, und das ist eine Frage an die Administration des Tenants.
 
+**Die Azure-Rollen fehlen, die anderen sind da.** Im Fenster steht eine Zeile, die mit *Azure
+resource roles unavailable* beginnt — was danach kommt, ist die Ursache. Ein fehlender Consent
+erledigt sich von allein, sobald ein Admin ihn erteilt. Eine Conditional-Access-Richtlinie, die ein
+verwaltetes Gerät verlangt, gehört zur IT. Und wenn du dich per Device Code angemeldet hast, ist das
+die Ursache: diese Anmeldung kann nichts über das Gerät nachweisen — Konto entfernen und normal neu
+anmelden.
+
 **Das Anmeldefenster öffnet sich und bleibt leer.** Meist blockiert das Netzwerk einen
 Microsoft-Endpunkt. **Settings → Diagnostics → Network check** ausführen, **Copy report** drücken
 und das an die IT schicken — darin steht, welcher Endpunkt blockiert ist, statt dass jemand raten

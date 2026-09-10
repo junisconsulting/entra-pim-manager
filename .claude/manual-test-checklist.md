@@ -307,6 +307,16 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
       Favoriten ganz; `settings.json` spiegelt `IsPinned` und das Löschen wider.
 - [ ] Zweiten Favoriten klicken, während einer angehakt ist → **nur** dessen Scopes sind
       angehakt, die des ersten nicht mehr; die Chips unter dem Dropdown stimmen überein.
+- [ ] **Zwei Konten im selben Tenant**, beide mit einer Azure-Rolle auf einer Management Group:
+      Panel für Konto A öffnen, Scopes ansehen, zurück, **direkt danach** Panel für Konto B →
+      B sieht seine eigenen Child Scopes, nicht die von A. Der Cache hält 10 min, ohne Pause
+      hintereinander prüfen. Gegenprobe: ein unter B gespeicherter Favorit enthält keinen
+      Scope, auf den nur A eligible ist.
+- [ ] **Favorit auf einem Scope ohne Kinder** (Management Group ohne Subscriptions darunter):
+      Favorit speichern, Panel schließen, PINNED-Zeile klicken → Hinweis „No management groups
+      or subscriptions found beneath this scope.", und über „Entire scope" ist Activate
+      **erreichbar**. Es darf nicht dauerhaft bei „The scopes for this favourite could not be
+      loaded. Open the scope picker to try again" bleiben — dieser Retry hat keinen Weg zurück.
 - [ ] Rollen-Einstellung an einer Subscription strenger als an der Management Group (z. B.
       max. 1 h statt 8 h): Aktivierung mit 2 h an genau dieser Subscription. Wird sie abgelehnt
       (`ExpirationRule`), wertet ARM die Policy des Kind-Scopes aus → Backlog-Eintrag
@@ -410,6 +420,11 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
       Schalter regelt das ungefragte Prüfen, nicht das Fragen dürfen.
 - [ ] Ein zuvor mit „Later" weggeklicktes Update erscheint auf Knopfdruck
       wieder (die Session-Unterdrückung gilt nur für den Hintergrund-Check).
+- [ ] **„Check for updates" während der Prompt schon lebt** — Stand „Downloading" oder
+      bereits „Ready": der Fortschritt wird **nicht** auf 0 zurückgesetzt und **nicht** erneut
+      heruntergeladen; das Fenster kommt nach vorn, Statuszeile „An update is available — see
+      the update window." Gilt auch für einen mit „Later" versteckten fertigen Download —
+      der Knopf holt ihn zurück, statt ihn wegzuwerfen.
 - [ ] Statuszeile ist beim erneuten Öffnen der Settings wieder leer — ein
       alter Befund darf nicht als aktuelle Aussage stehenbleiben.
 - [ ] **Deinstallation räumt restlos auf — ab 0.10.0.** Danach existiert weder
@@ -561,6 +576,16 @@ gesetzt, mindestens ein Konto enrolled), dann die neue Version darüber installi
       Der Step-up-Prompt aus dem Claims-Challenge-Punkt oben bleibt davon unberührt.
 - [ ] **Mehrere Konten, ein Tenant ohne Consent:** die Liste lädt trotzdem
       vollständig und innerhalb der üblichen Zeit — kein Konto wartet auf ein anderes.
+- [ ] **Device-Code-Konto unter einer geräteabhängigen CA-Policy** (AADSTS53001/53000):
+      die Meldung nennt die Anmeldeart als Ursache — „…requires a managed device, which
+      device-code sign-in cannot present. Remove this account in Settings and add it again
+      using the standard sign-in." —, **nicht** „See the log file for details.". Gegenprobe
+      mit einem WAM-Konto auf demselben nicht gejointen Gerät: dort nennt die Meldung das
+      **Gerät** und rät nicht zum Neuanlegen, das dort nichts ändern würde. Feldfall
+      2026-09-10: Graph lud weiter, nur die Azure-Rollen fehlten stündlich.
+- [ ] **Kaputte `favorites.json`:** in einem Eintrag `"Scopes": null` setzen und die App
+      starten → genau dieser Eintrag verschwindet, die übrigen Favoriten bleiben, und beim
+      Rendern der Chips stürzt nichts ab.
 - [ ] Nach jedem Fehlerfall ist die App weiter bedienbar (kein eingefrorenes UI).
 
 ## 7. Sicherheit & Logs

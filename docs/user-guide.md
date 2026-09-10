@@ -230,6 +230,12 @@ becomes available on its own; there is nothing to do.
 be signed in with your everyday account instead of the admin one. If the account is right, the
 eligibility genuinely is not there, and that is a question for whoever administers the tenant.
 
+**Azure roles are missing while the others are there.** The panel shows a line that starts *Azure
+resource roles unavailable* — what follows it is the cause. A missing consent resolves itself once an
+admin grants it. A Conditional Access policy that wants a managed device is one for IT. And if you
+signed in with a device code, that is the cause: that sign-in cannot prove anything about the
+device, so remove the account and add it again with the normal sign-in.
+
 **Sign-in window opens and stays blank.** Usually a network that blocks a Microsoft endpoint. Run
 **Settings → Diagnostics → Network check**, hit **Copy report**, and send that to IT — it names the
 endpoint that is blocked instead of leaving them guessing.
