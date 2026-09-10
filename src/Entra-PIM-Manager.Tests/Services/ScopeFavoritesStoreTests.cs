@@ -128,6 +128,23 @@ public sealed class ScopeFavoritesStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task LoadAsync_WithAnEntryWhoseScopesAreNull_DropsThatEntry()
+    {
+        // Valid JSON, so the catch never fires — the entry reaches the list with a null
+        // Scopes and every chip that renders it reads Scopes. Dropping it here is what
+        // keeps a hand-edited file from taking down the UI thread.
+        const string Json =
+            """[{"Id":"11111111-1111-1111-1111-111111111111","TenantId":"t","ResourceId":"r","ScopeId":"s","Scopes":null,"CreatedAt":"2026-01-01T00:00:00+00:00"}]""";
+
+        await File.WriteAllTextAsync(_filePath, Json);
+        var store = CreateStore();
+
+        await store.LoadAsync();
+
+        Assert.Empty(store.Current);
+    }
+
+    [Fact]
     public async Task AddAsync_LeavesNoTempFileBehind()
     {
         await CreateStore().AddAsync(Favorite("Project X"));

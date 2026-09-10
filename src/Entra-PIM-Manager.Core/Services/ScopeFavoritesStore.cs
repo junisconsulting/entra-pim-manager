@@ -127,8 +127,10 @@ public sealed class ScopeFavoritesStore : IScopeFavoritesStore
                 .DeserializeAsync<List<ScopeFavorite>>(stream, JsonOptions, ct)
                 .ConfigureAwait(false);
 
-            // A null entry would survive deserialization and blow up on first use.
-            return favorites?.Where(favorite => favorite is not null).ToList() ?? [];
+            // A null entry — or one whose Scopes list deserialized as null, which a
+            // truncated or hand-edited file produces just as easily — would survive
+            // deserialization and blow up on first use: every chip reads Scopes.
+            return favorites?.Where(favorite => favorite is { Scopes: not null }).ToList() ?? [];
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
