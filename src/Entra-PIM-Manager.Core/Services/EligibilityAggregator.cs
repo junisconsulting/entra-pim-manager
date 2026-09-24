@@ -86,7 +86,7 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyDictionary<SignedInAccount, IReadOnlyList<ActiveAssignment>>>
+    public async Task<IReadOnlyDictionary<SignedInAccount, ActiveAssignmentFetchResult>>
         GetAggregatedActiveAssignmentsAsync(
             IEnumerable<SignedInAccount> accounts, CancellationToken ct = default)
     {
@@ -95,7 +95,7 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
         var snapshot = accounts.ToList();
         if (snapshot.Count == 0)
         {
-            return new Dictionary<SignedInAccount, IReadOnlyList<ActiveAssignment>>();
+            return new Dictionary<SignedInAccount, ActiveAssignmentFetchResult>();
         }
 
         var tasks = snapshot
@@ -103,10 +103,10 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
             .ToList();
         var results = await Task.WhenAll(tasks).ConfigureAwait(false);
 
-        var dict = new Dictionary<SignedInAccount, IReadOnlyList<ActiveAssignment>>();
+        var dict = new Dictionary<SignedInAccount, ActiveAssignmentFetchResult>();
         for (var i = 0; i < snapshot.Count; i++)
         {
-            dict[snapshot[i]] = results[i].Items;
+            dict[snapshot[i]] = new ActiveAssignmentFetchResult(results[i].Items, results[i].LoadError);
         }
 
         return dict;

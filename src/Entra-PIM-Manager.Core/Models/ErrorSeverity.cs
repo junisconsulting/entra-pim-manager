@@ -5,8 +5,17 @@ namespace EntraPimManager.Core.Models;
 /// </summary>
 public enum ErrorSeverity
 {
-    /// <summary>Informational — not really a failure (e.g. role already active).</summary>
+    /// <summary>Informational — not really a failure (e.g. an activation awaiting approval).</summary>
     Info,
+
+    /// <summary>
+    /// The role is already active, so nothing happened. Its own value rather than
+    /// plain <see cref="Info"/> because a re-activation waits this one out — PIM
+    /// keeps refusing until it has released the previous activation — while the
+    /// other informational cases (a cancelled verification, a pending approval)
+    /// must never be retried.
+    /// </summary>
+    AlreadyActive,
 
     /// <summary>Input validation failed — keep the dialog open, highlight the field.</summary>
     Validation,

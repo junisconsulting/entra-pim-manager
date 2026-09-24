@@ -71,12 +71,34 @@ Or via `/$batch` for larger sets.
 
 The eligibility response gives you a `directoryScopeId` that can be:
 - `"/"` — tenant scope
-- `"/administrativeUnits/{auId}"` — restricted to an AU
-- `"/applications/{appId}"` — restricted to an app (for App Admin scope)
+- `"/administrativeUnits/{auId}"` — the role applies to the **members** of that AU
+- `"/{objectId}"` — the role applies to that one directory object itself, typically an app
+  registration or service principal. **No `/applications/` segment**, just the object id after the
+  slash. Corrected 2026-09-23 against Microsoft Learn, which calls the asymmetry out explicitly:
+  "The scope of `/<ID>` means the principal can manage that Microsoft Entra object. The scope
+  `/administrativeUnits/<ID>` means the principal can manage the members of the administrative
+  unit … not the administrative unit itself." An earlier revision of this file claimed
+  `"/applications/{appId}"` — it does not exist.
+
+Not every role can be scoped. AU scope is limited to a published list (User, Groups, Helpdesk,
+Password, Authentication, Privileged Authentication, License, Cloud Device, Printer, SharePoint,
+Teams, Teams Devices, Attribute Assignment Administrator/Reader, plus custom roles carrying at
+least one user/group/device permission); app-registration scope only to roles with
+app-registration permissions. Everything else is tenant-wide or nothing, and an unsupported
+combination is refused with `Request_BadRequest` — "The given built-in role is not supported to be
+assigned to a single resource scope."
 
 When you POST the activation request, this MUST match exactly what was in the eligibility. Don't normalize, don't trim, don't hardcode `"/"`.
 
 Hard-coding `"/"` while the eligibility was AU-scoped will fail with HTTP 400 `InvalidScope`.
+
+**A scoped directory role is not distinguishable from a tenant-wide one by name.** "User
+Administrator" over one AU and over the whole tenant read identically in any UI that shows only
+`roleDefinition.displayName` — and the read paths return no display name for the scope, only its
+id. `directoryScope` (and `appScope`) are `$expand`-able navigation properties on the schedule
+instances, which is the only way to a human-readable scope; whether the role-management delegated
+scopes alone suffice for that expansion, or whether it needs directory read permission on top, is
+unverified.
 
 ---
 
@@ -106,6 +128,41 @@ The HTTP response for a successful POST is `201 Created`, but the `status` field
 | `Revoked` | Was active, now ended |
 
 A UI that only checks HTTP status will incorrectly tell the user "activation successful" for a `PendingApproval`. **Always parse the body.**
+
+---
+
+## A running activation cannot be extended, and cannot be overlapped
+
+There is no "extend the activation I am in" operation. `selfExtend` / `selfRenew` belong to the
+*assignment* lifecycle — an admin-granted, time-bound eligible or active assignment — and the
+portal only offers them within 14 days of that assignment's end date, as a request an admin
+approves. They do nothing for a four-hour self-activation.
+
+Chaining a second activation onto the running one does not work either. A `selfActivate` carrying
+a future `startDateTime` (the running activation's `endDateTime`), submitted while the role is
+still active, is rejected with `RoleAssignmentExists` — "The role assignment already exists."
+Field-verified 2026-09-21; it fails the same way with a longer duration or a different start, and
+`isValidationOnly: true` surfaces it without mutating anything. The ARM surface returns the same
+`RoleAssignmentExists` code for an already-active role (unverified for the future-dated case).
+
+So the only paths to "more time" are, in order of how much access they cost:
+
+1. `selfDeactivate`, then `selfActivate` again — a gap of a few seconds, at a moment the user
+   picks. Blocked for the first five minutes after an activation (`ActiveDurationTooShort` on ARM;
+   the portal states the same five-minute floor for directory roles).
+2. Wait for the expiry, then `selfActivate` again. PIM removes the active assignment within
+   seconds of expiry and the eligibility is untouched, so a re-activation is valid immediately —
+   there is no cooldown and no cap on how many times a day a role may be activated.
+
+How long path 1 actually takes, measured 2026-09-22 on a directory role with an authentication
+context: `selfDeactivate` answered `Revoked`, and **12 s later** the role was off the read API and
+`selfActivate` was accepted on the first attempt — no `RoleAssignmentExists` in between. One
+sample, so treat it as the happy path rather than the ceiling.
+
+Both are full new requests: policy is re-evaluated (justification, ticket, MFA, authentication
+context, **approval**) and each one lands in the audit log separately. For a role whose policy
+requires approval, option 1 drops the user into `PendingApproval` with no access in the meantime —
+never offer it there.
 
 ---
 

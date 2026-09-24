@@ -201,6 +201,33 @@ gelb. Der Countdown-Balken der Zeile wechselt gegen Ende die Farbe.
 
 Ob gewarnt wird und wie früh, steht unter **Settings → Notifications**.
 
+## Sich mehr Zeit verschaffen
+
+PIM kann eine laufende Aktivierung nicht verlängern. Das hat diese App nicht vergessen — Microsofts
+API lehnt eine zweite Aktivierung einer Rolle ab, die du noch hast, ganz gleich welches Ende du
+verlangst, und im Entra-Portal gibt es dafür ebenso wenig einen Knopf.
+
+Der Knopf **↻ Extend time** tut deshalb das Einzige, was dir mehr Zeit verschafft: Er beendet die
+laufende Aktivierung und beantragt sofort eine neue über die volle Dauer. Du findest ihn neben dem
+Stop-Knopf in jeder ACTIVE-Zeile und in der Ablaufwarnung.
+
+Bevor du ihn drückst:
+
+- **Du verlierst die Rolle kurz.** Die App wartet, bis Microsoft sie wirklich losgelassen hat —
+  meist ein paar Sekunden, im schlechten Fall ein paar Minuten — und fragt erst dann erneut danach.
+  Drück ihn nicht mitten in etwas, das kaputtgeht, wenn deine Rechte kurz blinken.
+- **Es ist vorausgefüllt.** Bei einer Azure-Rolle ist die Subscription bzw. Management Group, auf
+  der die ablaufende Aktivierung läuft, bereits angehakt, und als Begründung steht die vom letzten
+  Mal mit angehängtem `- extend time`. Beides kannst du vor dem Absenden ändern. Die Begründung
+  merkt sich die App nur zur Laufzeit — nach einem Neustart oder bei einer anderswo aktivierten
+  Rolle bleibt das Feld leer.
+- **Es ist eine neue Aktivierung.** Eigene Begründung, eigener Eintrag im Audit-Log, genau so, als
+  hättest du bei der Eligibility angefangen.
+- **Die ersten fünf Minuten sind gesperrt**, aus demselben Grund wie beim Stop-Knopf.
+- **Rollen mit Genehmigung bieten ihn nicht an.** Die laufende Aktivierung zu beenden würde dich
+  ohne jeden Zugriff auf einen Genehmiger warten lassen. Dort bleibt nur: ablaufen lassen und neu
+  beantragen — sag deinem Genehmiger also vorher Bescheid.
+
 ## Einstellungen
 
 Das Zahnrad oben rechts.

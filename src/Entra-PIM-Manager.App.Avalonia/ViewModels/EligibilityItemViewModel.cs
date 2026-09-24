@@ -145,13 +145,12 @@ public sealed partial class EligibilityItemViewModel : ObservableObject
     /// administrative unit for a directory role confined to one, <c>null</c> otherwise.
     /// </summary>
     /// <remarks>
-    /// The administrative unit is named by its object id, not its display name — resolving
-    /// that needs a directory read the app does not ask consent for. An id is still the
-    /// difference between "User Administrator" and "User Administrator, but only there".
+    /// The read paths name the scope themselves now — the directory surface expands
+    /// <c>directoryScope</c> and falls back to the bare object id where a tenant
+    /// refuses that expansion. Either way an id is still the difference between "User
+    /// Administrator" and "User Administrator, but only there".
     /// </remarks>
-    public string? ScopeLabel => Eligibility.ScopeLabel
-        ?? (Eligibility.AdministrativeUnitId is { } unitId ? $"Administrative unit: {unitId}" : null)
-        ?? (Eligibility.NarrowedScopeId is { } scopeId ? $"Scope: {scopeId}" : null);
+    public string? ScopeLabel => Eligibility.ScopeLabel;
 
     /// <summary>
     /// True when this eligibility is not currently active and not in the

@@ -183,7 +183,7 @@ public static class PimErrorMapper
     private static UserFacingError Map(string code, int statusCode, string? message) => code switch
     {
         "RoleAssignmentExists" or "RoleAssignmentInstanceAlreadyExists" or "RoleAssignmentAlreadyExists" =>
-            Error(ErrorSeverity.Info, "This role is already active."),
+            Error(ErrorSeverity.AlreadyActive, "This role is already active."),
 
         "JustificationRuleViolated" or "JustificationRequired" =>
             Error(ErrorSeverity.Validation, JustificationMessage, "justification"),

@@ -123,6 +123,15 @@ Same `PUT`, at the *active assignment's* scope:
 
 Refused within five minutes of activation (`ActiveDurationTooShort`).
 
+**ARM lets go of a deactivated role far more slowly than Graph, and its read API is not the
+signal.** Measured 2026-09-22 on a subscription-scoped `Contributor`: `SelfDeactivate` answered
+`Revoked` at once, the row was off `roleAssignmentScheduleInstances?$filter=asTarget()` within ~25 s
+— and every `SelfActivate` for the next ~90 s still came back HTTP 400 `RoleAssignmentExists`. It
+was accepted ~117 s after the deactivation. The same sequence on a Graph directory role took 12 s.
+So anything that deactivates in order to activate again (there is no extend — see the
+`entra-pim-graph-api` skill) needs a retry budget of minutes on ARM, and must not treat the read
+API's silence as permission to proceed.
+
 ### 5. Read the policy (PIM settings) for a role at a scope
 
 ```http

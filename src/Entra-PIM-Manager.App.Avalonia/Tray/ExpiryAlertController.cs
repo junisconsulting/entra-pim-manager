@@ -62,6 +62,16 @@ public sealed class ExpiryAlertController
         };
         _window.DismissRequested += (_, _) => _viewModel.DismissCurrentExpiryAlert();
 
+        // "Re-activate" needs the popup up first — the activation panel slides in
+        // over it — and then leaves the alert behind: whatever the user decides in
+        // the panel, this warning has been acted on.
+        _window.ReactivateRequested += async (_, _) =>
+        {
+            _popupController.Show();
+            _viewModel.DismissCurrentExpiryAlert();
+            await _viewModel.ReactivateCurrentExpiryAlertAsync();
+        };
+
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
     }
 

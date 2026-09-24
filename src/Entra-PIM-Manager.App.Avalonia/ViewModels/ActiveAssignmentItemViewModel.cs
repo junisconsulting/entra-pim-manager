@@ -20,6 +20,7 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
     private static readonly TimeSpan ProvisioningWindow = TimeSpan.FromMinutes(5);
 
     private readonly Func<ActiveAssignmentItemViewModel, Task> _deactivate;
+    private readonly Func<ActiveAssignmentItemViewModel, Task> _reactivate;
 
     [ObservableProperty]
     private string _remainingText = string.Empty;
@@ -73,6 +74,15 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
     private bool _isDeactivating;
 
     /// <summary>
+    /// Display name of the subscription a resource-group-scoped assignment lives in,
+    /// pushed in by the shell. ARM does not return it on such an assignment, so the
+    /// shell resolves it from the subscriptions it has seen elsewhere; <c>null</c>
+    /// when it has seen none, and the scope line falls back to the subscription id.
+    /// </summary>
+    [ObservableProperty]
+    private string? _scopeSubscriptionName;
+
+    /// <summary>
     /// Inline error caption shown under the role meta when a deactivation
     /// attempt fails after the shell's retry budget is exhausted. Surfaces the
     /// failure inside the row itself so users never lose the signal when
@@ -85,11 +95,13 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
     public ActiveAssignmentItemViewModel(
         ActiveAssignment assignment,
         SignedInAccount account,
-        Func<ActiveAssignmentItemViewModel, Task> deactivate)
+        Func<ActiveAssignmentItemViewModel, Task> deactivate,
+        Func<ActiveAssignmentItemViewModel, Task> reactivate)
     {
         Assignment = assignment;
         Account = account;
         _deactivate = deactivate;
+        _reactivate = reactivate;
         UpdateCountdown();
     }
 
@@ -144,31 +156,25 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
         && DateTimeOffset.UtcNow - start < ProvisioningWindow;
 
     /// <summary>
+    /// True while the row offers "Extend time". It is the deactivate button's
+    /// condition, because a re-activation ends this activation first and runs into
+    /// the very same minimum active duration.
+    /// </summary>
+    public bool CanReactivate => !IsBusy && !IsInProvisioningWindow;
+
+    /// <summary>
     /// Deactivate-button tooltip: a generic label outside the lockout window,
     /// the policy explanation + remaining wait time during it.
     /// </summary>
-    public string DeactivateTooltip
-    {
-        get
-        {
-            if (Assignment.StartDateTime is not { } start)
-            {
-                return "Deactivate";
-            }
+    public string DeactivateTooltip => LockoutAwareTooltip("Deactivate");
 
-            var elapsed = DateTimeOffset.UtcNow - start;
-            if (elapsed >= ProvisioningWindow)
-            {
-                return "Deactivate";
-            }
-
-            var remaining = ProvisioningWindow - elapsed;
-            var remainingText = remaining.TotalMinutes >= 1
-                ? $"{(int)remaining.TotalMinutes}m {remaining.Seconds}s"
-                : $"{Math.Max(1, (int)Math.Ceiling(remaining.TotalSeconds))}s";
-            return $"Microsoft requires a minimum active duration of {(int)ProvisioningWindow.TotalMinutes} minutes before a role can be deactivated. Available in {remainingText}.";
-        }
-    }
+    /// <summary>
+    /// Tooltip for the button the UI calls "Extend time". It spells out what
+    /// extending really is, because PIM cannot lengthen a running activation — the
+    /// role is given up and requested again.
+    /// </summary>
+    public string ReactivateTooltip =>
+        LockoutAwareTooltip("Extend time: ends this activation and immediately requests a new one");
 
     /// <summary>
     /// Composed tenant label: <c>"{TenantName}"</c> when resolved, GUID fallback
@@ -188,39 +194,57 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
     };
 
     /// <summary>
-    /// Tenant, resource kind and — for Azure resource roles — the scope as one
-    /// string for the row's meta line.
+    /// The three lines under the role name, each a single bound string.
     /// </summary>
     /// <remarks>
-    /// Composed here rather than laid out as three controls in the view on purpose:
-    /// a horizontal <c>StackPanel</c> measures its children against infinite width,
-    /// so <c>TextTrimming</c> never engages and a long tenant name (e.g. a CJK one)
-    /// overflows its grid column and paints over the countdown. One TextBlock bound
-    /// to one string trims correctly at any width.
-    /// <para/>
-    /// Azure resource roles drop the kind: their scope already reads
-    /// "Subscription: …", so the kind only steals the width the scope needs — and
-    /// the scope is what makes "Contributor" mean anything.
+    /// Composed here rather than laid out as label + value controls in the view: a
+    /// horizontal <c>StackPanel</c> measures its children against infinite width, so
+    /// neither wrapping nor trimming engages there and a long tenant name overflows
+    /// the column and paints over the countdown. One TextBlock per line wraps
+    /// correctly at any width — and wrap they do, because a trimmed
+    /// "Subscription: lz-a…" cannot tell two subscriptions apart, which is the one
+    /// thing these lines exist to answer.
     /// </remarks>
-    public string MetaLine
-    {
-        get
-        {
-            var kind = Assignment.Kind == PimResourceKind.AzureResourceRole ? null : KindLabel;
-            return string.Join(
-                " · ",
-                new[] { TenantLabel, kind, Assignment.ScopeLabel }.Where(part => !string.IsNullOrEmpty(part)));
-        }
-    }
+    public string UserLine => $"User: {AliasOrUpn}";
+
+    /// <inheritdoc cref="UserLine"/>
+    public string TenantLine => $"Tenant: {TenantLabel}";
+
+    /// <inheritdoc cref="UserLine"/>
+    /// <remarks>
+    /// An Azure scope is a bare name behind the word "Scope", because a subscription
+    /// is recognisably a subscription. A directory scope keeps the label it came with
+    /// — "Administrative unit: Seattle" — since there the kind is the meaning: the
+    /// same role over an administrative unit and over the tenant are worlds apart.
+    /// </remarks>
+    public string ScopeLine => Assignment.Kind == PimResourceKind.AzureResourceRole
+        ? $"Scope: {ScopeNameFormatter.Describe(Assignment.ScopeId, Assignment.ScopeLabel, ScopeSubscriptionName)}"
+        : Assignment.ScopeLabel ?? string.Empty;
 
     /// <summary>
-    /// Tooltip for the meta line: the tenant GUID, plus the full ARM scope id for
-    /// Azure resource roles — the trimmed "Subscription: …" is a display name, and
-    /// the scope path is what an operator actually needs to copy.
+    /// What this is, for everything but an Azure role — where the scope already says
+    /// so. "Directory role" versus "Group membership" is what tells two identically
+    /// named things apart.
     /// </summary>
-    public string MetaTooltip => Assignment.Kind == PimResourceKind.AzureResourceRole
-        ? $"{TenantId}{Environment.NewLine}{Assignment.ScopeId}"
-        : TenantId;
+    public string TypeLine => $"Type: {KindLabel}";
+
+    /// <summary>True when the assignment names a scope of its own.</summary>
+    public bool HasScope => !string.IsNullOrWhiteSpace(Assignment.ScopeLabel);
+
+    /// <summary>
+    /// True wherever the scope line does not already imply the kind. A directory role
+    /// confined to an administrative unit shows both: what it is, and where it applies.
+    /// </summary>
+    public bool ShowType => Assignment.Kind != PimResourceKind.AzureResourceRole;
+
+    /// <summary>Tenant GUID, behind the tenant line — the label may be an alias.</summary>
+    public string TenantTooltip => TenantId;
+
+    /// <summary>
+    /// The full ARM scope path behind the scope line. The displayed name is for
+    /// reading; this is what an operator copies.
+    /// </summary>
+    public string ScopeTooltip => Assignment.ScopeId;
 
     /// <summary>
     /// Wall-clock time this row was constructed. Used by the shell's pending
@@ -242,7 +266,8 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
         PimEligibility eligibility,
         SignedInAccount account,
         TimeSpan duration,
-        Func<ActiveAssignmentItemViewModel, Task> deactivate)
+        Func<ActiveAssignmentItemViewModel, Task> deactivate,
+        Func<ActiveAssignmentItemViewModel, Task> reactivate)
     {
         ArgumentNullException.ThrowIfNull(eligibility);
         ArgumentNullException.ThrowIfNull(account);
@@ -259,7 +284,7 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
             AssignmentScheduleId: string.Empty,
             ScopeLabel: eligibility.ScopeLabel);
 
-        return new ActiveAssignmentItemViewModel(placeholder, account, deactivate)
+        return new ActiveAssignmentItemViewModel(placeholder, account, deactivate, reactivate)
         {
             IsPending = true,
         };
@@ -329,21 +354,63 @@ public sealed partial class ActiveAssignmentItemViewModel : ObservableObject
         // turns from grey to red and re-enables itself the moment the lockout expires,
         // without waiting for a refresh.
         OnPropertyChanged(nameof(IsInProvisioningWindow));
+        OnPropertyChanged(nameof(CanReactivate));
         OnPropertyChanged(nameof(DeactivateTooltip));
+        OnPropertyChanged(nameof(ReactivateTooltip));
     }
 
     [RelayCommand]
     private Task DeactivateAsync() => _deactivate(this);
 
+    [RelayCommand]
+    private Task ReactivateAsync() => _reactivate(this);
+
+    /// <summary>
+    /// The button label, or — inside Microsoft's minimum active duration — why the
+    /// button is dead and for how much longer. Both buttons need it: deactivating is
+    /// what a re-activation does first.
+    /// </summary>
+    private string LockoutAwareTooltip(string label)
+    {
+        if (Assignment.StartDateTime is not { } start)
+        {
+            return label;
+        }
+
+        var elapsed = DateTimeOffset.UtcNow - start;
+        if (elapsed >= ProvisioningWindow)
+        {
+            return label;
+        }
+
+        var remaining = ProvisioningWindow - elapsed;
+        var remainingText = remaining.TotalMinutes >= 1
+            ? $"{(int)remaining.TotalMinutes}m {remaining.Seconds}s"
+            : $"{Math.Max(1, (int)Math.Ceiling(remaining.TotalSeconds))}s";
+        return $"Microsoft requires a minimum active duration of {(int)ProvisioningWindow.TotalMinutes} minutes before a role can be deactivated. Available in {remainingText}.";
+    }
+
     partial void OnTenantNameChanged(string? value)
     {
         OnPropertyChanged(nameof(TenantLabel));
-        OnPropertyChanged(nameof(MetaLine));
+        OnPropertyChanged(nameof(TenantLine));
     }
 
-    partial void OnAccountAliasChanged(string? value) => OnPropertyChanged(nameof(AliasOrUpn));
+    partial void OnAccountAliasChanged(string? value)
+    {
+        OnPropertyChanged(nameof(AliasOrUpn));
+        OnPropertyChanged(nameof(UserLine));
+    }
 
-    partial void OnIsPendingChanged(bool value) => OnPropertyChanged(nameof(IsBusy));
+    partial void OnScopeSubscriptionNameChanged(string? value) => OnPropertyChanged(nameof(ScopeLine));
 
-    partial void OnIsDeactivatingChanged(bool value) => OnPropertyChanged(nameof(IsBusy));
+    partial void OnIsPendingChanged(bool value) => NotifyBusyChanged();
+
+    partial void OnIsDeactivatingChanged(bool value) => NotifyBusyChanged();
+
+    private void NotifyBusyChanged()
+    {
+        OnPropertyChanged(nameof(IsBusy));
+        OnPropertyChanged(nameof(CanReactivate));
+    }
 }

@@ -190,6 +190,33 @@ countdown bar on the row shifts colour as it gets close.
 
 Both the warning and how early it fires are under **Settings → Notifications**.
 
+## Give yourself more time
+
+PIM cannot extend a running activation. That is not something this app left out — Microsoft's API
+refuses a second activation of a role you still hold, whatever end time you ask for, and the Entra
+portal has no button for it either.
+
+The **↻ Extend time** button therefore does the only thing that gets you more time: it ends the
+running activation and immediately requests a new one for the full duration. You will find it next
+to the stop button on every ACTIVE row, and on the expiry warning.
+
+Before you press it:
+
+- **You lose the role for a moment.** The app waits until Microsoft has really let go — usually a
+  few seconds, occasionally a few minutes — and only then asks for it again. Don't press it
+  in the middle of something that breaks when your permissions blink.
+- **It comes prefilled.** For an Azure role, the subscription or management group the expiring
+  activation runs on is already ticked, and the justification is the one you gave last time with
+  `- extend time` appended. Both are yours to change before you submit. The reason is only
+  remembered while the app runs — after a restart, or for a role activated elsewhere, the field
+  starts empty.
+- **It is a new activation.** Own justification, own entry in the audit log, exactly as if you had
+  started from the eligibility.
+- **The first five minutes are blocked**, for the same reason the stop button is.
+- **Roles that need approval don't offer it.** Ending the activation would leave you waiting for an
+  approver with no access at all. There, the only path is to let it expire and request again — so
+  tell your approver beforehand.
+
 ## Settings
 
 The gear icon, top right.

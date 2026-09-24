@@ -63,6 +63,12 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     /// </summary>
     private const int SectionAutoExpandLimit = 12;
 
+    /// <summary>
+    /// Appended to the justification an extension carries over, so the audit trail
+    /// says which entry was the original grant and which one bought more time.
+    /// </summary>
+    private const string ExtendJustificationSuffix = " - extend time";
+
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan GraphCallTimeout = TimeSpan.FromSeconds(30);
 
@@ -75,6 +81,12 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     // How long an "Activating…" placeholder may live without Graph publishing
     // the real assignment before we give up and drop it.
     private static readonly TimeSpan PendingWatchdog = TimeSpan.FromSeconds(30);
+
+    // Microsoft's read API is eventually consistent: a deactivated assignment can
+    // take 5-60 s to drop off the schedule-instances endpoint. Poll for that long
+    // before declaring the deactivation unconfirmed.
+    private static readonly TimeSpan DeactivationWatchdog = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan DeactivationPollInterval = TimeSpan.FromSeconds(6);
 
     private readonly IAuthService _authService;
     private readonly IEligibilityAggregator _aggregator;
@@ -101,6 +113,25 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     // when that assignment leaves and re-enters the warning window.
     private readonly HashSet<string> _expiryDismissed = new(StringComparer.Ordinal);
 
+    // Enrollments whose last active-assignments read failed. A failed read comes back
+    // as an empty list, which on its own is indistinguishable from "nothing is active"
+    // — and for anything waiting on a role to be given up, that difference is the
+    // difference between "PIM let go" and "the network blinked".
+    private readonly HashSet<string> _activeReadFailures = new(StringComparer.OrdinalIgnoreCase);
+
+    // Subscription display names by subscription id, harvested from every row whose
+    // scope IS a subscription. ARM does not return the subscription's name on a
+    // resource-group-scoped assignment — only its id sits in the scope path — and
+    // this is the answer without spending a read on it.
+    private readonly Dictionary<string, string> _subscriptionNames = new(StringComparer.OrdinalIgnoreCase);
+
+    // Justification of every activation this session granted, keyed by assignment
+    // identity, so "Extend time" can offer the same reason again instead of making
+    // the user retype it. In memory for the session only: justification text may
+    // carry incident detail, so it is never written to disk and never logged.
+    private readonly Dictionary<(PimResourceKind Kind, string ResourceId, string ScopeId, string ObjectId, string TenantId), string>
+        _grantedJustifications = [];
+
     // Snapshot of per-group IsExpanded state taken at the moment a filter
     // becomes active, restored when the user clears the filter. Without this
     // the auto-expand-on-match behaviour would overwrite the layout the user
@@ -126,6 +157,9 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     // Identity of the assignment currently shown in the alert window, so a
     // Dismiss/Open click knows which key to suppress.
     private string? _currentAlertKey;
+
+    // The row behind that alert, for its Re-activate button.
+    private ActiveAssignmentItemViewModel? _currentAlertRow;
 
     // Last surfaced "expiring" signature, so ExpiringChanged only fires when the
     // tray-visible state actually changes instead of on every 1s tick.
@@ -209,6 +243,10 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         _countdownTimer.Tick += (_, _) => UpdateCountdowns();
 
         _activationPanel.Activated += OnActivated;
+
+        // Re-activation ends the running activation from inside the panel's submit;
+        // deactivation and the refresh that confirms it live here.
+        _activationPanel.EndRunningActivation = EndRunningActivationAsync;
 
         // Scope favourites are written from the activation panel; the starred ones are
         // rows on the main page, so they follow the store. Changed fires on the writing
@@ -445,6 +483,14 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         IsExpiryAlertVisible = false;
     }
 
+    /// <summary>
+    /// Re-activates the assignment the alert is currently showing. Called from the
+    /// alert's "Re-activate" button via <see cref="Tray.ExpiryAlertController"/>,
+    /// which surfaces the popup first — that is where the activation panel lives.
+    /// </summary>
+    public Task ReactivateCurrentExpiryAlertAsync()
+        => _currentAlertRow is { } row ? ReactivateAsync(row) : Task.CompletedTask;
+
     /// <summary>Refreshes eligibilities and active assignments across all enrolled accounts.</summary>
     [RelayCommand]
     private async Task RefreshAsync()
@@ -466,6 +512,17 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             var activeTask = _aggregator.GetAggregatedActiveAssignmentsAsync(snapshot, cts.Token);
             var eligibilityTask = _aggregator.GetAggregatedEligibilitiesAsync(snapshot, cts.Token);
             await Task.WhenAll(activeTask, eligibilityTask);
+
+            HarvestSubscriptionNames(activeTask.Result, eligibilityTask.Result);
+
+            _activeReadFailures.Clear();
+            foreach (var (account, fetched) in activeTask.Result)
+            {
+                if (fetched.LoadError is not null)
+                {
+                    _activeReadFailures.Add(EnrollmentKey(account));
+                }
+            }
 
             UpdateActiveAssignments(activeTask.Result);
             BuildEligibilityGroups(eligibilityTask.Result);
@@ -836,6 +893,321 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         }
     }
 
+    /// <summary>
+    /// Re-activate an active row: open the activation panel in replace mode, so the
+    /// running activation is ended and immediately requested again.
+    /// </summary>
+    /// <remarks>
+    /// PIM has no way to extend a running activation — a second request for a role
+    /// that is still active comes back as <c>RoleAssignmentExists</c>, whatever start
+    /// time it carries. Giving the role up and asking again is the only path, which
+    /// is why this goes through the panel rather than acting on one click: the user
+    /// sees what it costs, and fills in the justification the new request needs.
+    /// </remarks>
+    private async Task ReactivateAsync(ActiveAssignmentItemViewModel item)
+    {
+        var account = item.Account;
+
+        // A release plus activation is already in flight. A second one would fire
+        // another deactivation for the same assignment behind the first one's back,
+        // and re-opening the panel would orphan the batch that is running.
+        if (_activationPanel.IsBusy)
+        {
+            return;
+        }
+
+        // The alert window reaches this without the row button's guard, and an
+        // activation can be both younger than five minutes and close to expiring.
+        // Ending it would be refused, so say so before the user fills in a form.
+        if (item.IsInProvisioningWindow)
+        {
+            _toastService.ShowError("Can't extend yet", item.ReactivateTooltip);
+            return;
+        }
+
+        try
+        {
+            using var cts = new CancellationTokenSource(GraphCallTimeout);
+            var bundle = _accountServices.GetServicesFor(account);
+            var policy = await bundle.PolicyService.GetPolicyAsync(
+                account.TenantId,
+                item.Assignment.Kind,
+                item.Assignment.ResourceId,
+                item.Assignment.ScopeId,
+                cts.Token);
+
+            // An approval-gated role has no re-activation worth offering: the running
+            // activation would end now and the replacement would sit in PendingApproval,
+            // leaving the user with nothing in between. Say so instead of doing it.
+            if (policy.RequiresApproval)
+            {
+                _toastService.ShowError(
+                    "Can't extend this role",
+                    $"{item.DisplayName} requires approval. Extending means giving the role up first, which would leave you waiting for an approver with no access. Let it expire and request again — and tell your approver beforehand.");
+                return;
+            }
+
+            if (FindEligibilityFor(item) is not { } eligibility)
+            {
+                _toastService.ShowError(
+                    "Can't extend this role",
+                    $"No eligibility for {item.DisplayName} is listed any more. Refreshing…");
+                await RefreshAsync();
+                return;
+            }
+
+            _settingsPanel.IsOpen = false;
+            if (!IsSameEnrollment(ActiveAccount, account))
+            {
+                ActiveAccount = account;
+            }
+
+            _activationPanel.Open(
+                account,
+                eligibility,
+                policy,
+                preselect: ScopePreselectionFor(account, eligibility, item.Assignment),
+                replacing: item.Assignment,
+                justification: CarriedJustificationFor(item));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Loading policy for re-activation failed");
+            _toastService.ShowError("Extend time", PimErrorMapper.MapException(ex).Message);
+        }
+    }
+
+    /// <summary>
+    /// The eligibility the panel needs to request <paramref name="item"/> again.
+    /// </summary>
+    /// <remarks>
+    /// Usually the row with the very same key. An Azure activation narrowed to a
+    /// subscription is the exception: it lists at that subscription while its
+    /// eligibility stays on the management group above, so the exact key finds
+    /// nothing and the role alone has to do. The panel then opens with an empty
+    /// scope picker and the user names the scope again — which is the existing rule
+    /// that a narrowed activation is chosen per activation, not inherited.
+    /// </remarks>
+    private PimEligibility? FindEligibilityFor(ActiveAssignmentItemViewModel item)
+    {
+        var rows = EligibilityGroups.SelectMany(group => group.Items).ToList();
+        var wanted = PendingMatchKey(
+            item.Account,
+            item.Assignment.Kind,
+            item.Assignment.ResourceId,
+            item.Assignment.ScopeId);
+
+        var exact = rows.FirstOrDefault(row => PendingMatchKey(
+            row.Account,
+            row.Eligibility.Kind,
+            row.Eligibility.ResourceId,
+            row.Eligibility.ScopeId).Equals(wanted));
+        if (exact is not null)
+        {
+            return exact.Eligibility;
+        }
+
+        // Only Azure roles fall back. A directory role at another scope is another
+        // grant under the same name: ending an administrative-unit-scoped activation
+        // and re-requesting the tenant-wide eligibility would hand back more than was
+        // given up, which is the one mistake this whole feature must not make.
+        if (item.Assignment.Kind != PimResourceKind.AzureResourceRole)
+        {
+            return null;
+        }
+
+        var candidates = rows
+            .Where(row =>
+                IsSameEnrollment(row.Account, item.Account)
+                && row.Eligibility.Kind == PimResourceKind.AzureResourceRole
+                && string.Equals(
+                    RoleDefinitionKey(row.Eligibility.ResourceId),
+                    RoleDefinitionKey(item.Assignment.ResourceId),
+                    StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        // Whether a subscription sits beneath a given management group is not derivable
+        // from the scope ids — it takes the eligibleChildResources walk the panel does
+        // later. So one candidate is an answer and several are a guess, and a guess here
+        // activates the role somewhere the user did not ask for.
+        return candidates.Count == 1 ? candidates[0].Eligibility : null;
+    }
+
+    /// <summary>
+    /// Remembers the display name of every scope that is a subscription, from both
+    /// reads, so a resource-group-scoped row can name the subscription it sits in.
+    /// Never cleared: a subscription that drops out of one refresh has not been
+    /// renamed, and a remembered name beats falling back to its GUID.
+    /// </summary>
+    private void HarvestSubscriptionNames(
+        IReadOnlyDictionary<SignedInAccount, ActiveAssignmentFetchResult> active,
+        IReadOnlyDictionary<SignedInAccount, EligibilityFetchResult> eligibilities)
+    {
+        var scopes = active
+            .SelectMany(entry => entry.Value.Items)
+            .Select(assignment => (assignment.ScopeId, assignment.ScopeLabel))
+            .Concat(eligibilities
+                .SelectMany(entry => entry.Value.Items)
+                .Select(eligibility => (eligibility.ScopeId, eligibility.ScopeLabel)));
+
+        foreach (var (scopeId, scopeLabel) in scopes)
+        {
+            if (ScopeNameFormatter.SubscriptionScopeOf(scopeId) is { } subscriptionId)
+            {
+                _subscriptionNames[subscriptionId] = ScopeNameFormatter.NameOf(scopeLabel, scopeId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The subscription name to hand a row, or <c>null</c> when the scope is not
+    /// under a subscription we have a name for.
+    /// </summary>
+    private string? SubscriptionNameFor(string scopeId)
+        => ScopeNameFormatter.SubscriptionIdOf(scopeId) is { } subscriptionId
+            && _subscriptionNames.TryGetValue(subscriptionId, out var name)
+                ? name
+                : null;
+
+    /// <summary>
+    /// Ticks the scope the expiring activation is actually on, so extending an Azure
+    /// role does not start at an empty "Activate on" picker.
+    /// </summary>
+    /// <remarks>
+    /// Only for an eligibility that can narrow, and only when the activation sits
+    /// somewhere other than the eligibility's own scope — otherwise there is no
+    /// picker, or nothing to choose. It travels as an unsaved
+    /// <see cref="ScopeFavorite"/> purely to reuse the panel's existing
+    /// preselect-once-the-list-loads machinery, including its refusal to fall back to
+    /// the entire scope when the scope cannot be found. Nothing persists it.
+    /// </remarks>
+    private ScopeFavorite? ScopePreselectionFor(
+        SignedInAccount account,
+        PimEligibility eligibility,
+        ActiveAssignment assignment)
+    {
+        if (!eligibility.CanNarrowScope
+            || string.Equals(eligibility.ScopeId, assignment.ScopeId, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        // The picker matches on the scope id alone; the name and type only ever reach
+        // the "no longer available" notice, so they come off the row's own label.
+        var label = assignment.ScopeLabel;
+        var separator = label?.IndexOf(": ", StringComparison.Ordinal) ?? -1;
+        var name = separator >= 0 ? label![(separator + 2)..] : label ?? assignment.ScopeId;
+        var type = assignment.ScopeId.Contains("/subscriptions/", StringComparison.OrdinalIgnoreCase)
+            ? "subscription"
+            : "managementgroup";
+
+        return new ScopeFavorite(
+            Guid.Empty,
+            account.TenantId,
+            eligibility.ResourceId,
+            eligibility.ScopeId,
+            [new EligibleChildScope(assignment.ScopeId, name, type)],
+            DateTimeOffset.UtcNow,
+            IsPinned: false);
+    }
+
+    /// <summary>
+    /// The reason the expiring activation was granted on, marked as an extension —
+    /// or nothing, when this session did not grant it (another machine, the portal,
+    /// or an app restart in between).
+    /// </summary>
+    private string? CarriedJustificationFor(ActiveAssignmentItemViewModel item)
+    {
+        var key = PendingMatchKey(
+            item.Account,
+            item.Assignment.Kind,
+            item.Assignment.ResourceId,
+            item.Assignment.ScopeId);
+
+        if (!_grantedJustifications.TryGetValue(key, out var justification))
+        {
+            return null;
+        }
+
+        // Extending an extension must not stack the suffix.
+        return justification.EndsWith(ExtendJustificationSuffix, StringComparison.OrdinalIgnoreCase)
+            ? justification
+            : justification + ExtendJustificationSuffix;
+    }
+
+    /// <summary>
+    /// Ends the activation the panel is replacing and waits until PIM has let go of
+    /// it. <c>null</c> once it is gone, otherwise the reason to show in the panel.
+    /// </summary>
+    private async Task<UserFacingError?> EndRunningActivationAsync(SignedInAccount account, ActiveAssignment assignment)
+    {
+        var key = PendingMatchKey(account, assignment.Kind, assignment.ResourceId, assignment.ScopeId);
+
+        // It may have run out while the user was filling the form in — the entry
+        // point is an expiry warning, so that is an ordinary case here, not an edge
+        // one. Nothing left to end, and the new activation is free to go. Same caveat
+        // as in the wait below: a read that failed says nothing about the role.
+        if (!_activeReadFailures.Contains(EnrollmentKey(account)) && !ActiveAssignmentExists(key))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var cts = new CancellationTokenSource(GraphCallTimeout);
+            var result = await _aggregator.DeactivateAsync(account, assignment, cts.Token);
+
+            _logger.LogInformation(
+                "Deactivation for re-activation submitted for {Role} (account oid {Oid}): requestId={RequestId}, status={Status}",
+                assignment.DisplayName,
+                account.ObjectId,
+                result.RequestId,
+                result.Status);
+
+            if (result.Error is { } error)
+            {
+                // Same race, one refresh later: the list this method checked can be up
+                // to a refresh interval old, so PIM refusing to end something that is
+                // already over must not block the new activation. A read that failed
+                // says nothing either way, and then the refusal stands.
+                await RefreshAsync();
+                var confirmedGone = !_activeReadFailures.Contains(EnrollmentKey(account))
+                    && !ActiveAssignmentExists(key);
+                return confirmedGone ? null : error;
+            }
+
+            if (result.Status is ActivationStatus.Failed or ActivationStatus.Denied)
+            {
+                return new UserFacingError(
+                    ErrorSeverity.Fatal,
+                    $"Microsoft Graph reported status {result.Status} when ending the running activation. It is still active.",
+                    null);
+            }
+
+            // Best effort, not a gate. The read API is not the authority on whether
+            // PIM will accept a new activation — measured on an Azure resource role,
+            // the row was gone while every request was still refused for another
+            // minute and a half, and it can just as well be the other way round. The
+            // activation request itself is the authority, and it retries; blocking on
+            // this would fail an extension that was about to work.
+            if (!await WaitUntilInactiveAsync(account, key))
+            {
+                _logger.LogInformation(
+                    "Release of {Role} unconfirmed after {Seconds}s; requesting the new activation anyway (account oid {Oid})",
+                    assignment.DisplayName,
+                    DeactivationWatchdog.TotalSeconds,
+                    account.ObjectId);
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Ending the running activation failed");
+            return PimErrorMapper.MapException(ex);
+        }
+    }
+
     private async Task DeactivateAsync(ActiveAssignmentItemViewModel item)
     {
         if (item.IsDeactivating)
@@ -886,37 +1258,29 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
                 return;
             }
 
-            // Microsoft's read API is eventually consistent — the deactivated
-            // assignment can take 5–60 s to drop off /roleAssignmentScheduleInstances.
-            // Poll up to ~60 s; only fire the success toast once the role has
-            // actually disappeared so we never falsely claim success.
-            const int maxPollAttempts = 10;
-            for (var pollAttempt = 1; pollAttempt <= maxPollAttempts; pollAttempt++)
+            // Only fire the success toast once the role has actually disappeared, so
+            // we never falsely claim success.
+            if (await WaitUntilInactiveAsync(item.Account, deactivationKey))
             {
-                await Task.Delay(TimeSpan.FromSeconds(6));
-                await RefreshAsync();
-
-                if (!ActiveAssignmentExists(deactivationKey))
-                {
-                    _toastService.ShowDeactivationResult(item.DisplayName, result);
-                    return;
-                }
+                _toastService.ShowDeactivationResult(item.DisplayName, result);
+                return;
             }
 
             // Watchdog: still active after ~60 s. Surface the Graph status so
             // the user can distinguish "PIM never processed it" from "PIM
             // accepted but the read API is just lagging".
+            var waited = $"{DeactivationWatchdog.TotalSeconds:0}s";
             ClearDeactivatingState(deactivationKey);
             _toastService.ShowError(
                 "Deactivation not confirmed",
-                $"{item.DisplayName} still appears active after {maxPollAttempts * 6}s (Graph status: {result.Status}). Check the Entra PIM portal.");
+                $"{item.DisplayName} still appears active after {waited} (Graph status: {result.Status}). Check the Entra PIM portal.");
             SetDeactivationErrorText(
                 deactivationKey,
-                $"Still active after {maxPollAttempts * 6}s — check the Entra PIM portal.");
+                $"Still active after {waited} — check the Entra PIM portal.");
             _logger.LogWarning(
                 "Deactivation watchdog: {Role} still active {Seconds}s after request (account oid {Oid}, requestId {RequestId}, status {Status})",
                 item.DisplayName,
-                maxPollAttempts * 6,
+                DeactivationWatchdog.TotalSeconds,
                 item.Account.ObjectId,
                 result.RequestId,
                 result.Status);
@@ -938,6 +1302,35 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         (PimResourceKind Kind, string ResourceId, string ScopeId, string ObjectId, string TenantId) key)
         => ActiveAssignments.Any(a =>
             PendingMatchKey(a.Account, a.Assignment.Kind, a.Assignment.ResourceId, a.Assignment.ScopeId).Equals(key));
+
+    /// <summary>
+    /// Refreshes until the assignment matching <paramref name="key"/> is off the
+    /// list, or the watchdog runs out. True when it is gone. Both paths that end an
+    /// activation wait here: the stop button, which then reports success, and a
+    /// re-activation, which then asks for the role again.
+    /// </summary>
+    private async Task<bool> WaitUntilInactiveAsync(
+        SignedInAccount account,
+        (PimResourceKind Kind, string ResourceId, string ScopeId, string ObjectId, string TenantId) key)
+    {
+        var enrollment = EnrollmentKey(account);
+        var attempts = (int)(DeactivationWatchdog / DeactivationPollInterval);
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            await Task.Delay(DeactivationPollInterval);
+            await RefreshAsync();
+
+            // A read that failed hands back an empty list, so "not in the list" would
+            // mean "the network blinked" every bit as readily as "PIM let go". Only a
+            // read that actually came back may end the wait.
+            if (!_activeReadFailures.Contains(enrollment) && !ActiveAssignmentExists(key))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>Clears <see cref="ActiveAssignmentItemViewModel.IsDeactivating"/>
     /// on every row matching <paramref name="key"/>. The pre-refresh
@@ -995,6 +1388,15 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             RememberRecent(granted.Account, granted.Request.Eligibility);
         }
 
+        // Per scope, not per batch: a narrowed activation carries one reason across
+        // several subscriptions, and each of them can be extended on its own later.
+        foreach (var outcome in outcomes.Where(candidate => !string.IsNullOrWhiteSpace(candidate.Request.Justification)))
+        {
+            var target = outcome.Target;
+            _grantedJustifications[PendingMatchKey(outcome.Account, target.Kind, target.ResourceId, target.ScopeId)] =
+                outcome.Request.Justification!;
+        }
+
         // Graph PIM's read API is eventually consistent — show a placeholder
         // immediately, the next refresh swaps it for the real assignment
         // (or the 30 s watchdog drops it). One per scope for a narrowed
@@ -1009,10 +1411,12 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
                 outcome.Target,
                 outcome.Account,
                 duration,
-                DeactivateAsync);
+                DeactivateAsync,
+                ReactivateAsync);
             _tenantNameCache.TryGetValue(outcome.Account.TenantId, out var cachedName);
             pending.TenantName = cachedName;
             pending.AccountAlias = AliasFor(outcome.Account);
+            pending.ScopeSubscriptionName = SubscriptionNameFor(outcome.Target.ScopeId);
             ActiveAssignments.Insert(0, pending);
             pendingShown = true;
         }
@@ -1196,11 +1600,16 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         if (alertTarget is null)
         {
             _currentAlertKey = null;
+            _currentAlertRow = null;
             IsExpiryAlertVisible = false;
             return;
         }
 
         _currentAlertKey = ExpiryKey(alertTarget);
+
+        // Kept alongside the key because the alert's Re-activate acts on the row
+        // itself; a refresh rebuilds the rows, so this is re-pointed every tick.
+        _currentAlertRow = alertTarget;
         ExpiryAlert.UpdateFrom(alertTarget, expiring.Count - 1);
         IsExpiryAlertVisible = true;
     }
@@ -1938,7 +2347,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     }
 
     private void UpdateActiveAssignments(
-        IReadOnlyDictionary<SignedInAccount, IReadOnlyList<ActiveAssignment>> aggregated)
+        IReadOnlyDictionary<SignedInAccount, ActiveAssignmentFetchResult> aggregated)
     {
         var existingPendings = ActiveAssignments.Where(a => a.IsPending).ToList();
         var staleThreshold = DateTimeOffset.UtcNow - PendingWatchdog;
@@ -1964,18 +2373,19 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         ActiveAssignments.Clear();
 
         var addedKeys = new HashSet<(PimResourceKind, string, string, string, string)>();
-        foreach (var (account, list) in aggregated)
+        foreach (var (account, fetched) in aggregated)
         {
             _tenantNameCache.TryGetValue(account.TenantId, out var cachedName);
             var alias = AliasFor(account);
 
-            foreach (var assignment in list)
+            foreach (var assignment in fetched.Items)
             {
                 var key = PendingMatchKey(account, assignment.Kind, assignment.ResourceId, assignment.ScopeId);
                 errorTexts.TryGetValue(key, out var carriedError);
-                ActiveAssignments.Add(new ActiveAssignmentItemViewModel(assignment, account, DeactivateAsync)
+                ActiveAssignments.Add(new ActiveAssignmentItemViewModel(assignment, account, DeactivateAsync, ReactivateAsync)
                 {
                     TenantName = cachedName,
+                    ScopeSubscriptionName = SubscriptionNameFor(assignment.ScopeId),
                     AccountAlias = alias,
                     IsDeactivating = deactivatingKeys.Contains(key),
                     DeactivationErrorText = carriedError,

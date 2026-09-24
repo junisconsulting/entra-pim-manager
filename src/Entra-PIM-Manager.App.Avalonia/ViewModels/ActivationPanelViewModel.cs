@@ -50,6 +50,16 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
     private static readonly TimeSpan ScopeWalkTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>
+    /// How long a re-activation keeps asking while PIM still reports the activation
+    /// it just replaced as active. Ending an activation is eventually consistent, so
+    /// the first request after it can legitimately be refused.
+    /// </summary>
+    private static readonly TimeSpan ReactivationRetryBudget = TimeSpan.FromMinutes(3);
+
+    /// <summary>Pause between those attempts.</summary>
+    private static readonly TimeSpan ReactivationRetryDelay = TimeSpan.FromSeconds(5);
+
+    /// <summary>
     /// How long a walked hierarchy is reused across openings of the same eligibility.
     /// A favourite row on the main page is meant to be one click, not one walk; a
     /// subscription created in the meantime shows up after this.
@@ -94,6 +104,14 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
 
     [ObservableProperty]
     private ActivationPolicy _policy = new();
+
+    /// <summary>
+    /// The activation this one replaces, when the panel was opened from an active
+    /// row's Re-activate. PIM has no "extend": a running activation has to end
+    /// before a new one is accepted, so Submit ends this one first.
+    /// </summary>
+    [ObservableProperty]
+    private ActiveAssignment? _replacing;
 
     [ObservableProperty]
     private bool _isOpen;
@@ -175,11 +193,21 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
     public event Action<IReadOnlyList<ActivationOutcome>>? Activated;
 
     /// <summary>
+    /// Ends the activation named by <see cref="Replacing"/> and returns once PIM has
+    /// let go of it — <c>null</c> on success, the reason otherwise. Set by the shell,
+    /// which owns deactivation and the refresh that confirms it.
+    /// </summary>
+    public Func<SignedInAccount, ActiveAssignment, Task<UserFacingError?>>? EndRunningActivation { get; set; }
+
+    /// <summary>
     /// True while any submit is in flight. Disables every footer button — and the
     /// scope picker, whose ticks the running batch has already read — so the user
     /// can't fire a second request or change what the first one is doing.
     /// </summary>
     public bool IsBusy => IsValidating || IsSubmitting;
+
+    /// <summary>Whether to warn that the running activation ends before the new one starts.</summary>
+    public bool ShowReplaceBanner => Replacing is not null;
 
     /// <summary>Display name of the resource currently being activated.</summary>
     public string ResourceName => Eligibility?.DisplayName ?? string.Empty;
@@ -218,9 +246,11 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
 
     /// <summary>
     /// Whether the Validate (dry-run) button applies. Azure Resource Manager has
-    /// no validation-only mode, so the button is hidden for Azure resource roles.
+    /// no validation-only mode, so the button is hidden for Azure resource roles —
+    /// and so is a dry-run in replace mode, where the role is still active and the
+    /// answer can only ever be "already active".
     /// </summary>
-    public bool CanValidate => Eligibility?.Kind != PimResourceKind.AzureResourceRole;
+    public bool CanValidate => Eligibility?.Kind != PimResourceKind.AzureResourceRole && Replacing is null;
 
     /// <summary>Scope of the eligibility as the list shows it, e.g. <c>Management group: Tenant Root Group</c>.</summary>
     public string ScopeLabel => Eligibility?.ScopeLabel ?? string.Empty;
@@ -301,8 +331,17 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
     /// Prepares the panel for a new activation and slides it in. With
     /// <paramref name="preselect"/>, a favourite's scopes are ticked as soon as the
     /// picker's list is there — the main page's FAVOURITES rows open the panel this way.
+    /// With <paramref name="replacing"/>, the panel runs in replace mode: Submit ends
+    /// that activation before requesting the new one, and <paramref name="justification"/>
+    /// starts the form off with the text that activation was granted on.
     /// </summary>
-    public void Open(SignedInAccount account, PimEligibility eligibility, ActivationPolicy policy, ScopeFavorite? preselect = null)
+    public void Open(
+        SignedInAccount account,
+        PimEligibility eligibility,
+        ActivationPolicy policy,
+        ScopeFavorite? preselect = null,
+        ActiveAssignment? replacing = null,
+        string? justification = null)
     {
         ArgumentNullException.ThrowIfNull(account);
         ArgumentNullException.ThrowIfNull(eligibility);
@@ -312,12 +351,13 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
         Account = account;
         Eligibility = eligibility;
         Policy = policy;
+        Replacing = replacing;
 
         // Default duration comes from user settings, clamped to the role's
         // policy ceiling so the slider never starts above the maximum.
         var defaultDuration = _userSettings.Current.DefaultDurationHours;
         DurationHours = Math.Min(defaultDuration, policy.MaximumDuration.TotalHours);
-        Justification = string.Empty;
+        Justification = justification ?? string.Empty;
         TicketNumber = string.Empty;
 
         // The ticket number is per incident and must never be carried over; the
@@ -371,6 +411,12 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowRoleAssignableBanner));
         OnPropertyChanged(nameof(CanNarrowScope));
         OnPropertyChanged(nameof(ScopeLabel));
+    }
+
+    partial void OnReplacingChanged(ActiveAssignment? value)
+    {
+        OnPropertyChanged(nameof(ShowReplaceBanner));
+        OnPropertyChanged(nameof(CanValidate));
     }
 
     partial void OnPolicyChanged(ActivationPolicy value)
@@ -867,8 +913,8 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
         if (_pendingFavorite is not null)
         {
             ValidationMessage = IsLoadingScopes
-                ? "Still loading the scopes for this favourite — try again in a moment."
-                : "The scopes for this favourite could not be loaded. Open the scope picker to try again.";
+                ? "Still loading the scopes for this selection — try again in a moment."
+                : "The scopes for this selection could not be loaded. Open the scope picker to try again.";
             return;
         }
 
@@ -922,6 +968,41 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
             IsSubmitting = true;
         }
 
+        // Replace mode: PIM refuses a second activation of a role that is still
+        // active, so the running one has to go first. Deliberately here and not when
+        // the panel opened — the user keeps the role while filling the form in.
+        var replaced = isValidationOnly ? null : Replacing;
+        if (replaced is { } running)
+        {
+            // An unwired hook would leave the role active and send the request into
+            // the retry loop below, where it can only ever be refused — say so
+            // instead of spending the whole budget on it.
+            var released = EndRunningActivation is { } endRunning
+                ? await endRunning(account, running)
+                : new UserFacingError(ErrorSeverity.Fatal, "Extending is unavailable in this build.", null);
+
+            if (released is not null)
+            {
+                if (generation == _generation)
+                {
+                    IsSubmitting = false;
+                    ValidationMessage = released.Message;
+                }
+
+                return;
+            }
+
+            // Released. Should the activation below fail, the panel stays open on a
+            // role that is no longer active — a second attempt must go straight to
+            // activating instead of trying to end an activation that is already gone.
+            // Only for the panel this batch belongs to: it was reopened for something
+            // else, that session's replace mode is not ours to clear.
+            if (generation == _generation)
+            {
+                Replacing = null;
+            }
+        }
+
         var outcomes = new List<ActivationOutcome>();
         string? failure = null;
         try
@@ -939,28 +1020,26 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
                     authContextClaim,
                     option?.Scope);
 
-                ActivationResult result;
-                try
-                {
-                    using var cts = new CancellationTokenSource(
-                        request.AuthContextClaim is null ? GraphCallTimeout : StepUpTimeout);
-                    result = await _aggregator.ActivateAsync(account, request, cts.Token);
-                }
-                catch (Exception ex)
-                {
-                    // Offline, timeout or an MSAL failure (e.g. cancelled WAM prompt) —
-                    // the panel stays open with a friendly message and the user can retry.
-                    _logger.LogWarning(
-                        ex,
-                        "Activation submit failed (tenant {TenantId}, validationOnly {IsValidationOnly})",
-                        account.TenantId,
-                        isValidationOnly);
-                    result = new ActivationResult(string.Empty, ActivationStatus.Failed, null, null, PimErrorMapper.MapException(ex));
-                }
+                // Only the request taking over the freed scope waits for PIM to let
+                // go. Another ticked scope answering "already active" means exactly
+                // that, and the user should hear it at once instead of watching the
+                // panel sit on a retry budget that can never come good.
+                var afterRelease = replaced is not null
+                    && string.Equals(
+                        request.TargetScope?.Id ?? eligibility.ScopeId,
+                        replaced.ScopeId,
+                        StringComparison.OrdinalIgnoreCase);
+
+                var result = await RequestActivationAsync(account, request, afterRelease);
 
                 if (result.Error is { } error)
                 {
-                    var message = PimErrorMapper.Describe(error, account.AuthMethod);
+                    // "This role is already active" is a baffling thing to read right
+                    // after giving the role up, so say what actually happened: PIM
+                    // never let go inside the budget.
+                    var message = afterRelease && error.Severity == ErrorSeverity.AlreadyActive
+                        ? $"The previous activation was ended, but PIM had not released it after {ReactivationRetryBudget.TotalMinutes:0} minutes. Wait a moment and activate again from the list."
+                        : PimErrorMapper.Describe(error, account.AuthMethod);
                     failure = option is null ? message : $"{option.Scope.ScopeLabel}: {message}";
                     break;
                 }
@@ -1028,6 +1107,66 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
         }
 
         IsOpen = false;
+    }
+
+    /// <summary>
+    /// One activation request, kept asking while PIM still holds the activation this
+    /// one replaces. Ending an activation is eventually consistent — Microsoft drops
+    /// the assignment "within seconds" and the read API lags further behind — so the
+    /// first request after a release can legitimately come back as already active.
+    /// Only that answer is waited out, and only in replace mode: everywhere else it
+    /// means the user is activating something they already have, and every other
+    /// failure is theirs to see at once.
+    /// </summary>
+    private async Task<ActivationResult> RequestActivationAsync(
+        SignedInAccount account,
+        ActivationRequest request,
+        bool afterRelease)
+    {
+        var deadline = DateTimeOffset.UtcNow + ReactivationRetryBudget;
+        while (true)
+        {
+            var result = await SendActivationAsync(account, request);
+            var keepAsking = afterRelease
+                && result.Error?.Severity == ErrorSeverity.AlreadyActive
+                && DateTimeOffset.UtcNow + ReactivationRetryDelay < deadline;
+
+            if (!keepAsking)
+            {
+                return result;
+            }
+
+            // The claim belongs to the first attempt only: it forces a token refresh,
+            // and the token it yields already carries it. Sending it again would ask
+            // the user for verification once per retry.
+            request = request with { AuthContextClaim = null };
+            await Task.Delay(ReactivationRetryDelay);
+        }
+    }
+
+    /// <summary>
+    /// A single call to the service layer, with every failure turned into a result
+    /// the caller can read instead of an exception it has to catch.
+    /// </summary>
+    private async Task<ActivationResult> SendActivationAsync(SignedInAccount account, ActivationRequest request)
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(
+                request.AuthContextClaim is null ? GraphCallTimeout : StepUpTimeout);
+            return await _aggregator.ActivateAsync(account, request, cts.Token);
+        }
+        catch (Exception ex)
+        {
+            // Offline, timeout or an MSAL failure (e.g. cancelled WAM prompt) —
+            // the panel stays open with a friendly message and the user can retry.
+            _logger.LogWarning(
+                ex,
+                "Activation submit failed (tenant {TenantId}, validationOnly {IsValidationOnly})",
+                account.TenantId,
+                request.IsValidationOnly);
+            return new ActivationResult(string.Empty, ActivationStatus.Failed, null, null, PimErrorMapper.MapException(ex));
+        }
     }
 
     private string BuildValidationSuccessText(ActivationResult result)

@@ -59,14 +59,14 @@
               <TextBlock Text="{Binding ScopeLabel}"
                          FontSize="{DynamicResource FontSmall}"
                          Foreground="{DynamicResource TextTertiaryBrush}"
-                         TextTrimming="CharacterEllipsis"
+                         TextWrapping="Wrap"
                          IsVisible="{Binding ShowScopeLine}" />
               <!-- Shortcut rows only: tenant and scope, because they stand outside
                    the tenant group that would otherwise say so. -->
               <TextBlock Text="{Binding ContextLine}"
                          FontSize="{DynamicResource FontSmall}"
                          Foreground="{DynamicResource TextSecondaryBrush}"
-                         TextTrimming="CharacterEllipsis"
+                         TextWrapping="Wrap"
                          IsVisible="{Binding ContextLine,
                                              Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
               <TextBlock Text="{Binding ActivationErrorText}"
@@ -672,7 +672,7 @@
                   <DataTemplate DataType="vm:ActiveAssignmentItemViewModel">
                     <Border Classes="active" Margin="0,0,0,6">
                       <Grid RowDefinitions="Auto,Auto">
-                      <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center">
+                      <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto,Auto" VerticalAlignment="Center">
 
                         <!-- Live dot -->
                         <Ellipse Grid.Column="0"
@@ -693,25 +693,43 @@
                                      FontWeight="SemiBold"
                                      Foreground="{DynamicResource TextPrimaryBrush}"
                                      TextTrimming="CharacterEllipsis" />
-                          <!-- Alias when the user set one, UPN otherwise. The UPN is
-                               trimmed in the middle (a 380 px window cuts off exactly
-                               the tail that distinguishes two admin accounts), with
-                               the full value one hover away. -->
-                          <TextBlock Text="{Binding AliasOrUpn}"
+                          <!-- User / Tenant / Scope, each ONE bound string composed in
+                               the view model. Label and value as two TextBlocks in a
+                               horizontal StackPanel would neither wrap nor ellipsize:
+                               that panel measures children against infinite width, so
+                               a long name overflowed this column and painted over the
+                               countdown. See ActiveAssignmentItemViewModel.UserLine.
+                               All three wrap: a trimmed "Subscription: lz-a…" leaves
+                               the user unable to tell which of two subscriptions the
+                               role is live on, which is the one thing these lines
+                               exist to answer. The row grows — only when it has to. -->
+                          <TextBlock Text="{Binding UserLine}"
                                      FontSize="{DynamicResource FontSmall}"
                                      Foreground="{DynamicResource TextSecondaryBrush}"
-                                     TextTrimming="PrefixCharacterEllipsis"
+                                     TextWrapping="Wrap"
                                      ToolTip.Tip="{Binding Username}" />
-                          <!-- Tenant · kind as ONE bound string. Three TextBlocks in a
-                               horizontal StackPanel would never ellipsize: that panel
-                               measures children against infinite width, so a long
-                               tenant name overflowed this column and painted over the
-                               countdown. See ActiveAssignmentItemViewModel.MetaLine. -->
-                          <TextBlock Text="{Binding MetaLine}"
+                          <TextBlock Text="{Binding TenantLine}"
                                      FontSize="{DynamicResource FontSmall}"
                                      Foreground="{DynamicResource TextTertiaryBrush}"
-                                     TextTrimming="CharacterEllipsis"
-                                     ToolTip.Tip="{Binding MetaTooltip}" />
+                                     TextWrapping="Wrap"
+                                     ToolTip.Tip="{Binding TenantTooltip}" />
+                          <!-- An Azure role is identified by where it applies, so its
+                               scope stands in for the kind. Everything else names its
+                               kind — and adds the scope when it has one, because a
+                               directory role confined to an administrative unit is a
+                               different thing from the tenant-wide one of the same
+                               name. -->
+                          <TextBlock Text="{Binding TypeLine}"
+                                     FontSize="{DynamicResource FontSmall}"
+                                     Foreground="{DynamicResource TextTertiaryBrush}"
+                                     TextWrapping="Wrap"
+                                     IsVisible="{Binding ShowType}" />
+                          <TextBlock Text="{Binding ScopeLine}"
+                                     FontSize="{DynamicResource FontSmall}"
+                                     Foreground="{DynamicResource TextTertiaryBrush}"
+                                     TextWrapping="Wrap"
+                                     IsVisible="{Binding HasScope}"
+                                     ToolTip.Tip="{Binding ScopeTooltip}" />
                           <TextBlock Text="{Binding DeactivationErrorText}"
                                      FontSize="{DynamicResource FontCaption}"
                                      FontWeight="Medium"
@@ -788,6 +806,32 @@
                                      VerticalAlignment="Center" />
                         </StackPanel>
 
+                        <!-- "Extend time" icon-button. PIM cannot lengthen a running
+                             activation, so this ends it and immediately requests a new
+                             one — which is why it carries the stop button's lockout:
+                             ending it is the first thing it does. The label is what the
+                             user wants ("more time"), the tooltip and the panel's banner
+                             are what actually happens. Glyph as text rather than
+                             PathIcon (CLAUDE.md), doubled for the same style-precedence
+                             reason as the stop square below. -->
+                        <Button Grid.Column="3"
+                                Classes="icon"
+                                Command="{Binding ReactivateCommand}"
+                                ToolTip.Tip="{Binding ReactivateTooltip}"
+                                ToolTip.ShowOnDisabled="True"
+                                IsEnabled="{Binding CanReactivate}"
+                                IsVisible="{Binding !IsBusy}">
+                          <Panel>
+                            <TextBlock Text="&#x21BB;"
+                                       FontSize="14"
+                                       Foreground="{DynamicResource TextTertiaryBrush}"
+                                       IsVisible="{Binding IsInProvisioningWindow}" />
+                            <TextBlock Text="&#x21BB;"
+                                       FontSize="14"
+                                       Foreground="{DynamicResource AccentBrush}"
+                                       IsVisible="{Binding !IsInProvisioningWindow}" />
+                          </Panel>
+                        </Button>
                         <!-- Deactivate icon-button — stop square, hover turns danger-red.
                              Hidden during pending/deactivating so the user can't
                              double-click while a transition is in flight. Hard-
@@ -799,7 +843,7 @@
                              that ignores the click says the opposite of what it
                              means. The tooltip carries the policy and the
                              remaining wait time. -->
-                        <Button Grid.Column="3"
+                        <Button Grid.Column="4"
                                 Classes="icon danger"
                                 Command="{Binding DeactivateCommand}"
                                 ToolTip.Tip="{Binding DeactivateTooltip}"
@@ -1251,7 +1295,7 @@
                                 <TextBlock Text="{Binding ScopeLabel}"
                                            FontSize="{DynamicResource FontSmall}"
                                            Foreground="{DynamicResource TextPrimaryBrush}"
-                                           TextTrimming="CharacterEllipsis" />
+                                           TextWrapping="Wrap" />
                                 <TextBlock Text="Entire scope — everything listed above"
                                            FontSize="{DynamicResource FontCaption}"
                                            Foreground="{DynamicResource TextTertiaryBrush}" />
@@ -1569,6 +1613,15 @@
               </StackPanel>
 
               <!-- Banners -->
+              <Border Background="{DynamicResource WarningSoftBrush}"
+                      CornerRadius="6"
+                      Padding="10,8"
+                      IsVisible="{Binding ShowReplaceBanner}">
+                <TextBlock Text="⚠ Extending means ending and restarting: PIM cannot lengthen an activation that is already running. You lose the role until PIM releases it — usually seconds, occasionally a few minutes — then it starts again with the full duration."
+                           TextWrapping="Wrap"
+                           FontSize="{DynamicResource FontSmall}"
+                           Foreground="{DynamicResource WarningBrush}" />
+              </Border>
               <Border Background="{DynamicResource WarningSoftBrush}"
                       CornerRadius="6"
                       Padding="10,8"

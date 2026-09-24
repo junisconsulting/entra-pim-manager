@@ -50,33 +50,6 @@ public sealed record PimEligibility(
         && ScopeId.StartsWith(AdministrativeUnitPrefix, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The directory scope of a directory role that does **not** apply to the whole
-    /// directory — an administrative unit, or a single application — or <c>null</c> for a
-    /// tenant-wide role and for the other surfaces, whose scope travels in
-    /// <see cref="ScopeLabel"/>.
-    /// </summary>
-    /// <remarks>
-    /// Entra passes <c>directoryScopeId</c> through verbatim and <c>/</c> means the whole
-    /// directory. Anything else narrows the grant, and a narrowed grant that looks exactly
-    /// like the tenant-wide one is the ambiguity worth removing — administrative units are
-    /// only the most common case of it.
-    /// </remarks>
-    public string? NarrowedScopeId => Kind == PimResourceKind.DirectoryRole
-        && !string.IsNullOrEmpty(ScopeId)
-        && !string.Equals(ScopeId, "/", StringComparison.Ordinal)
-        ? ScopeId
-        : null;
-
-    /// <summary>
-    /// Object id of the administrative unit this role is scoped to, or <c>null</c> when it
-    /// is not AU-scoped. The unit's display name is not resolved — that needs a directory
-    /// read the app does not ask consent for.
-    /// </summary>
-    public string? AdministrativeUnitId => IsAdministrativeUnitScoped
-        ? ScopeId[AdministrativeUnitPrefix.Length..]
-        : null;
-
-    /// <summary>
     /// True when the role may be activated on a management group or subscription
     /// beneath this scope instead of on the whole scope.
     /// </summary>

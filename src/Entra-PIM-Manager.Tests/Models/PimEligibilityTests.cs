@@ -20,13 +20,12 @@ public sealed class PimEligibilityTests
     [Theory]
     [InlineData("/administrativeUnits/")]
     [InlineData("/AdministrativeUnits/")]
-    public void IsAdministrativeUnitScoped_ScopedDirectoryRole_IsTrueAndYieldsTheUnitId(string prefix)
+    public void IsAdministrativeUnitScoped_ScopedDirectoryRole_IsTrue(string prefix)
     {
         // Graph's casing is not something to rely on — see the entra-pim-graph-api skill.
         var eligibility = Eligibility(PimResourceKind.DirectoryRole, prefix + UnitId);
 
         Assert.True(eligibility.IsAdministrativeUnitScoped);
-        Assert.Equal(UnitId, eligibility.AdministrativeUnitId);
     }
 
     [Fact]
@@ -40,32 +39,15 @@ public sealed class PimEligibilityTests
             "/subscriptions/" + UnitId + "/administrativeUnits/x");
 
         Assert.False(eligibility.IsAdministrativeUnitScoped);
-        Assert.Null(eligibility.AdministrativeUnitId);
     }
 
     [Fact]
-    public void NarrowedScopeId_TenantWideDirectoryRole_IsNull()
+    public void IsAdministrativeUnitScoped_AppScopedDirectoryRole_IsFalse()
     {
-        Assert.Null(Eligibility(PimResourceKind.DirectoryRole, "/").NarrowedScopeId);
-    }
-
-    [Fact]
-    public void NarrowedScopeId_AppScopedDirectoryRole_IsTheScope()
-    {
-        // A directory role can also be narrowed to a single application. It is not an
-        // administrative unit, but it is just as much "not what the tenant-wide role of
-        // the same name grants" — so it must not read as unscoped either.
-        var eligibility = Eligibility(PimResourceKind.DirectoryRole, "/" + UnitId);
-
-        Assert.False(eligibility.IsAdministrativeUnitScoped);
-        Assert.Equal("/" + UnitId, eligibility.NarrowedScopeId);
-    }
-
-    [Fact]
-    public void NarrowedScopeId_AzureResourceRole_IsNull()
-    {
-        // ARM scopes carry their own readable label; this one is about directory scopes.
-        Assert.Null(Eligibility(PimResourceKind.AzureResourceRole, "/subscriptions/x").NarrowedScopeId);
+        // A directory role can also be confined to a single object — "/{objectId}", with
+        // no path segment. That is not an administrative unit and must not be filed under
+        // one; DirectoryScopeLabel is what names it.
+        Assert.False(Eligibility(PimResourceKind.DirectoryRole, "/" + UnitId).IsAdministrativeUnitScoped);
     }
 
     [Fact]

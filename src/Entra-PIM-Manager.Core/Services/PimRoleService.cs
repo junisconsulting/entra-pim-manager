@@ -16,8 +16,21 @@ using GraphTicketInfo = Microsoft.Graph.Models.TicketInfo;
 public sealed class PimRoleService : IPimRoleService
 {
     private const string UnknownRoleName = "(unknown role)";
+
+    /// <summary>Expansions every read asks for: the role's name, and its scope's.</summary>
+    private static readonly string[] WithScope = ["roleDefinition", "directoryScope"];
+
+    /// <summary>What is left once a tenant refuses to expand the scope.</summary>
+    private static readonly string[] WithoutScope = ["roleDefinition"];
+
     private readonly GraphServiceClient _graph;
     private readonly ILogger<PimRoleService> _logger;
+
+    // ponytail: whether the role-management delegated scopes alone permit expanding
+    // directoryScope is unverified beyond one tenant, and a tenant that refuses must
+    // still get its list rather than an error. Drop this the day the expansion is
+    // proven — the scope name is then simply always there.
+    private bool _scopeExpansionRefused;
 
     public PimRoleService(GraphServiceClient graph, ILogger<PimRoleService> logger)
     {
@@ -28,11 +41,13 @@ public sealed class PimRoleService : IPimRoleService
     /// <inheritdoc />
     public async Task<IReadOnlyList<PimEligibility>> GetEligibleRolesAsync(CancellationToken ct = default)
     {
-        var response = await _graph.RoleManagement.Directory.RoleEligibilityScheduleInstances
-            .FilterByCurrentUserWithOn("principal")
-            .GetAsFilterByCurrentUserWithOnGetResponseAsync(
-                requestConfiguration => requestConfiguration.QueryParameters.Expand = ["roleDefinition"],
-                ct)
+        var response = await ReadWithScopeAsync(
+            (expand, token) => _graph.RoleManagement.Directory.RoleEligibilityScheduleInstances
+                .FilterByCurrentUserWithOn("principal")
+                .GetAsFilterByCurrentUserWithOnGetResponseAsync(
+                    requestConfiguration => requestConfiguration.QueryParameters.Expand = expand,
+                    token),
+            ct)
             .ConfigureAwait(false);
 
         var instances = response?.Value ?? [];
@@ -42,15 +57,17 @@ public sealed class PimRoleService : IPimRoleService
     /// <inheritdoc />
     public async Task<IReadOnlyList<ActiveAssignment>> GetActiveRolesAsync(CancellationToken ct = default)
     {
-        var response = await _graph.RoleManagement.Directory.RoleAssignmentScheduleInstances
-            .FilterByCurrentUserWithOn("principal")
-            .GetAsFilterByCurrentUserWithOnGetResponseAsync(
-                requestConfiguration =>
-                {
-                    requestConfiguration.QueryParameters.Expand = ["roleDefinition"];
-                    requestConfiguration.QueryParameters.Filter = "assignmentType eq 'Activated'";
-                },
-                ct)
+        var response = await ReadWithScopeAsync(
+            (expand, token) => _graph.RoleManagement.Directory.RoleAssignmentScheduleInstances
+                .FilterByCurrentUserWithOn("principal")
+                .GetAsFilterByCurrentUserWithOnGetResponseAsync(
+                    requestConfiguration =>
+                    {
+                        requestConfiguration.QueryParameters.Expand = expand;
+                        requestConfiguration.QueryParameters.Filter = "assignmentType eq 'Activated'";
+                    },
+                    token),
+            ct)
             .ConfigureAwait(false);
 
         var instances = response?.Value ?? [];
@@ -132,7 +149,8 @@ public sealed class PimRoleService : IPimRoleService
         ScopeId: instance.DirectoryScopeId ?? "/",
         PrincipalId: instance.PrincipalId ?? string.Empty,
         EndDateTime: instance.EndDateTime,
-        IsRoleAssignableGroup: false);
+        IsRoleAssignableGroup: false,
+        ScopeLabel: ScopeLabelOf(instance.DirectoryScopeId, instance.DirectoryScope));
 
     private static ActiveAssignment ToActiveAssignment(UnifiedRoleAssignmentScheduleInstance instance) => new(
         Kind: PimResourceKind.DirectoryRole,
@@ -142,7 +160,59 @@ public sealed class PimRoleService : IPimRoleService
         PrincipalId: instance.PrincipalId ?? string.Empty,
         StartDateTime: instance.StartDateTime,
         EndDateTime: instance.EndDateTime,
-        AssignmentScheduleId: instance.Id ?? string.Empty);
+        AssignmentScheduleId: instance.Id ?? string.Empty,
+        ScopeLabel: ScopeLabelOf(instance.DirectoryScopeId, instance.DirectoryScope));
+
+    /// <summary>
+    /// Names an administrative-unit or single-object scope. <c>null</c> for a
+    /// tenant-wide role, which is what a row without a scope has always meant.
+    /// </summary>
+    private static string? ScopeLabelOf(string? directoryScopeId, DirectoryObject? scope)
+        => DirectoryScopeLabel.For(directoryScopeId, scope?.OdataType, DisplayNameOf(scope));
+
+    /// <summary>
+    /// The expanded scope's display name. <see cref="DirectoryObject"/> has none of
+    /// its own — the property lives on each derived type — so the known ones are read
+    /// directly and anything else through the untyped payload the SDK kept.
+    /// </summary>
+    private static string? DisplayNameOf(DirectoryObject? scope) => scope switch
+    {
+        null => null,
+        AdministrativeUnit unit => unit.DisplayName,
+        Application application => application.DisplayName,
+        ServicePrincipal servicePrincipal => servicePrincipal.DisplayName,
+        Group group => group.DisplayName,
+        _ => scope.AdditionalData?.TryGetValue("displayName", out var value) == true ? value?.ToString() : null,
+    };
+
+    /// <summary>
+    /// Runs a read with the scope expansion, and once without it if the tenant turns
+    /// that down. Losing the scope's name costs a line of detail; losing the list
+    /// costs the user every role they have.
+    /// </summary>
+    private async Task<TResponse?> ReadWithScopeAsync<TResponse>(
+        Func<string[], CancellationToken, Task<TResponse?>> read,
+        CancellationToken ct)
+    {
+        if (_scopeExpansionRefused)
+        {
+            return await read(WithoutScope, ct).ConfigureAwait(false);
+        }
+
+        try
+        {
+            return await read(WithScope, ct).ConfigureAwait(false);
+        }
+        catch (ODataError error) when (error.ResponseStatusCode is 400 or 403)
+        {
+            _logger.LogWarning(
+                "Expanding directoryScope was refused ({Code}, HTTP {Status}); reading without the scope name from here on.",
+                error.Error?.Code,
+                error.ResponseStatusCode);
+            _scopeExpansionRefused = true;
+            return await read(WithoutScope, ct).ConfigureAwait(false);
+        }
+    }
 
     private ActivationResult Failure(ODataError error)
     {

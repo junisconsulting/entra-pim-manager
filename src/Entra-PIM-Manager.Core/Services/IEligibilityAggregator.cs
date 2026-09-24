@@ -28,10 +28,12 @@ public interface IEligibilityAggregator
     /// <summary>
     /// Fans out across <paramref name="accounts"/> in parallel and returns the
     /// active assignments per account. Failures on individual accounts are
-    /// logged and surfaced as empty lists — a slow or broken tenant must not
-    /// block the rest.
+    /// logged and surfaced as an empty list plus an
+    /// <see cref="ActiveAssignmentFetchResult.LoadError"/> — a slow or broken
+    /// tenant must not block the rest, and a caller waiting for a role to be given
+    /// up must not read a failed fetch as "it is gone".
     /// </summary>
-    Task<IReadOnlyDictionary<SignedInAccount, IReadOnlyList<ActiveAssignment>>>
+    Task<IReadOnlyDictionary<SignedInAccount, ActiveAssignmentFetchResult>>
         GetAggregatedActiveAssignmentsAsync(
             IEnumerable<SignedInAccount> accounts, CancellationToken ct = default);
 

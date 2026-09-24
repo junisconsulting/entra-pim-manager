@@ -326,6 +326,57 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
       Stop-Button gesperrt und **grau**, danach rot und klickbar — der Wechsel passiert
       ohne Zutun, spätestens eine Sekunde nach Ablauf der fünf Minuten.
 
+### 3a. Scope einer Directory-Rolle — ab 0.11.0
+
+Directory-Rollen gelten tenantweit (`/`), für die **Mitglieder** einer Administrative Unit
+(`/administrativeUnits/{id}`) oder für **ein einzelnes Objekt** (`/{objectId}`, typischerweise eine
+App-Registrierung oder ein Service Principal). Die Reads expandieren dafür `directoryScope`.
+
+- [ ] Eine auf eine **Administrative Unit** eingeschränkte eligible Rolle: Liste **und** ACTIVE-Zeile
+      zeigen `Administrative unit: <Name der AU>`, nicht die GUID und nicht gar nichts.
+- [ ] Eine auf eine **App-Registrierung / Service Principal** eingeschränkte Rolle zeigt
+      `App registration: <Name>` bzw. `Enterprise application: <Name>`.
+- [ ] Eine tenantweite Rolle zeigt **keine** Scope-Zeile — nur `Type: Directory role`.
+- [ ] Aktivierung einer AU-gescopten Rolle funktioniert weiterhin (die `directoryScopeId` wird
+      unverändert durchgereicht, sonst HTTP 400 `InvalidScope`).
+- [ ] Log prüfen: **keine** Zeile „Expanding directoryScope was refused". Erscheint sie, reichen die
+      vorhandenen Delegated Scopes in diesem Tenant nicht — dann bitte Tenant und Fehlercode
+      notieren, das entscheidet, ob eine weitere Graph-Permission nötig wird.
+
+### 3b. Extend time — ab 0.11.0
+
+PIM kann eine laufende Aktivierung nicht verlängern (`RoleAssignmentExists`, auch mit künftigem
+Startzeitpunkt — feldverifiziert 2026-09-21). Der Knopf heißt trotzdem „Extend time", weil das der
+Wunsch dahinter ist; Tooltip und Panel-Banner sagen, was wirklich passiert. Er beendet die
+Aktivierung und beantragt sofort neu.
+
+- [ ] In den ersten 5 min nach Aktivierung ist **↻ Extend time** grau; Tooltip nennt die Restzeit.
+      Danach wird er ohne Zutun klickbar, wie der Stop-Button daneben.
+- [ ] Klick → Panel öffnet für dieselbe Rolle, mit dem Banner „PIM cannot extend a running
+      activation…", und der **Validate**-Knopf ist weg.
+- [ ] Submit → die Rolle verschwindet aus ACTIVE, das Panel bleibt mit Spinner stehen, danach
+      erscheint sie mit voller Dauer neu. **Gemessene Lückendauer notieren.** Gemessen 2026-09-22:
+      Graph-Directory-Rolle ~12 s, Azure-Ressourcenrolle ~117 s — ARM ist deutlich träger. Das
+      Budget beginnt erst nach der Bestätigungsschleife, es stehen also 60 s + 3 min zur Verfügung;
+      reicht das nicht, ist `ReactivationRetryBudget` in `ActivationPanelViewModel` zu klein.
+- [ ] Azure-Rolle, die auf eine **Subscription eingeengt** aktiviert wurde → Extend time findet die
+      Eligibility der Management Group darüber, und **genau diese Subscription ist im Picker schon
+      angehakt** (nicht „Entire scope", nicht leer). Absenden aktiviert wieder auf ihr.
+- [ ] Begründung ist mit dem Text der ersten Aktivierung plus `- extend time` vorausgefüllt.
+      Zweimal hintereinander verlängern → das Suffix steht **einmal** da, nicht zweimal.
+- [ ] Nach App-Neustart eine noch laufende Rolle verlängern → Begründungsfeld ist leer (die App
+      merkt sich den Text nur zur Laufzeit) und der Scope ist trotzdem vorausgewählt.
+- [ ] Rolle mit **Approval-Policy** → Extend time öffnet **kein** Panel, sondern erklärt per Toast,
+      warum nicht. Die laufende Aktivierung bleibt unangetastet.
+- [ ] Extend time aus der **Ablaufwarnung** → Popup kommt nach vorn, Panel ist offen, die Warnung
+      ist weg.
+- [ ] Fehlschlag **nach** der Deaktivierung erzwingen (z. B. den MFA-/WAM-Prompt der neuen
+      Aktivierung abbrechen) → Panel bleibt offen mit der Meldung, ACTIVE zeigt die Rolle nicht
+      mehr, und ein erneuter Submit im selben Panel aktiviert sie. Cancel ist währenddessen
+      gesperrt — das ist Absicht.
+- [ ] Log prüfen: `Deactivation for re-activation submitted …` vorhanden, **keine** Begründung und
+      **kein** Token im Klartext.
+
 ## 4. Tray-App & UI — Phase 4
 
 - [ ] App startet ohne sichtbares Hauptfenster, nur Tray-Icon.

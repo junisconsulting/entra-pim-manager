@@ -17,7 +17,7 @@ public sealed class PimErrorMapperTests
     [InlineData("RoleAssignmentRequestAcrsValidationFailed", ErrorSeverity.StepUpRequired, null)]
     [InlineData("GroupAssignmentRequestAcrsValidationFailed", ErrorSeverity.StepUpRequired, null)]
     [InlineData("EligibilityNotFound", ErrorSeverity.RefreshList, null)]
-    [InlineData("RoleAssignmentExists", ErrorSeverity.Info, null)]
+    [InlineData("RoleAssignmentExists", ErrorSeverity.AlreadyActive, null)]
     [InlineData("InsufficientPermissions", ErrorSeverity.Fatal, null)]
     [InlineData("PermissionScopeNotGranted", ErrorSeverity.Fatal, null)]
     public void Map_KnownCode_ReturnsExpectedSeverityAndFieldHint(
@@ -58,7 +58,7 @@ public sealed class PimErrorMapperTests
     [InlineData("RoleAssignmentRequestAcrsValidationFailed", "Reauthenticate with claims=%7B%22access_token%22%3A%7B%22acrs%22...", ErrorSeverity.StepUpRequired, null)]
     [InlineData("ActiveDurationTooShort", "The Active duration is too short. Minimum Required is 5 minutes.", ErrorSeverity.Validation, null)]
     [InlineData("AuthorizationFailed", "The client does not have authorization to perform action", ErrorSeverity.Fatal, null)]
-    [InlineData("RoleAssignmentExists", "The Role assignment already exists.", ErrorSeverity.Info, null)]
+    [InlineData("RoleAssignmentExists", "The Role assignment already exists.", ErrorSeverity.AlreadyActive, null)]
     [InlineData("InvalidRoleAssignmentRequestSchedule", "The role assignment request schedule is invalid.", ErrorSeverity.Validation, "duration")]
     public void Map_ArmError_ReturnsExpectedSeverityAndFieldHint(
         string code,
@@ -89,7 +89,7 @@ public sealed class PimErrorMapperTests
         var mapped = PimErrorMapper.MapException(
             new ArmRequestException(400, "RoleAssignmentExists", "The Role assignment already exists."));
 
-        Assert.Equal(ErrorSeverity.Info, mapped.Severity);
+        Assert.Equal(ErrorSeverity.AlreadyActive, mapped.Severity);
     }
 
     [Fact]

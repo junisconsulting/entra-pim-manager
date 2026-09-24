@@ -142,8 +142,13 @@ public sealed class EligibilityAggregatorTests
         var result = await aggregator.GetAggregatedActiveAssignmentsAsync(new[] { goodAccount, badAccount });
 
         Assert.Equal(2, result.Count);
-        Assert.Single(result[goodAccount]);
-        Assert.Empty(result[badAccount]);
+        Assert.Single(result[goodAccount].Items);
+        Assert.Null(result[goodAccount].LoadError);
+
+        // The failed tenant is empty AND says so — a caller that cannot tell the two
+        // apart reads a network blip as "the role is no longer active".
+        Assert.Empty(result[badAccount].Items);
+        Assert.NotNull(result[badAccount].LoadError);
     }
 
     [Fact]
@@ -227,7 +232,7 @@ public sealed class EligibilityAggregatorTests
 
         var result = await aggregator.GetAggregatedActiveAssignmentsAsync(new[] { account });
 
-        Assert.Single(result[account]);
+        Assert.Single(result[account].Items);
     }
 
     [Fact]

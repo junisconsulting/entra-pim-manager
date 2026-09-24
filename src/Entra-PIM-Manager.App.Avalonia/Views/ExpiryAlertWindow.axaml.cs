@@ -27,6 +27,12 @@ public partial class ExpiryAlertWindow : Window
     /// <summary>Raised when the user clicks "Dismiss" — the controller hides the alert.</summary>
     public event EventHandler? DismissRequested;
 
+    /// <summary>
+    /// Raised when the user clicks "Re-activate" — the controller surfaces the popup
+    /// (which holds the activation panel) and asks the shell to open it in replace mode.
+    /// </summary>
+    public event EventHandler? ReactivateRequested;
+
     private void InitializeComponent()
     {
         AvaloniaXamlLoader.Load(this);
@@ -37,4 +43,7 @@ public partial class ExpiryAlertWindow : Window
 
     private void OnDismissClick(object? sender, RoutedEventArgs e)
         => DismissRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnReactivateClick(object? sender, RoutedEventArgs e)
+        => ReactivateRequested?.Invoke(this, EventArgs.Empty);
 }
