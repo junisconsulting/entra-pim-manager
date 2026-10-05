@@ -24,6 +24,7 @@ Assume every commit is world-readable: no tenant IDs, no internal hostnames, no 
 - `docs/app-registration-setup.md` — the delegated permissions (Graph scopes plus Azure Service
   Management) and the consent procedure
 - `docs/engineering-backlog.md` — known gaps and deferred work, with evidence pointers
+- `docs/adr/` — decision records for hard-to-reverse choices, with the rejected alternatives
 - `SECURITY.md` — vulnerability reporting
 
 ## Skills (read before writing code in these areas)

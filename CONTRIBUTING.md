@@ -31,16 +31,23 @@ for; `TrayPopupController` picks between them from `SystemUsesLightTheme`. Edit 
 the two halves drift. Judge the result at 16 px on a real taskbar — light, dark, an
 accent colour close to each of the two tones, and translucency over a busy wallpaper.
 
-Two admin-facing scripts under `scripts/` support an unattended rollout, both needing
-PowerShell 7 — see `docs/unattended-deployment.md`:
+Admin-facing scripts under `scripts/` support an unattended rollout — see
+`docs/unattended-deployment.md`:
 
-- `create-app-registration.ps1` provisions the Entra App Registration an admin needs
+- `create-app-registration.ps1` (PowerShell 7) provisions the Entra App Registration an admin needs
   before first use, and prints the endpoint command with the ids filled in. It needs the
   `Microsoft.Graph.Applications` module, and reads the delegated scopes from
   `src/Entra-PIM-Manager.App.Avalonia/appsettings.json` rather than repeating them —
   when the app's permission surface changes, that file is the only place to edit.
 - `install-entra-pim-manager.ps1` runs on the endpoint: silent install, then the
-  configuration call, then a check that the entry actually reached the config file.
+  configuration call, then a check that the entry actually reached the config file. It must
+  stay runnable on **Windows PowerShell 5.1** — that is what Intune's `powershell.exe` is, and
+  PowerShell 7 is not in-box. 5.1 reads a file without a BOM as ANSI, so keep the file ASCII, and
+  read the app's UTF-8 files with `-Encoding UTF8`.
+- `uninstall-entra-pim-manager.cmd` is the silent uninstall for deployment tools.
+
+`packaging/intune/build.ps1` wraps the Setup.exe and these two endpoint scripts into the
+`.intunewin` the release attaches (Windows only).
 
 ## Code conventions
 

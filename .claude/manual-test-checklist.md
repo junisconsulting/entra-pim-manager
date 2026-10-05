@@ -614,6 +614,45 @@ gesetzt, mindestens ein Konto enrolled), dann die neue Version darüber installi
       einer neuen Logdatei (der Aufruf loggt gar nicht — es gibt so früh keinen
       Logger).
 
+## 5e. Intune-Win32-App — ab 0.12.0, einmalig
+
+> **Einmal** Ende zu Ende durchspielen, nicht bei jedem Release — danach prüft ein
+> Release nur noch, dass das Asset existiert (Asset-Tabelle im `release`-Skill).
+> Testpaket aus einem lokalen Build: auf Windows mit Repo-Checkout
+> `./packaging/intune/build.ps1 -SetupExe <Setup.exe aus verify> -OutputDir <Ordner>`.
+> Die einzutragenden Werte stehen in `docs/unattended-deployment.md`, Abschnitt 3.
+> Testnutzer ohne vorhandene Installation und ohne Run-Wert `Entra PIM Manager`.
+
+- [ ] **Paket bauen:** Skript läuft durch, `Entra-PIM-Manager-win-Setup.intunewin`
+      liegt im Ausgabeordner. Gegenprobe: den Hash in `packaging/intune/build.ps1`
+      testweise um ein Zeichen ändern → Abbruch **vor** dem Packen mit „does not match
+      the pinned SHA256". Hash zurücksetzen.
+- [ ] **App anlegen:** Windows app (Win32), Paket hochladen. Install-Kommando mit
+      Tenant-/Client-ID und `-NoStart`, Uninstall-Kommando
+      `uninstall-entra-pim-manager.cmd`, Install behavior **User**, Detection Registry
+      `DisplayVersion` **≥** Basisversion des Testbuilds (`0.11.1` für
+      `0.11.1-local.*`), Logo `app-registration-logo.png`.
+- [ ] **Installieren:** einem Testnutzer zuweisen → Intune bzw. Company Portal meldet
+      „Installiert" nach wenigen Minuten, **nicht** erst nach dem Timeout.
+      `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` enthält den
+      Tenant, der Run-Wert `Entra PIM Manager` zeigt auf den Stub.
+- [ ] **Läuft unter Windows PowerShell 5.1:** im IME-Log
+      (`%ProgramData%\Microsoft\IntuneManagementExtension\Logs\AppWorkload.log`)
+      endet das Install-Kommando mit Exit-Code `0` — kein `#requires`-Fehler.
+- [ ] **Anmeldung:** ab- und wieder anmelden → App startet im Tray, **ohne**
+      Konfigurations-CTA und **ohne** Erststart-Dialog; der Tenant steht im
+      „Sign in with"-Picker.
+- [ ] **Self-Update gegen Detection:** `DisplayVersion` unter
+      `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Entra-PIM-Manager` von
+      Hand höher setzen (oder ein echtes Update abwarten), Intune-Sync auslösen →
+      Intune meldet weiter „Installiert" und installiert **nicht** neu.
+- [ ] **Deinstallieren:** Zuweisung auf „Uninstall" → `%LocalAppData%\Entra-PIM-Manager`,
+      `%LocalAppData%\junis\Entra-PIM-Manager` und der Run-Wert sind weg; Intune meldet
+      „Nicht installiert".
+- [ ] **Optional — `AllSigned`-Fallback:** das `cmd.exe /c "start "" /wait …"`-Kommando
+      aus der Doku als Install-Kommando → Ergebnis wie bei „Installieren". Bis das
+      einmal grün war, steht in der Doku „not yet tested in Intune".
+
 ## 6. Fehlerpfade & Hardening — Phase 6
 
 - [ ] **Offline:** Netzwerk trennen, „Refresh" auslösen → Statuszeile meldet

@@ -70,6 +70,15 @@ jobs:
         shell: pwsh
         run: ./packaging/velopack/build.ps1 -Version ${{ steps.version.outputs.version }}
 
+      - name: Pack for Intune
+        shell: pwsh
+        run: |
+          # The same Setup.exe plus the endpoint scripts, as a Win32 app admins upload into
+          # their own tenant. Tenant-neutral; see docs/adr/0001-intune-win32-package.md.
+          ./packaging/intune/build.ps1 `
+              -SetupExe packaging/velopack/releases/Entra-PIM-Manager-win-Setup.exe `
+              -OutputDir packaging/velopack/releases
+
       - name: Create GitHub release
         shell: pwsh
         env:
@@ -88,6 +97,7 @@ jobs:
               "$releases/RELEASES"
               "$releases/Entra-PIM-Manager-win-Setup.exe"
               "$releases/Entra-PIM-Manager-win-Portable.zip"
+              "$releases/Entra-PIM-Manager-win-Setup.intunewin"
               "$releases/Entra-PIM-Manager-$version-full.nupkg"
           )
           $delta = "$releases/Entra-PIM-Manager-$version-delta.nupkg"

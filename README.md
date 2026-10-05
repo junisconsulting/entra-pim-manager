@@ -82,7 +82,9 @@ Rolling out to a team? Nobody has to type a client id. Two scripts:
 
 Installation and configuration are two separate steps — a silent install never starts the app, so the configuration is a second call that writes the entry and exits at once, which is what lets an Intune install command return. Deploy in the **user's** context; install and configuration are both per-user.
 
-Details, arguments and exit codes: [docs/unattended-deployment.md](docs/unattended-deployment.md).
+For Intune, every release also carries `Entra-PIM-Manager-win-Setup.intunewin`, a ready-made Win32 app with the installer and both endpoint scripts — tenant-neutral, the ids go into the install command.
+
+Details, arguments, exit codes and the Intune values: [docs/unattended-deployment.md](docs/unattended-deployment.md).
 
 ## Build from source
 

@@ -73,6 +73,7 @@ That is the whole trigger. The workflow does the rest:
 - pulls the previous release feed so Velopack can generate a **delta** package (a few hundred KB
   instead of a ~65 MB full download),
 - packs via `packaging/velopack/build.ps1`,
+- wraps that Setup.exe into the Intune package via `packaging/intune/build.ps1`,
 - creates the GitHub release with an explicit asset list.
 
 ## 5. Verify the published release
@@ -85,6 +86,7 @@ The workflow already asserts the asset list, but confirm it on the release page:
 | `RELEASES` | Legacy feed companion — also read by installed clients |
 | `Entra-PIM-Manager-win-Setup.exe` | The installer humans download |
 | `Entra-PIM-Manager-win-Portable.zip` | Portable variant |
+| `Entra-PIM-Manager-win-Setup.intunewin` | Intune Win32 app (Setup.exe plus the endpoint scripts) admins upload into their tenant. Checking that it exists is the whole per-release gate; the Intune end-to-end run is checklist 5e, done once |
 | `Entra-PIM-Manager-{version}-full.nupkg` | Full package the updater pulls |
 | `Entra-PIM-Manager-{version}-delta.nupkg` | Optional — absent on the first release after a gap |
 
@@ -103,6 +105,10 @@ Then confirm the release body matches `packaging/release-notes/{version}.md`.
 - **`vpk download github` failed** — the `Fetch previous releases` step is `continue-on-error` on
   purpose. Expected on the first-ever release; the build proceeds without a delta package.
 - **No delta package in the output** — harmless; the full package still updates clients.
+- **`IntuneWinAppUtil.exe does not match the pinned SHA256`** — the packer downloaded from
+  Microsoft's repo is not the reviewed build. Do not just paste the new hash: check the upstream
+  tag first, and if Microsoft published a new version, bump version and hash together in
+  `packaging/intune/build.ps1`.
 - **`vpk` version mismatch** — `build.ps1` pins the CLI to the `Velopack` package version read from
   the `.csproj`, uninstalling first because `dotnet tool update` refuses to downgrade. If you bumped
   the Velopack library, the pin follows automatically. Do not hand-install a different `vpk`.

@@ -1,4 +1,4 @@
-#requires -Version 7
+#requires -Version 5.1
 <#
 .SYNOPSIS
     Installs Entra PIM Manager and pins one App Registration to a tenant, unattended.
@@ -8,7 +8,7 @@
     installed executable to write the tenant registration, and verifies that the entry
     actually landed in the per-user configuration.
 
-    Run this in the *user's* context — both the install and the configuration are
+    Run this in the *user's* context - both the install and the configuration are
     per-user. A run as SYSTEM writes into the SYSTEM profile and the user ends up with
     an unconfigured app.
 
@@ -38,7 +38,7 @@
 
 .PARAMETER NoStart
     Do not launch the app when finished. Use this for an unattended rollout that should
-    not put a tray icon in front of the user mid-install — autostart is already set, so
+    not put a tray icon in front of the user mid-install - autostart is already set, so
     it comes up configured at the next logon either way.
 
 .EXAMPLE
@@ -79,7 +79,7 @@ if ($Cloud -notin @("Global", "China")) {
     throw "Cloud must be 'Global' or 'China', got '$Cloud'."
 }
 
-# 2. Install. Silent means no dialogs — and no app launch either, which is exactly why
+# 2. Install. Silent means no dialogs - and no app launch either, which is exactly why
 #    the configuration below is a second, separate call.
 if ($SetupExe) {
     if (-not (Test-Path $SetupExe)) {
@@ -98,7 +98,7 @@ else {
 
 # 3. Prefer current\, which is the executable Velopack's own install hook invokes and
 #    which it replaces in place on update. The launcher stub one level up forwards to
-#    the same binary, but that it forwards arguments is unverified — so it is only the
+#    the same binary, but that it forwards arguments is unverified - so it is only the
 #    fallback for a layout that has no current\ directory.
 $exe = Join-Path $installRoot "current\Entra-PIM-Manager.exe"
 if (-not (Test-Path $exe)) {
@@ -140,13 +140,15 @@ switch ($configure.ExitCode) {
     default { throw "Unexpected exit code $($configure.ExitCode). An installation older than 0.10.0 does not know these arguments and starts the tray app instead." }
 }
 
-# 5. Trust the file, not the exit code — this is also what proves the arguments reached
+# 5. Trust the file, not the exit code - this is also what proves the arguments reached
 #    the app rather than being swallowed by a launcher.
 if (-not (Test-Path $configFile)) {
     throw "Exit code 0 but $configFile does not exist. The arguments did not reach the app."
 }
 
-$written = (Get-Content $configFile -Raw | ConvertFrom-Json).EntraPimManager.TenantAppRegistrations |
+#    -Encoding UTF8: the app writes the file without a BOM, and Windows PowerShell 5.1 would
+#    otherwise decode it with the ANSI code page, which breaks a non-ASCII label under a DBCS locale.
+$written = (Get-Content $configFile -Raw -Encoding UTF8 | ConvertFrom-Json).EntraPimManager.TenantAppRegistrations |
     Where-Object { $_.TenantId -eq $TenantId -and $_.ClientId -eq $ClientId }
 
 if (-not $written) {
@@ -157,8 +159,8 @@ Write-Host ""
 Write-Host "Done. Tenant $TenantId is configured for cloud $Cloud." -ForegroundColor Green
 
 # 6. Start the app so the result is visible at once. An already-running instance still
-#    holds the configuration it read at ITS startup — the registration list is bound with
-#    reloadOnChange:false — so launching a second process would only signal the old one to
+#    holds the configuration it read at ITS startup - the registration list is bound with
+#    reloadOnChange:false - so launching a second process would only signal the old one to
 #    show its window, still without the new tenant. Restart it instead.
 if ($NoStart) {
     Write-Host "Not starting the app (-NoStart). It starts configured at the next logon." -ForegroundColor DarkGray

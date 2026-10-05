@@ -73,6 +73,11 @@ exe. Then app-control customers can replace per-version hash rules with a single
 Until that lands, the docs must say releases are unsigned (they do, as of 2026-08-14) — not imply
 the opposite.
 
+The deployment scripts (`install-entra-pim-manager.ps1`, `uninstall-entra-pim-manager.cmd`) are
+unsigned too, so where a GPO enforces the `AllSigned` execution policy the install script cannot
+run. The `.intunewin` needs nothing extra: it is packed after `vpk pack` and wraps whatever
+Setup.exe that produced, so a signed Setup.exe lands in it automatically.
+
 ---
 
 ## Velopack Desktop shortcut suppression is unverified

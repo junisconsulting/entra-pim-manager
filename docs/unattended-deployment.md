@@ -96,6 +96,58 @@ The app is a GUI executable and has no console, so the exit code is the only fee
 printed even when run from a terminal. Both ids are validated before anything is written: a typo
 fails with code `1` and leaves the configuration untouched.
 
+## 3. Intune: the ready-made Win32 app
+
+Every release also carries `Entra-PIM-Manager-win-Setup.intunewin`: the same Setup.exe, packed for
+Intune together with `install-entra-pim-manager.ps1` and `uninstall-entra-pim-manager.cmd`. It holds
+no tenant or client id — those go into the install command — so one package serves every tenant.
+Add it in Intune as a **Windows app (Win32)** and enter:
+
+| Field | Value |
+| --- | --- |
+| Install command | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File install-entra-pim-manager.ps1 -SetupExe .\Entra-PIM-Manager-win-Setup.exe -TenantId <guid> -ClientId <guid> -NoStart` |
+| Uninstall command | `uninstall-entra-pim-manager.cmd` |
+| Install behavior | **User** |
+| Return codes | the defaults — installer and uninstaller exit `0` on success and `1` on failure |
+| Detection rule | **Registry** · key `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\Entra-PIM-Manager` · value `DisplayVersion` · **Version comparison** · **Greater than or equal to** the release you upload, e.g. `0.12.0` |
+| Logo | [`app-registration-logo.png`](../src/Entra-PIM-Manager.App.Avalonia/Assets/app-registration-logo.png) from this repository |
+
+`-Cloud`, `-Label` and `-TicketSystem` from the [arguments table](#arguments) work in the install
+command too. To install without configuring a tenant, make the install command
+`Entra-PIM-Manager-win-Setup.exe --silent`; users then add their tenant under **Settings →
+TENANTS**.
+
+Why these values, and not the obvious alternatives:
+
+- **`-NoStart`.** Whether Intune waits for a tray app the script started is unverified, and a wait
+  would run into the install timeout. The app comes up at the next logon through autostart, or
+  right away from the Start menu.
+- **Greater than or equal, never equals.** The app updates itself, and every update rewrites
+  `DisplayVersion`. With "equals" the first update makes the app look missing, and Intune's
+  reinstall silently *downgrades* it. Intune does the first install; updates stay with the app.
+- **Registry, not a file rule.** A file rule on `%LOCALAPPDATA%` is not reliably resolved to the
+  signed-in user.
+- **The uninstall is a script** because Intune does not expand environment variables in the
+  uninstall command, and `Update.exe` lives under `%LOCALAPPDATA%`. It removes the app **and** its
+  data: accounts, token cache, configuration.
+
+The scripts are not signed. Where a GPO enforces the `AllSigned` execution policy, it overrides
+`-ExecutionPolicy Bypass` and the install fails. Use the two raw commands from step 2 instead, in one
+install command — not yet tested in Intune:
+
+```text
+cmd.exe /c "start "" /wait Entra-PIM-Manager-win-Setup.exe --silent && start "" /wait "%LOCALAPPDATA%\Entra-PIM-Manager\current\Entra-PIM-Manager.exe" --tenant-id <guid> --client-id <guid>"
+```
+
+`cmd` expands `%LOCALAPPDATA%` itself. `start /wait` is not decoration: both executables are GUI
+programs, `cmd /c` does not reliably wait for those, and without it the second command would run
+before the install has finished. What this line loses is the script's check that the entry actually
+landed in `appsettings.local.json`: a `0` here means only that the app accepted the arguments. Check
+that file on the first device by hand.
+
+To build the package from a local Setup.exe, run `packaging/intune/build.ps1` on Windows — it is the
+same script the release uses.
+
 ## Two things that will bite you
 
 **Deploy in the user's context, not as SYSTEM.** The install and the configuration are both
