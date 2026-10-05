@@ -23,6 +23,9 @@ appsettings.local.json
 # The manual test checklist IS the release gate — the `release` skill refuses to
 # tag without a signed-off run. Untracked it existed on one machine only.
 !.claude/manual-test-checklist.md
+!.claude/grilling-seeds.md
+# Per-feature specs (spec skill) are working material; the durable why lives in docs/adr/
+.scratch/
 
 # Velopack / packaging output
 packaging/**/output/
