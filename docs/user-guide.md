@@ -29,7 +29,8 @@ nothing for other users of the machine. If your company rolled it out for you, i
 
 On the very first start you are asked two things: whether the app should start when you sign in to
 Windows, and whether it should keep a Start-menu entry. Both are on, and both can be changed later
-under **Settings → Behavior**. The question is asked once per installation.
+under **Settings → Behavior**. The question is asked once per installation. If your company rolled
+the app out for you, you are not asked: both are on, and the same settings change them.
 
 The app has no window of its own in the taskbar. It lives in the notification area — the icons next
 to the clock. Windows likes to hide new icons there: if you cannot see it, click the **^** arrow,

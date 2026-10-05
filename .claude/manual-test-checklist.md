@@ -563,7 +563,17 @@ gesetzt, mindestens ein Konto enrolled), dann die neue Version darüber installi
 > angelegte App Registration, deren Tenant- und Client-ID vorliegen. Die Schritte
 > laufen im **Benutzerkontext**, nicht als SYSTEM. Siehe
 > `docs/unattended-deployment.md`.
+>
+> Vorher deinstallieren oder zumindest den Wert `Entra PIM Manager` unter
+> `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` löschen. Ein Run-Wert aus einer
+> früheren interaktiven Installation lässt den Autostart-Punkt sonst grundlos bestehen —
+> so ist in 0.10.0 durchgerutscht, dass eine stille Installation nie Autostart gesetzt hat.
 
+- [ ] **Autostart direkt nach `Setup.exe --silent` (ab 0.12.0):** noch **vor** jedem
+      App-Start liefert `Get-ItemProperty HKCU:\Software\Microsoft\Windows\CurrentVersion\Run
+      -Name 'Entra PIM Manager'` den Pfad zum Stub
+      `%LocalAppData%\Entra-PIM-Manager\Entra-PIM-Manager.exe` (nicht `…\current\…`).
+      Beim ersten Start erscheint **kein** Erststart-Dialog.
 - [ ] **Ende zu Ende über das Skript:** `scripts/install-entra-pim-manager.ps1
       -SetupExe … -TenantId … -ClientId … -Label "Contoso" -TicketSystem "ServiceNow"`
       → läuft ohne Fehler durch und meldet „Done." Danach ab- und wieder anmelden →

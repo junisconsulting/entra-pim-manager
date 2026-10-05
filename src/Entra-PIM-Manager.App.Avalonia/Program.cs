@@ -56,8 +56,8 @@ public static class Program
         // It must come before the single-instance gate: with the tray app already
         // running that gate would pop the existing window and return 0 without ever
         // writing the file. Before the Velopack hook too, so a deployment process
-        // does not consume the once-per-install OnFirstRun and enable autostart in
-        // its own profile instead of the user's.
+        // does not consume the once-per-install OnFirstRun in its own profile
+        // instead of the user's.
         var deployment = DeploymentArguments.Parse(args);
         if (deployment.IsRequested)
         {
@@ -67,7 +67,8 @@ public static class Program
         // Velopack hooks must run first; hook invocations exit inside Run() before
         // reaching the gate below, so an install/update launch never contends here.
         VelopackApp.Build()
-            .OnFirstRun(_ => EnableAutostartOnFirstRun())
+            .OnAfterInstallFastCallback(_ => EnableAutostartOnInstall())
+            .OnFirstRun(_ => MarkFirstRunSetupPending())
             .OnBeforeUninstallFastCallback(_ => RemoveUserData())
             .Run();
 
@@ -275,15 +276,15 @@ public static class Program
     }
 
     /// <summary>
-    /// On the very first launch after a Velopack install, default the
-    /// "Start with Windows" autostart toggle to ON (so even if the setup dialog
-    /// never runs the app still starts on login) and drop a marker that asks the
-    /// UI to show the one-time first-run setup dialog. There the user can opt out
-    /// of autostart and the Start menu entry; the dialog applies the choice and
-    /// deletes the marker. Velopack fires this hook once per install, so the
-    /// dialog is shown exactly once.
+    /// Defaults the "Start with Windows" autostart toggle to ON at install time, so
+    /// the app starts on login even if the setup dialog never runs. This is the
+    /// install hook rather than OnFirstRun because a silent install
+    /// (<c>Setup.exe --silent</c>, i.e. every Intune or script rollout) never starts
+    /// the app, so OnFirstRun never fires there. The hook runs as the installing user
+    /// on every install, interactive or silent, which also means an install over an
+    /// existing one turns autostart back on.
     /// </summary>
-    private static void EnableAutostartOnFirstRun()
+    private static void EnableAutostartOnInstall()
     {
         try
         {
@@ -291,11 +292,22 @@ public static class Program
         }
         catch
         {
-            // Defensive: a registry write failure here must NOT prevent the
-            // app from starting. The user can still toggle it from Settings
-            // later. We can't log (no logger wired this early) — swallow.
+            // Defensive: a registry write failure here must NOT fail the install.
+            // The user can still toggle it from Settings later. We can't log (no
+            // logger wired this early) — swallow.
         }
+    }
 
+    /// <summary>
+    /// On the very first launch after an interactive Velopack install, drop a marker
+    /// that asks the UI to show the one-time first-run setup dialog. There the user
+    /// can opt out of autostart and the Start menu entry; the dialog applies the
+    /// choice and deletes the marker. Velopack fires this hook once per install, and
+    /// only when the installer itself starts the app — a silent install shows no
+    /// dialog and keeps the defaults.
+    /// </summary>
+    private static void MarkFirstRunSetupPending()
+    {
         try
         {
             // The UI thread isn't up yet, so we can't show the dialog here —

@@ -63,7 +63,7 @@ public sealed class FirstRunSetupController
             return;
         }
 
-        // Seed from the live state: autostart was defaulted on by OnFirstRun and the
+        // Seed from the live state: autostart was defaulted on by the install hook and the
         // installer already created the Start menu shortcut, so both toggles start
         // on unless something failed.
         _viewModel.StartWithWindows = _autostart.IsEnabled;

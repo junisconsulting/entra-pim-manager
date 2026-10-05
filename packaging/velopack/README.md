@@ -42,8 +42,9 @@ Das Skript:
 
 Das erzeugte Paket installiert **per-user** nach `%LocalAppData%\Entra-PIM-Manager` —
 ohne UAC, ohne Schreibzugriff auf `HKLM` oder `Program Files`, ohne Windows-Dienst
-und ohne Scheduled Task. Autostart wird beim ersten Start über den
-`HKCU`-Run-Key gesetzt (Velopack-`OnFirstRun`-Hook).
+und ohne Scheduled Task. Autostart wird bei der Installation über den
+`HKCU`-Run-Key gesetzt (Velopack-Install-Hook `OnAfterInstallFastCallback`) — auch bei
+`Setup.exe --silent`, das die App nie startet und `OnFirstRun` deshalb nie auslöst.
 
 ## Deinstallation
 
@@ -70,8 +71,10 @@ Velopack hat **keinen interaktiven Installer** — die `Setup.exe` läuft still.
 Wahlmöglichkeit für Autostart und Startmenü-Eintrag wird daher über einen
 **einmaligen Setup-Dialog beim ersten Start** angeboten (nicht im Installer):
 
-1. Der `OnFirstRun`-Hook aktiviert den Autostart (sicherer Default) und legt einen
-   Marker (`%LocalAppData%\Entra-PIM-Manager\.setup-pending`) ab.
+1. Der Install-Hook hat den Autostart bereits aktiviert (sicherer Default); der
+   `OnFirstRun`-Hook legt nur noch einen Marker
+   (`%LocalAppData%\junis\Entra-PIM-Manager\.setup-pending`) ab. Nach einer stillen
+   Installation feuert `OnFirstRun` nie — dann gibt es keinen Dialog, und die Defaults gelten.
 2. Sobald die UI läuft, zeigt `FirstRunSetupController` den Dialog mit zwei
    Schaltern (Autostart / Startmenü-Eintrag, beide standardmäßig an).
 3. Beim Bestätigen — oder beim Schließen — wird die Auswahl angewendet
@@ -111,8 +114,10 @@ ist im Silent-Mode **wirkungslos** — er gilt für den normalen App-Start, den 
 die installierte exe selbst (`--tenant-id` / `--client-id`), siehe
 `docs/unattended-deployment.md`. Nicht erneut über `Setup.exe -- …` versuchen.
 
-Der Erststart-Dialog aus dem vorigen Abschnitt erscheint davon unberührt beim ersten
-interaktiven Start: sein Auslöser ist allein der `.setup-pending`-Marker.
+Den Erststart-Dialog aus dem vorigen Abschnitt gibt es nach einer stillen Installation
+nicht: sein einziger Auslöser ist der `.setup-pending`-Marker, und den schreibt nur
+`OnFirstRun`. Autostart ist trotzdem gesetzt — das erledigt der Install-Hook, der auch
+hier läuft.
 
 ## Code-Signing
 

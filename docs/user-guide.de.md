@@ -34,7 +34,8 @@ da.
 
 Beim allerersten Start wirst du zwei Dinge gefragt: ob die App starten soll, wenn du dich an Windows
 anmeldest, und ob sie einen Startmenü-Eintrag behalten soll. Beides ist an, beides lässt sich später
-unter **Settings → Behavior** ändern. Die Frage kommt einmal pro Installation.
+unter **Settings → Behavior** ändern. Die Frage kommt einmal pro Installation. Hat deine IT die App
+verteilt, wirst du nicht gefragt: beides ist an und lässt sich dort genauso ändern.
 
 Die App hat kein eigenes Fenster in der Taskleiste. Sie lebt im Infobereich — den Symbolen neben der
 Uhr. Windows versteckt neue Symbole dort gern: Wenn du es nicht siehst, klick auf den Pfeil **^**
