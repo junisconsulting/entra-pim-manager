@@ -37,6 +37,8 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+    <!-- Upload-only logo for the Entra app registration; the app itself never loads it. -->
+    <AvaloniaResource Remove="Assets\app-registration-logo.png" />
   </ItemGroup>
 
   <!-- Release notes ship with the build so the what's-new window works offline.
