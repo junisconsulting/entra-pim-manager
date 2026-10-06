@@ -94,6 +94,10 @@ Windows-Design umstellst. Bedeutung trägt allein der kleine Punkt.
 
 Ein Klick auf das Symbol öffnet das Fenster. Von oben nach unten:
 
+**ACTIVE** — was gerade eingeschaltet ist, jeweils mit Countdown-Balken; erscheint nur, solange
+etwas aktiv ist. Wegen dieses Abschnitts lohnt der Blick in die App auch dann, wenn du nichts
+aktivierst.
+
 **PINNED** — Rollen und gespeicherte Scope-Sets, die du mit einem Stern markiert hast. Deine
 Sortierung, bleibt über Neustarts erhalten.
 
@@ -101,9 +105,6 @@ Sortierung, bleibt über Neustarts erhalten.
 
 **ELIGIBILITIES** — alles, was du aktivieren darfst, nach Tenant gruppiert. Gruppen lassen sich
 zuklappen, und die App merkt sich, welche du zugelassen hast.
-
-**ACTIVE** — was gerade eingeschaltet ist, jeweils mit Countdown-Balken. Wegen dieses Abschnitts
-lohnt der Blick in die App auch dann, wenn du nichts aktivierst.
 
 Das **Suchfeld** durchsucht Rollenname, Rollentyp, Tenant *und* Azure-Scope gleichzeitig — der Name
 einer Subscription findet also die Rollen, die für sie gelten. **⟳** erzwingt eine Aktualisierung,
@@ -319,7 +320,10 @@ Alles liegt unter `%LocalAppData%\junis\Entra-PIM-Manager`, in deinem eigenen Be
 
 Ein Passwort wird nie gespeichert — die Anmeldung macht Windows. Außerhalb deines Profils wird
 nichts geschrieben: kein `Programme`-Ordner, keine maschinenweite Registry, kein Dienst, keine
-geplante Aufgabe. Der einzige Eintrag außerhalb dieses Ordners ist der Autostart-Wert unter
+geplante Aufgabe. Außerhalb dieses Ordners, aber ebenfalls in deinem Profil, liegen nur die App
+selbst unter `%LocalAppData%\Entra-PIM-Manager`, ihr Startmenü-Eintrag, falls du ihn behalten hast,
+und zwei Registry-Einträge unter `HKCU`: der Deinstallationseintrag, den Windows bei den
+installierten Apps anzeigt, und der Autostart-Wert unter
 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, falls du den Autostart angelassen hast.
 
 Eine Deinstallation entfernt all das, inklusive Tokens und Autostart-Eintrag. **Ein Update entfernt

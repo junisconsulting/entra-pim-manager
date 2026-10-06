@@ -89,6 +89,9 @@ theme. Only the small dot carries a meaning.
 
 Clicking the icon opens the panel. Top to bottom:
 
+**ACTIVE** — what is switched on right now, each with a countdown bar; shown only while something
+is. This section is the reason to look at the app when you are not activating anything.
+
 **PINNED** — roles and saved scope sets you marked with a star. Yours to arrange; it stays across
 restarts.
 
@@ -96,9 +99,6 @@ restarts.
 
 **ELIGIBILITIES** — everything you may activate, grouped per tenant. Groups fold, and the app
 remembers which ones you left closed.
-
-**ACTIVE** — what is switched on right now, each with a countdown bar. This section is the reason to
-look at the app when you are not activating anything.
 
 The **search box** searches role name, role type, tenant *and* Azure scope in one go — typing a
 subscription name finds the roles that apply to it. The **⟳** button forces a refresh, though the
@@ -302,9 +302,11 @@ Everything sits under `%LocalAppData%\junis\Entra-PIM-Manager`, in your own user
 - the log files
 
 No password is ever stored — sign-in is handled by Windows. Nothing is written outside your profile:
-no `Program Files`, no machine-wide registry, no service, no scheduled task. The only entry outside
-this folder is the autostart value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, if
-you left autostart on.
+no `Program Files`, no machine-wide registry, no service, no scheduled task. Outside this folder,
+and still inside your profile, are only the app itself under `%LocalAppData%\Entra-PIM-Manager`,
+its Start-menu entry if you kept it, and two registry entries under `HKCU`: the uninstall entry
+Windows lists under installed apps, and the autostart value under
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run` if you left autostart on.
 
 Uninstalling removes all of it, including the tokens and the autostart entry. **Updating removes
 none of it** — settings, accounts and favourites survive.
