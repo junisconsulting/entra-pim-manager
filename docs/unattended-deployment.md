@@ -128,6 +128,9 @@ Why these values, and not the obvious alternatives:
 - **Greater than or equal, never equals.** The app updates itself, and every update rewrites
   `DisplayVersion`. With "equals" the first update makes the app look missing, and Intune's
   reinstall silently *downgrades* it. Intune does the first install; updates stay with the app.
+- **Version comparison, not string or integer.** `DisplayVersion` is a string with dots
+  (`0.12.0`). String comparison only offers equals and not equal, and integer comparison needs a
+  DWORD. Version comparison reads the string as a version and offers greater than or equal.
 - **Registry, not a file rule.** A file rule on `%LOCALAPPDATA%` is not reliably resolved to the
   signed-in user.
 - **The uninstall is a script** because Intune does not expand environment variables in the

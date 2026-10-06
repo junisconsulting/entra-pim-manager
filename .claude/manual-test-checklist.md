@@ -672,7 +672,8 @@ gesetzt, mindestens ein Konto enrolled), dann die neue Version darüber installi
       Tenant-/Client-ID und `-NoStart`, Uninstall-Kommando
       `uninstall-entra-pim-manager.cmd`, Install behavior **User**, Requirements x64 und
       mindestens Windows 10 1809, Detection Registry
-      `DisplayVersion` **≥** Basisversion des Testbuilds (`0.11.1` für
+      `DisplayVersion`, Versionsvergleich (nicht Zeichenfolge oder Ganzzahl)
+      **≥** Basisversion des Testbuilds (`0.11.1` für
       `0.11.1-local.*`), Logo `app-registration-logo.png`.
 - [ ] **Installieren:** einem Testnutzer zuweisen → Intune bzw. Company Portal meldet
       „Installiert" nach wenigen Minuten, **nicht** erst nach dem Timeout.
