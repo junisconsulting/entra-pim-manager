@@ -1,123 +1,150 @@
-# Entra PIM Manager
-
-A Windows tray application for activating Microsoft Entra Privileged Identity Management (PIM) eligibilities — Directory Roles, Group Memberships and Azure resource roles — from one place, across multiple tenants, without UAC, admin rights, or service installation.
-
-<p>
-  <img src="docs/screenshot1.png" alt="Entra PIM Manager screenshot 1" width="32%" />
-  <img src="docs/screenshot2.png" alt="Entra PIM Manager screenshot 2" width="32%" />
-  <img src="docs/screenshot3.png" alt="Entra PIM Manager screenshot 3" width="32%" />
+<p align="center">
+  <img src="src/Entra-PIM-Manager.App.Avalonia/Assets/app-registration-logo.png" alt="" width="88" />
 </p>
 
-## Using it
+<h1 align="center">Entra PIM Manager</h1>
 
-New to the app? **[User guide](docs/user-guide.md)** — English · **[Anleitung](docs/user-guide.de.md)** — Deutsch.
+<p align="center">
+  <b>Just-in-time admin rights, one click from your taskbar — in every tenant you manage.</b><br />
+  Microsoft Entra PIM for directory roles, groups and Azure resources, as a Windows tray app.
+</p>
 
-Covers signing in, activating a role, choosing Azure scopes, ending a role early, and what to do
-when something fails. The sections below are for the person setting it up.
+<p align="center">
+  <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/junisconsulting/entra-pim-manager?label=release" alt="Latest release" /></a>
+  <img src="https://img.shields.io/badge/Windows-10%201809%2B-0078D4" alt="Windows 10 1809 or later" />
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/junisconsulting/entra-pim-manager" alt="MIT license" /></a>
+</p>
 
-## Features
+![The Entra PIM Manager panel above the tray icon: active roles with countdowns, pinned and recent roles, eligibilities grouped per tenant](docs/images/hero.svg)
 
-- One-click activation of PIM eligibilities from the system tray — Entra directory roles, PIM for Groups, and Azure resource roles (Azure RBAC at management-group, subscription, resource-group or resource scope)
-- Narrowed Azure activations — a role held on a management group asks where it applies, with nothing preselected: pick single subscriptions, management groups, or deliberately the entire scope. A picked set can be saved under a name and starred, so it sits with your pinned roles for next time
-- Multi-tenant: sign in with multiple admin accounts; eligibilities and active assignments are grouped per tenant
-- One App Registration entry per tenant — a multi-tenant registration reused across tenants, a customer's own single-tenant registration, or a mix
-- Multi-cloud: Global and Entra China (21Vianet) side by side, each with its own App Registration
-- WAM-broker authentication (no embedded WebView, no in-app password prompts), with a device-code fallback for tenants whose federated IdP forces seamless SSO onto the wrong account
-- Activation form with justification, ticket reference, and a duration slider in 0.5 h steps (bounded by the per-role policy maximum)
-- Live watchdog — the list refreshes automatically when assignments are activated, deactivated, or expire
-- Search across role name, type, tenant and Azure scope — a subscription name finds its roles
-- Favorites for recurring justifications
-- Drag-and-drop reordering of accounts in Settings, and a short alias per account ("EADM") in place of a long UPN
-- Per-user install to `%LocalAppData%\Entra-PIM-Manager\` — no UAC, no HKLM, no Windows service
-- Optional Windows autostart (enabled by default on first install, toggleable in Settings)
-- Velopack-based auto-update
+PIM only protects you if people use it. When activating a role means a browser, the portal and
+seven steps — per tenant — admins stop activating and start asking for permanent roles. And a
+standing admin account is exactly what an attacker hopes to find.
+
+Entra PIM Manager puts every role you are eligible for, in every tenant you work in, behind the
+shield next to your clock. Activating takes three clicks, the icon tells you at a glance whether
+you are privileged right now, and roles end on their own. Least privilege stops being the slow
+option.
+
+| You want to … | Go to |
+| --- | --- |
+| see why this beats the portal | [Why](#why) |
+| install it and activate your first role | [Quick start](#quick-start) |
+| learn the app | [User guide](docs/user-guide.md) · [Anleitung auf Deutsch](docs/user-guide.de.md) |
+| set up a tenant (admin, once) | [App Registration setup](docs/app-registration-setup.md) |
+| roll it out to a team with Intune | [Rolling out to a team](#rolling-out-to-a-team) |
+| know what it does on your machine and in your tenant | [Security and footprint](#security-and-footprint) |
+| build it or contribute | [CONTRIBUTING.md](CONTRIBUTING.md) |
+
+## Why
+
+![Seven steps per tenant in the Entra admin center, three clicks for every tenant with Entra PIM Manager](docs/images/why.svg)
+
+| | Entra admin center | PowerShell | Entra PIM Manager |
+| --- | --- | --- | --- |
+| One role active | seven steps in the browser | connect, look up ids, build a request | three clicks |
+| Several tenants | a browser profile per admin account | a Graph and an Azure connection per tenant | one list |
+| Entra roles, groups, Azure roles | three tabs | two modules, `Microsoft.Graph` and `Az` | one list |
+| "Am I privileged right now?" | open My roles → Active assignments | query it | the colour of the tray icon |
+| Before a role expires | — | — | a notification, and the icon turns amber |
+| More time on a running role | deactivate, wait, activate again | the same, scripted | **↻ Extend time** does it for you |
+
+## What you get
+
+### Your privilege status, without opening anything
+
+![The four tray icon states on a light and a dark taskbar: red not signed in, grey nothing active, green privileged, amber expiring soon](docs/images/tray-states.svg)
+
+The shield is drawn for your taskbar, light or dark, and only the dot carries a meaning. Shortly
+before a role runs out you get a notification, with **↻ Extend time** right on it.
+
+### Every tenant, every kind of PIM, one list
+
+- **Directory roles, PIM for Groups and Azure resource roles** side by side, grouped per tenant.
+- **Several admin accounts in several tenants** — a customer's own App Registration, a
+  multi-tenant one, or a mix. Global and Entra China (21Vianet) work side by side.
+- **Search across everything** — role, type, tenant and Azure scope: a subscription name finds
+  its roles.
+- **Short aliases** ("EADM") instead of long UPNs, and tenants in the order you drag them.
+
+### Azure roles only where you work
+
+![An Azure role eligible on a management group reaches 32 subscriptions; the app asks where to activate it, with nothing preselected, and you activate the two you need](docs/images/azure-scope.svg)
+
+An Azure role held on a management group reaches every subscription below it. The app asks where
+to activate it — with nothing ticked, not even the scope the eligibility sits on. Save a set of
+scopes under a name, star it, and it waits next to your pinned roles tomorrow.
+
+### Less typing, every day
+
+- **Pinned and recent** — your usual roles and scope sets sit at the top of the panel.
+- **Saved justifications** per role. Ticket fields appear only when the role's policy asks for
+  them, with the ticket system prefilled per tenant.
+- **A duration slider** in half-hour steps, capped by the role's own policy.
+- **↻ Extend time** — PIM cannot lengthen a running activation, so the app ends it and requests
+  it again for you, prefilled.
+- **No surprises** — approval, MFA, and groups that can carry directory roles are flagged before
+  you click Activate.
+- **A list that keeps itself current** — activations, expiries and roles ended elsewhere show up
+  without a refresh.
+- **A network check** that probes every endpoint the sign-in needs and copies a report for your
+  IT ticket.
+
+## Quick start
+
+1. **Set up the tenant — an admin, once.** Run `scripts/create-app-registration.ps1`, or follow
+   the [manual steps](docs/app-registration-setup.md). Either way you end up with a tenant id
+   and a client id.
+2. **Install.** Download `Entra-PIM-Manager-win-Setup.exe` from
+   [Releases](../../releases/latest) and run it. No UAC prompt, nothing to choose.
+3. **Connect.** Click the shield next to the clock → **Set up your first tenant** → enter tenant
+   id and client id → **Add account** → **Sign in**, and pick your admin account in the Windows
+   account picker.
+
+Your eligibilities appear, grouped per tenant. Click one, give a reason, **Activate**.
+
+> [!NOTE]
+> **Releases are not code-signed yet.** Windows may warn about an unknown publisher, and
+> app-control tools can block the installer. The app offers an update only once it is 72 hours
+> old, so security tools have had time to classify it. Status:
+> [engineering backlog](docs/engineering-backlog.md#releases-are-not-code-signed--no-signing-exists-anywhere-in-the-pipeline).
+
+## Rolling out to a team
+
+![An admin script creates the App Registration once per tenant, one Intune package serves every tenant, each endpoint installs per user and already configured](docs/images/rollout.svg)
+
+One script per tenant, one Intune Win32 package for all of them — every release carries a
+tenant-neutral `.intunewin`. Install and configuration both run in the user's context, and the
+next logon starts the app already configured. Arguments, exit codes and the exact Intune values:
+[docs/unattended-deployment.md](docs/unattended-deployment.md).
+
+## Security and footprint
+
+This is a privileged-access tool, so here is exactly what it does and does not do.
+
+- **It cannot give you anything you don't already have.** It activates eligibilities someone
+  assigned to you. Maximum duration, approval, MFA and ticket rules are enforced by Entra, not by
+  the app.
+- **Delegated permissions only** — seven Microsoft Graph permissions plus Azure Service
+  Management `user_impersonation`, all on behalf of the signed-in user. No client secret, no
+  application permissions. [The list, and why each one is needed](docs/app-registration-setup.md#3-api-permissions-delegated).
+- **Windows does the sign-in.** The WAM broker handles password, MFA, Windows Hello and
+  Conditional Access; the app never sees your password.
+- **Clean logs.** No tokens, no justification text, and users appear by object id only.
+- **A per-user footprint.** Everything lives under `%LocalAppData%`, and registry entries stay in
+  `HKCU` — the uninstall entry and the optional autostart value. No admin rights, no service, no
+  scheduled task. Uninstalling removes all of it, cached tokens included.
+
+Found a vulnerability? Please report it privately — see [SECURITY.md](SECURITY.md).
 
 ## Requirements
 
-- Windows 10 1809+ or Windows Server 2019+ (required for the WAM broker)
-- An Entra tenant with PIM eligibilities assigned to the signed-in user
-- A configured Entra App Registration (see [Configure](#configure))
+- Windows 10 1809 or Windows Server 2019, or later — the WAM broker needs it.
+- Microsoft Entra ID P2 or Entra ID Governance in the tenant — PIM's own licence requirement.
+- A role you are eligible for. The app activates; it does not assign.
 
-## Install
+## Contributing and license
 
-Download the latest installer from the [Releases](../../releases) page and run it. The installer is per-user — no UAC prompt — and places the app under `%LocalAppData%\Entra-PIM-Manager\`.
-
-When a new release is published, the app checks GitHub once a day, then prompts you to download and install it — you choose whether to restart now or apply on the next launch. Toggle this under **Settings → Updates**, where **Check for updates** also runs a check on the spot and tells you what it found. A release is only offered once it is 72 hours old: builds are unsigned, and security tools block a binary they have not classified yet, so a fresher one would install and then fail to start.
-
-Uninstalling removes everything: the app, the autostart entry, and your per-user data under `%LocalAppData%\junis\Entra-PIM-Manager` — settings, signed-in accounts and the cached tokens. Updates leave all of that untouched.
-
-## Configure
-
-Before first use, an Entra App Registration must be created once (an admin task). Its client id is then entered into the app — no file editing required.
-
-Setup steps: [docs/app-registration-setup.md](docs/app-registration-setup.md).
-
-In short:
-
-1. Create an App Registration in your Entra portal — multi-tenant if it should serve several tenants, single-tenant if it lives in exactly one.
-2. Add the WAM redirect URI `ms-appx-web://microsoft.aad.brokerplugin/{client-id}` and enable public client flows.
-3. Grant delegated Graph permissions: `User.Read`, `RoleEligibilitySchedule.Read.Directory`, `RoleAssignmentSchedule.ReadWrite.Directory`, `RoleManagementPolicy.Read.Directory`, `RoleManagementPolicy.Read.AzureADGroup`, `PrivilegedAccess.ReadWrite.AzureADGroup`, `Group.Read.All` — plus the delegated permission **Azure Service Management → `user_impersonation`** for Azure resource roles (PIM for Azure Resources goes through Azure Resource Manager, not Graph).
-4. Grant admin consent in every tenant where Entra PIM Manager will be used.
-5. Launch the app, open **Settings → TENANTS**, and add one entry per tenant: tenant id, client id, cloud, optional label. A multi-tenant registration is listed once per tenant with the same client id; only listed tenants can be signed in to. Entries are saved to your per-user config at `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` and applied on the next restart — the shipped `appsettings.json` only carries the scopes.
-
-> **Entra China (21Vianet)?** National clouds are physically isolated instances of Entra, so a Global App Registration does not exist there — a Global client id sent to `login.partner.microsoftonline.cn` fails with `AADSTS700016`. Repeat steps 1–4 in [portal.azure.cn](https://portal.azure.cn) and add that tenant's entry with cloud **Entra China**. Both clouds then work side by side; "Add account…" lists every entry under "Sign in with".
->
-> **Upgrading from 0.6.x?** The per-cloud client ids are folded into per-tenant entries automatically at first start (one per enrolled tenant, no re-sign-in). A client id without any enrolled tenant cannot be migrated and has to be added again with its tenant id — see [docs/app-registration-setup.md §8](docs/app-registration-setup.md#8-upgrading-from-06x).
->
-> Running from source instead of an installer? Copy `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample` to `appsettings.local.json` and fill in `TenantAppRegistrations` — a developer convenience that avoids retyping the ids in the UI on every run.
-
-## Enterprise deployment
-
-Rolling out to a team? Nobody has to type a client id. Two scripts:
-
-```powershell
-# Admin, once per tenant: creates the App Registration, grants consent,
-# and prints the endpoint command with the ids filled in
-./scripts/create-app-registration.ps1
-
-# On each endpoint, in the user's context: installs and configures
-./scripts/install-entra-pim-manager.ps1 -SetupExe .\Entra-PIM-Manager-win-Setup.exe `
-    -TenantId <guid> -ClientId <guid> -Label "Contoso" -TicketSystem "ServiceNow"
-```
-
-Installation and configuration are two separate steps — a silent install never starts the app, so the configuration is a second call that writes the entry and exits at once, which is what lets an Intune install command return. Deploy in the **user's** context; install and configuration are both per-user.
-
-For Intune, every release also carries `Entra-PIM-Manager-win-Setup.intunewin`, a ready-made Win32 app with the installer and both endpoint scripts — tenant-neutral, the ids go into the install command.
-
-Details, arguments, exit codes and the Intune values: [docs/unattended-deployment.md](docs/unattended-deployment.md).
-
-## Build from source
-
-Requires the .NET 8 SDK on Windows.
-
-```powershell
-git clone <repo-url>
-cd Entra PIM Manager
-dotnet restore
-dotnet build -c Release -warnaserror
-dotnet test
-```
-
-To produce a Velopack installer, see [packaging/velopack/README.md](packaging/velopack/README.md).
-
-## Architecture
-
-```text
-src/Entra-PIM-Manager.App.Avalonia  →  Avalonia views, ViewModels, tray   (UI only)
-src/Entra-PIM-Manager.Core          →  Auth, Graph, models, services      (no UI deps)
-src/Entra-PIM-Manager.Tests         →  xUnit, Moq                         (tests against Core only)
-```
-
-`Entra-PIM-Manager.Core` does not reference any UI toolkit — that's the layering boundary that keeps tests simple.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
-## Contributing
-
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Security
-
-Found a vulnerability? Please report it privately — see [SECURITY.md](SECURITY.md).
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for build, conventions and
+the PR process. MIT licensed, see [LICENSE](LICENSE). Made by
+[junis](https://github.com/junisconsulting).

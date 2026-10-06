@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 660" width="960" height="660">
+  <title>Illustration: the Entra PIM Manager panel above the tray icon, showing active roles with countdowns, pinned and recent roles, and eligibilities grouped per tenant</title>
+  <!-- An illustration, not a screenshot: tenant and account names are Microsoft's fictional
+       ones. Layout and labels follow TrayPopupWindow.axaml; keep them in step when the panel changes. -->
+  <style>
+    text { font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif; }
+    .cap { font-size: 10.5px; font-weight: 600; fill: #767676; letter-spacing: .5px; }
+    .name { font-size: 13px; font-weight: 600; fill: #1A1A1A; }
+    .sub { font-size: 11px; fill: #555555; }
+    .co-h { font-size: 15px; font-weight: 600; fill: #0F172A; }
+    .co-t { font-size: 12.5px; fill: #475569; }
+    .lead { fill: none; stroke: #A78BFA; stroke-width: 1.5; stroke-dasharray: 4 3; }
+    .pin { fill: #7C3AED; stroke: #FFFFFF; stroke-width: 2; }
+  </style>
+  <defs>
+    <clipPath id="canvas"><rect x="0.5" y="0.5" width="959" height="659" rx="16"/></clipPath>
+    <filter id="lift" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#0F172A" flood-opacity=".16"/>
+    </filter>
+    <!-- The tray shield from Assets/tray-icon-green-onlight.svg, without its status dot -->
+    <g id="shield">
+      <path fill="#0a1630" stroke="#ffffff" stroke-width="2.4" stroke-linejoin="round" d="M16 0.5 L30 4.5 L30 19 Q30 29 16 31.5 Q2 29 2 19 L2 4.5 Z"/>
+      <circle fill="#ffffff" cx="16" cy="12" r="5.2"/>
+      <circle fill="#0a1630" cx="16" cy="12" r="2.2"/>
+      <rect fill="#ffffff" x="14.6" y="16.8" width="2.8" height="9.2" rx="1.4"/>
+      <rect fill="#ffffff" x="17.4" y="20.5" width="3.2" height="2.2" rx="0.9"/>
+      <rect fill="#ffffff" x="17.4" y="23.8" width="2.4" height="2" rx="0.9"/>
+    </g>
+    <path id="star" d="M0 -6.5 L1.9 -2 L6.7 -1.6 L3 1.5 L4.1 6.2 L0 3.7 L-4.1 6.2 L-3 1.5 L-6.7 -1.6 L-1.9 -2 Z"/>
+  </defs>
+
+  <g clip-path="url(#canvas)">
+    <rect x="0" y="0" width="960" height="660" fill="#F8FAFC"/>
+
+    <!-- Taskbar -->
+    <rect x="0" y="612" width="960" height="48" fill="#EEF1F6"/>
+    <path d="M0 612.5 H960" stroke="#DDE3EA"/>
+    <g fill="#3B82F6">
+      <rect x="28" y="626" width="9" height="9" rx="1"/><rect x="39" y="626" width="9" height="9" rx="1"/>
+      <rect x="28" y="637" width="9" height="9" rx="1"/><rect x="39" y="637" width="9" height="9" rx="1"/>
+    </g>
+    <rect x="796" y="618" width="40" height="36" rx="6" fill="#DFE4EC"/>
+    <g transform="translate(805 625) scale(0.69)">
+      <use href="#shield"/>
+      <circle fill="#ffffff" cx="25.5" cy="25.5" r="5.8"/>
+      <circle fill="#22c55e" cx="25.5" cy="25.5" r="4.2"/>
+    </g>
+    <g fill="none" stroke="#475569" stroke-width="1.6" stroke-linecap="round">
+      <path d="M852 634 a10 10 0 0 1 14 0 M855.5 637.5 a5 5 0 0 1 7 0"/>
+      <path d="M878 632 h3 l4 -3.5 v13 l-4 -3.5 h-3 z M889 632.5 a5 5 0 0 1 0 6"/>
+    </g>
+    <text x="944" y="632" font-size="12" fill="#1A1A1A" text-anchor="end">09:41</text>
+    <text x="944" y="649" font-size="11" fill="#475569" text-anchor="end">10/6/2026</text>
+
+    <!-- Panel -->
+    <rect x="556" y="28" width="360" height="576" rx="12" fill="#F7F7F7" stroke="#E4E4E7" filter="url(#lift)"/>
+
+    <!-- Title strip -->
+    <text x="572" y="62" font-size="15" font-weight="600" fill="#1A1A1A">Entra PIM Manager</text>
+    <text x="718" y="61" font-size="11.5" fill="#555555">14 eligible · 2 active</text>
+    <g fill="none" stroke="#555555" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M868 57 a6 6 0 1 1 -1.8 -4.3 M867.5 49.5 v3.8 h-3.8"/>
+      <circle cx="890" cy="57" r="6" stroke-dasharray="2.4 2"/>
+      <circle cx="890" cy="57" r="2.4"/>
+    </g>
+
+    <!-- ACTIVE -->
+    <rect x="566" y="78" width="340" height="140" rx="8" fill="#FFFFFF" stroke="#E4E4E7"/>
+    <text x="578" y="97" class="cap">ACTIVE</text>
+
+    <text x="578" y="120" class="name">Global Administrator</text>
+    <text x="578" y="137" class="sub">Contoso · Directory role</text>
+    <text x="838" y="121" font-size="12" font-weight="600" fill="#15803D" text-anchor="end">1 h 42 min</text>
+    <rect x="846" y="108" width="22" height="22" rx="5" fill="#F7F7F7" stroke="#E4E4E7"/>
+    <path d="M861.5 119 a4.5 4.5 0 1 1 -1.3 -3.2 M860.8 113.3 v2.9 h-2.9" fill="none" stroke="#555555" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="874" y="108" width="22" height="22" rx="5" fill="#F7F7F7" stroke="#E4E4E7"/>
+    <rect x="881" y="115" width="8" height="8" rx="1.5" fill="#555555"/>
+    <rect x="578" y="146" width="316" height="4" rx="2" fill="#ECECEC"/>
+    <rect x="578" y="146" width="180" height="4" rx="2" fill="#22C55E"/>
+
+    <text x="578" y="174" class="name">Contributor</text>
+    <text x="578" y="191" class="sub">Fabrikam · Subscription: lz-prod-01</text>
+    <text x="838" y="175" font-size="12" font-weight="600" fill="#15803D" text-anchor="end">3 h 05 min</text>
+    <rect x="846" y="162" width="22" height="22" rx="5" fill="#F7F7F7" stroke="#E4E4E7"/>
+    <path d="M861.5 173 a4.5 4.5 0 1 1 -1.3 -3.2 M860.8 167.3 v2.9 h-2.9" fill="none" stroke="#555555" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="874" y="162" width="22" height="22" rx="5" fill="#F7F7F7" stroke="#E4E4E7"/>
+    <rect x="881" y="169" width="8" height="8" rx="1.5" fill="#555555"/>
+    <rect x="578" y="200" width="316" height="4" rx="2" fill="#ECECEC"/>
+    <rect x="578" y="200" width="244" height="4" rx="2" fill="#22C55E"/>
+
+    <!-- ELIGIBILITIES -->
+    <rect x="566" y="230" width="340" height="332" rx="8" fill="#FFFFFF" stroke="#E4E4E7"/>
+    <text x="578" y="249" class="cap">ELIGIBILITIES</text>
+    <text x="894" y="249" class="cap" text-anchor="end">(14)</text>
+    <rect x="576" y="258" width="320" height="28" rx="6" fill="#F7F7F7" stroke="#E4E4E7"/>
+    <g fill="none" stroke="#767676" stroke-width="1.5" stroke-linecap="round">
+      <circle cx="590" cy="271" r="4.5"/><path d="M593.5 274.5 l3.5 3.5"/>
+    </g>
+    <text x="604" y="276" font-size="12" fill="#767676">Search…</text>
+
+    <text x="578" y="306" class="cap">PINNED</text>
+    <text x="578" y="327" class="name">Exchange Administrator</text>
+    <text x="578" y="343" class="sub">Contoso · Directory role</text>
+    <use href="#star" transform="translate(886 333)" fill="#7C3AED"/>
+    <text x="578" y="367" class="name">Contributor</text>
+    <text x="578" y="383" class="sub">Fabrikam · Prod subscriptions</text>
+    <use href="#star" transform="translate(886 373)" fill="#7C3AED"/>
+
+    <text x="578" y="407" class="cap">RECENT</text>
+    <text x="578" y="428" class="name">Security Reader</text>
+    <text x="578" y="444" class="sub">Fabrikam · Directory role</text>
+    <use href="#star" transform="translate(886 434)" fill="none" stroke="#B8B8B8" stroke-width="1.3"/>
+
+    <path d="M576 460.5 H896" stroke="#ECECEC"/>
+
+    <path d="M578 478 l5 5 l5 -5" fill="none" stroke="#555555" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="598" y="482" font-size="13.5" font-weight="600" fill="#1A1A1A">Contoso</text>
+    <text x="598" y="498" class="sub">EADM</text>
+    <rect x="812" y="472" width="52" height="18" rx="4" fill="#DCFCE7"/>
+    <text x="838" y="485" font-size="10.5" font-weight="600" fill="#15803D" text-anchor="middle">1 active</text>
+    <text x="894" y="485" class="sub" text-anchor="end">9</text>
+
+    <path d="M580 518 l5 5 l-5 5" fill="none" stroke="#555555" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="598" y="527" font-size="13.5" font-weight="600" fill="#1A1A1A">Fabrikam</text>
+    <text x="598" y="543" class="sub">admin@fabrikam.com</text>
+    <rect x="812" y="517" width="52" height="18" rx="4" fill="#DCFCE7"/>
+    <text x="838" y="530" font-size="10.5" font-weight="600" fill="#15803D" text-anchor="middle">1 active</text>
+    <text x="894" y="530" class="sub" text-anchor="end">5</text>
+
+    <!-- Footer -->
+    <path d="M556 574.5 H916" stroke="#E4E4E7"/>
+    <text x="572" y="593" font-size="11" fill="#6D28D9" text-decoration="underline">v0.12.0</text>
+    <text x="900" y="593" font-size="11" fill="#767676" text-anchor="end">junis GmbH</text>
+
+    <!-- Callouts -->
+    <text x="40" y="112" class="co-h">What is switched on right now</text>
+    <text x="40" y="133" class="co-t">Every active role with its countdown. ↻ gives you more</text>
+    <text x="40" y="150" class="co-t">time, ■ ends it early.</text>
+    <path class="lead" d="M472 128 H566"/>
+    <circle class="pin" cx="566" cy="128" r="4.5"/>
+
+    <text x="40" y="318" class="co-h">Your daily handful, one click away</text>
+    <text x="40" y="339" class="co-t">Pin roles and saved Azure scope sets. Recent activations</text>
+    <text x="40" y="356" class="co-t">fill themselves in.</text>
+    <path class="lead" d="M472 334 H566"/>
+    <circle class="pin" cx="566" cy="334" r="4.5"/>
+
+    <text x="40" y="482" class="co-h">Every tenant, every kind of PIM, one list</text>
+    <text x="40" y="503" class="co-t">Entra roles, PIM for Groups and Azure resource roles,</text>
+    <text x="40" y="520" class="co-t">grouped per tenant — one admin account or ten.</text>
+    <path class="lead" d="M472 498 H566"/>
+    <circle class="pin" cx="566" cy="498" r="4.5"/>
+
+    <text x="40" y="566" class="co-h">Lives next to the clock</text>
+    <text x="40" y="587" class="co-t">The dot is your status: grey idle, green privileged, amber expiring.</text>
+    <path class="lead" d="M472 562 H530 V636 H794"/>
+    <circle class="pin" cx="796" cy="636" r="4.5"/>
+  </g>
+  <rect x="0.5" y="0.5" width="959" height="659" rx="16" fill="none" stroke="#E2E8F0"/>
+</svg>

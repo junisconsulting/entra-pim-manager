@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="960" height="440">
+  <title>An Azure role eligible on a management group reaches 32 subscriptions; Entra PIM Manager asks where to activate it, with nothing preselected, so you activate the two you work on</title>
+  <!-- The picker follows the "Activate on" view in TrayPopupWindow.axaml; names are fictional. -->
+  <style>
+    text { font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif; }
+    .h { font-size: 16px; font-weight: 600; fill: #0F172A; }
+    .s { font-size: 12.5px; fill: #64748B; }
+    .lbl { font-size: 13px; font-weight: 600; fill: #334155; }
+    .t { font-size: 12.5px; fill: #475569; }
+    .cap { font-size: 10.5px; font-weight: 600; fill: #767676; letter-spacing: .5px; }
+    .name { font-size: 13px; font-weight: 600; fill: #1A1A1A; }
+    .sub { font-size: 11px; fill: #555555; }
+    .box-off { fill: #FFFFFF; stroke: #B8B8B8; stroke-width: 1.3; }
+  </style>
+  <defs>
+    <!-- Eight subscriptions; each <use> sets the fill -->
+    <g id="row">
+      <rect x="0" y="0" width="18" height="18" rx="4"/><rect x="24" y="0" width="18" height="18" rx="4"/>
+      <rect x="48" y="0" width="18" height="18" rx="4"/><rect x="72" y="0" width="18" height="18" rx="4"/>
+      <rect x="96" y="0" width="18" height="18" rx="4"/><rect x="120" y="0" width="18" height="18" rx="4"/>
+      <rect x="144" y="0" width="18" height="18" rx="4"/><rect x="168" y="0" width="18" height="18" rx="4"/>
+    </g>
+    <path id="tick" d="M-4 0 l2.8 3 l5.2 -6" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </defs>
+  <rect x="0.5" y="0.5" width="959" height="439" rx="16" fill="#F8FAFC" stroke="#E2E8F0"/>
+
+  <!-- Left: blast radius -->
+  <rect x="24" y="24" width="440" height="392" rx="12" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <text x="44" y="58" class="h">Eligible on a management group</text>
+  <text x="44" y="78" class="s">Contributor on the tenant root group, 32 subscriptions beneath it</text>
+  <path d="M44 94 H444" stroke="#EEF2F7"/>
+
+  <text x="44" y="114" class="lbl">Activated where the eligibility sits</text>
+  <use href="#row" x="44" y="124" fill="#F87171"/>
+  <use href="#row" x="44" y="148" fill="#F87171"/>
+  <use href="#row" x="44" y="172" fill="#F87171"/>
+  <use href="#row" x="44" y="196" fill="#F87171"/>
+  <text x="262" y="178" font-size="34" font-weight="700" fill="#DC2626">32</text>
+  <text x="262" y="200" class="s">subscriptions in reach</text>
+
+  <text x="44" y="248" class="lbl">Activated where you work today</text>
+  <use href="#row" x="44" y="258" fill="#F1F5F9" stroke="#E2E8F0"/>
+  <use href="#row" x="44" y="282" fill="#F1F5F9" stroke="#E2E8F0"/>
+  <use href="#row" x="44" y="306" fill="#F1F5F9" stroke="#E2E8F0"/>
+  <use href="#row" x="44" y="330" fill="#F1F5F9" stroke="#E2E8F0"/>
+  <rect x="92" y="258" width="18" height="18" rx="4" fill="#7C3AED"/>
+  <rect x="116" y="258" width="18" height="18" rx="4" fill="#7C3AED"/>
+  <text x="262" y="312" font-size="34" font-weight="700" fill="#7C3AED">2</text>
+  <text x="262" y="334" class="s">subscriptions in reach</text>
+
+  <text x="44" y="380" class="t">Nothing is preselected: subscriptions first, the entire scope last.</text>
+  <text x="44" y="400" class="t">Every ticked scope is its own activation, with its own countdown.</text>
+
+  <!-- Right: the picker -->
+  <rect x="488" y="24" width="448" height="392" rx="12" fill="#F7F7F7" stroke="#E4E4E7"/>
+  <path d="M512 52 l-5 5 l5 5" fill="none" stroke="#555555" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="526" y="62" font-size="15" font-weight="600" fill="#1A1A1A">Contributor</text>
+  <text x="526" y="80" class="sub">Fabrikam · eligible on Tenant Root Group</text>
+
+  <text x="506" y="110" class="cap">ACTIVATE ON</text>
+  <rect x="504" y="118" width="416" height="28" rx="6" fill="#FFFFFF" stroke="#E4E4E7"/>
+  <g fill="none" stroke="#767676" stroke-width="1.5" stroke-linecap="round">
+    <circle cx="518" cy="131" r="4.5"/><path d="M521.5 134.5 l3.5 3.5"/>
+  </g>
+  <text x="532" y="136" font-size="12" fill="#767676">Search management groups and subscriptions</text>
+
+  <rect x="508" y="160" width="16" height="16" rx="4" fill="#7C3AED"/>
+  <use href="#tick" transform="translate(516 168)"/>
+  <text x="536" y="170" class="name">lz-prod-01</text>
+  <text x="536" y="186" class="sub">Subscription · under Landing zones</text>
+
+  <rect x="508" y="198" width="16" height="16" rx="4" fill="#7C3AED"/>
+  <use href="#tick" transform="translate(516 206)"/>
+  <text x="536" y="208" class="name">lz-prod-02</text>
+  <text x="536" y="224" class="sub">Subscription · under Landing zones</text>
+
+  <rect x="508" y="236" width="16" height="16" rx="4" class="box-off"/>
+  <text x="536" y="246" class="name">lz-dev-01</text>
+  <text x="536" y="262" class="sub">Subscription · under Landing zones</text>
+
+  <rect x="508" y="274" width="16" height="16" rx="4" class="box-off"/>
+  <text x="536" y="284" class="name">Landing zones</text>
+  <text x="536" y="300" class="sub">Management group · under Tenant Root Group</text>
+
+  <path d="M504 314.5 H920" stroke="#E4E4E7"/>
+  <rect x="508" y="324" width="16" height="16" rx="4" class="box-off"/>
+  <text x="536" y="336" class="name">Entire scope — everything listed above</text>
+
+  <text x="506" y="370" class="cap">FAVOURITE SCOPES</text>
+  <rect x="504" y="378" width="150" height="24" rx="12" fill="#F3EFFF"/>
+  <path d="M0 -6.5 L1.9 -2 L6.7 -1.6 L3 1.5 L4.1 6.2 L0 3.7 L-4.1 6.2 L-3 1.5 L-6.7 -1.6 L-1.9 -2 Z" transform="translate(519 390) scale(0.85)" fill="#7C3AED"/>
+  <text x="531" y="394" font-size="12" font-weight="600" fill="#6D28D9">Prod subscriptions</text>
+  <rect x="826" y="374" width="94" height="30" rx="6" fill="#7C3AED"/>
+  <text x="873" y="394" font-size="13" font-weight="600" fill="#FFFFFF" text-anchor="middle">Activate</text>
+</svg>
