@@ -108,6 +108,8 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 - [ ] Zahnrad auf einer Tenant-Karte → Konfiguration klappt auf, Client-ID, Label
       und Ticketsystem sind vorbelegt, die **Tenant-ID steht nur als Text da**
       (nicht editierbar). Label ändern → Save → Karte aktualisiert, Restart-Banner.
+- [ ] Tenant-ID in der aufgeklappten Karte mit der Maus markieren → Strg+C → im Editor
+      einfügen: genau die GUID, **ohne** das vorangestellte „Tenant ".
 - [ ] Nur das **Ticketsystem** ändern → Save → **kein** Restart-Banner, und die
       Änderung wirkt sofort in der nächsten Aktivierung.
 - [ ] Zwei Tenant-Karten gleichzeitig aufklappen → beide zeigen **ihre eigenen**

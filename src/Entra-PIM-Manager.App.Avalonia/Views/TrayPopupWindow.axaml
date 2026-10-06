@@ -389,14 +389,22 @@
 
           <!-- Configuration. The tenant id is shown, not edited: it is this card's
                identity, so changing it names a different tenant — that is a remove
-               and an add, not an edit. -->
+               and an add, not an edit. Selectable, because it is what an admin needs
+               for a deployment command; the label sits apart so a selection copies
+               the bare GUID. -->
           <StackPanel IsVisible="{Binding IsConfigExpanded}" Spacing="6" Margin="12,2,12,4">
-            <TextBlock FontFamily="Consolas, Cascadia Mono, monospace"
-                       FontSize="{DynamicResource FontSmall}"
-                       Foreground="{DynamicResource TextSecondaryBrush}"
-                       TextTrimming="CharacterEllipsis">
-              <Run Text="Tenant " Foreground="{DynamicResource TextTertiaryBrush}" /><Run Text="{Binding TenantId}" />
-            </TextBlock>
+            <Grid ColumnDefinitions="Auto,*">
+              <TextBlock Text="Tenant "
+                         FontFamily="Consolas, Cascadia Mono, monospace"
+                         FontSize="{DynamicResource FontSmall}"
+                         Foreground="{DynamicResource TextTertiaryBrush}" />
+              <SelectableTextBlock Grid.Column="1"
+                                   Text="{Binding TenantId}"
+                                   FontFamily="Consolas, Cascadia Mono, monospace"
+                                   FontSize="{DynamicResource FontSmall}"
+                                   Foreground="{DynamicResource TextSecondaryBrush}"
+                                   TextTrimming="CharacterEllipsis" />
+            </Grid>
             <TextBox Text="{Binding ClientIdDraft}"
                      PlaceholderText="Client id — 00000000-0000-0000-0000-000000000000"
                      FontSize="{DynamicResource FontBody}" />

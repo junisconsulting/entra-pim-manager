@@ -237,8 +237,9 @@ can paste into a ticket. Reach for this when sign-in fails in a locked-down netw
 
 **TENANTS** — one card per tenant: its App Registration, its ticket system, and the accounts signed
 into it. You can give an account a short alias ("EADM") instead of reading a long UPN everywhere,
-and drag tenants into the order you want. Changing an App Registration takes effect after a restart,
-and the app says so when it does.
+and drag tenants into the order you want. The gear on a card shows its tenant id, which you can
+select and copy. Changing an App Registration takes effect after a restart, and the app says so when
+it does.
 
 ## Updates
 

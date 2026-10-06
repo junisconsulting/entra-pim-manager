@@ -249,8 +249,9 @@ Anmeldung in einem abgeschotteten Netz scheitert.
 
 **TENANTS** — eine Karte pro Tenant: dessen App Registration, dessen Ticketsystem und die dort
 angemeldeten Konten. Du kannst einem Konto ein kurzes Kürzel geben („EADM"), statt überall einen
-langen UPN zu lesen, und die Tenants in deine Reihenfolge ziehen. Eine geänderte App Registration
-greift erst nach einem Neustart — die App sagt es dann auch.
+langen UPN zu lesen, und die Tenants in deine Reihenfolge ziehen. Das Zahnrad einer Karte zeigt
+ihre Tenant-ID, die du markieren und kopieren kannst. Eine geänderte App Registration greift erst
+nach einem Neustart — die App sagt es dann auch.
 
 ## Updates
 
