@@ -184,3 +184,28 @@ registrations nobody configured.
 Releases are **not code-signed** yet. In managed environments SmartScreen and Defender ASR rules
 can block a freshly published unsigned installer until it builds reputation. See the entry in
 [engineering-backlog.md](engineering-backlog.md) before planning a wide rollout.
+
+**How a block shows up in Intune.** The install fails with exit code 1 (`0x80070001`), and no
+`Entra-PIM-Manager` key appears under `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall`.
+Intune discards the script's output, so the reason is not in its logs. It is in the event log
+**Microsoft-Windows-PowerShell/Operational**, event 4100: `Start-Process` failed with "Access is
+denied". Defender records the block itself as event 1121 in
+**Microsoft-Windows-Windows Defender/Operational**, naming the rule and the file. Seen in the field
+with the ASR rule "Block executable files from running unless they meet a prevalence, age, or
+trusted list criterion" (`01443614-cd74-433a-b99e-2ecdc07bfc25`) in block mode.
+
+**What to exclude.** Add these as per-rule exclusions to the rule that blocked. A hash rule would
+have to be renewed with every release, and the Velopack stub and `Update.exe` are no exception:
+vpk patches both per app, so their hashes differ from the stock Velopack binaries. Exclusions do
+not take user environment variables, hence `C:\Users\*`.
+
+| Path | Started by |
+| --- | --- |
+| `C:\Windows\IMECache\*\Entra-PIM-Manager-win-Setup.exe` | the Intune install |
+| `C:\Users\*\AppData\Local\Entra-PIM-Manager\*\Entra-PIM-Manager.exe` | the install script and the install hook (`current\`) |
+| `C:\Users\*\AppData\Local\Entra-PIM-Manager\Entra-PIM-Manager.exe` | autostart and the Start menu (the stub) |
+| `C:\Users\*\AppData\Local\Entra-PIM-Manager\Update.exe` | self-update and uninstall |
+
+The first two are field-tested: with exactly those, the install went through. The other two follow
+from the install layout and are listed separately because it is unconfirmed whether `*\` also
+matches no folder at all.

@@ -66,6 +66,14 @@ blocked binary that kills the installed app. Signing fixes this durably: the blo
 trigger is literally "untrusted and unsigned", and reputation then attaches to the constant
 publisher instead of each release's day-old hash.
 
+Second field case 2026-10-06, through Intune: the ASR rule "Block executable files from running
+unless they meet a prevalence, age, or trusted list criterion"
+(`01443614-CD74-433A-B99E-2ECDC07BFC25`, block mode) denied `Start-Process` on a same-day Setup.exe
+in `IMECache` with "Access is denied". The install script exited 1 before Velopack wrote anything,
+and only PowerShell/Operational event 4100 named the cause. Per-rule path exclusions let it
+through; `docs/unattended-deployment.md` lists them. Velopack's own binaries are no way around
+this: vpk patches the stub and `Update.exe` per app, so their hashes are as new as the app's.
+
 **What makes the fix safe:** a junis code-signing certificate (OV/EV) provisioned as a CI secret,
 `build.ps1 -SignParams` wired into the release workflow on `windows-latest`, and one release
 verified with `Get-AuthenticodeSignature` = `Valid` on Setup.exe, Update.exe, the stub and the app
