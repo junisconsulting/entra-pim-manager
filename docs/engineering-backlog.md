@@ -373,3 +373,23 @@ wrong result on a path admins also use:
 tells "missing" from "unreadable", argv-correct quoting, deleting the fallback, `Guid.ToString()`
 for the client id, a reload before saving settings — and checklist 5d covers the script on a
 real device.
+
+## Account removal drops the store entry before the token purge
+
+**Evidence:** `MsalAuthService.RemoveAccountAsync` reads the enrollment's `AuthMethod`, removes the
+entry from `accounts.json`, and only then purges the MSAL account from the matching cache (broker
+or device code). Found 2026-10-06 in the review of "Remove tenant", which removes every account of
+a tenant through this path.
+
+**Why it matters:** when the purge throws after the store write — a locked cache file, a broker
+error — the enrollment is gone but its tokens are not. A retry finds no stored entry, defaults to
+`AuthMethod.Broker`, purges the broker cache (nothing there) and reports success. For a
+device-code enrollment the refresh token then stays in `msal-devicecode-{client-id}.cache` with
+nothing left that points at it; "Remove tenant" goes on to remove the registration as if it were
+clean.
+
+**What makes the fix safe:** purge first, then remove the store entry; compute `stillInUse` over
+the other enrollments, excluding the one being removed, instead of relying on it already being
+gone. A failed purge then leaves the enrollment listed, so the retry still knows its
+`AuthMethod`. It is MSAL code: follow the `msal-dotnet-desktop-wam` skill, and add Core tests for
+both orders of failure (store write vs. purge).

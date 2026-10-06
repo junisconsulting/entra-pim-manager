@@ -1,7 +1,9 @@
 namespace EntraPimManager.AppAvalonia.ViewModels;
 
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Configuration;
 
 /// <summary>
@@ -16,8 +18,10 @@ using EntraPimManager.Core.Configuration;
 /// <see cref="SettingsPanelViewModel.AttachAccountsHost"/> breaks the cycle:
 /// DI builds Settings first without a host, then Shell, and Shell attaches
 /// itself in its constructor.
+/// <para/>
+/// Observable because Settings disables its remove buttons while <see cref="IsBusy"/> is set.
 /// </remarks>
-public interface IAccountsHost
+public interface IAccountsHost : INotifyPropertyChanged
 {
     /// <summary>
     /// Enrolled accounts in stable order, wrapped for the row template. The tenant tree
@@ -32,4 +36,22 @@ public interface IAccountsHost
     /// slide-in has nothing left to ask.
     /// </summary>
     IRelayCommand<TenantSlot?> OpenAddAccountPanelCommand { get; }
+
+    /// <summary>
+    /// True while a refresh or a removal runs. Removing an account is refused then, so
+    /// anything that removes accounts has to wait for it to clear.
+    /// </summary>
+    bool IsBusy { get; }
+
+    /// <summary>
+    /// Removes the given enrollments one after another, each with its tokens, as one busy
+    /// operation — a refresh cannot slip in between two of them. Stops at the first failure
+    /// and shows the error itself.
+    /// </summary>
+    /// <param name="accounts">The enrollments to remove.</param>
+    /// <returns>
+    /// <c>true</c> when every account was removed; <c>false</c> when one failed or the host
+    /// was busy, in which case the caller must not carry on as if they were gone.
+    /// </returns>
+    Task<bool> RemoveAccountsAsync(IReadOnlyList<SignedInAccount> accounts);
 }

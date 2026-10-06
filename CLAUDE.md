@@ -101,6 +101,12 @@ from `CONTRIBUTING.md` work as documented; the flags above are the Linux-host ad
   half-visible smudge at 12-16 px, and nothing in the build catches it — the trap has already
   cost two rounds in `TrayPopupWindow.axaml` (the close x, the pin star). Vector icons come from
   the resource dictionary or not at all.
+- A button that changes state when clicked (armed → confirm, edit → save) stays **one** button
+  and switches its look by class (`Classes.x="{Binding …}"`), never two buttons swapped with
+  `IsVisible`. Hiding the focused element clears keyboard focus, so the next Escape reaches the
+  window's handler and hides the popup — found in the review of the two-step remove buttons.
+  Avalonia's `Button` also clicks on every Enter auto-repeat; `TrayPopupWindow` swallows those
+  in the tunnel phase, so a held key never presses a button twice.
 - Comment intent, not mechanics: the maintainers are identity admins as much as developers.
 
 ## Security conventions

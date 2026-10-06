@@ -98,12 +98,42 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 - [ ] Account entfernen, dessen ClientId noch von einem anderen Enrollment genutzt
       wird → dessen Cache bleibt; letztes Enrollment einer ClientId entfernen →
       MSAL-Account wird gepurgt.
-- [ ] Registration per ✕ auf der Tenant-Karte entfernen → Restart-Banner; nach
-      Neustart zeigt die Tenant-Gruppe „Sign-in for this account is no longer
-      valid…", und der Account lässt sich in Settings trotzdem entfernen.
-- [ ] **Die Karte bleibt dabei stehen**, solange noch ein Konto in diesem Tenant
-      angemeldet ist — mit Status „No App Registration — sign-in for this tenant
-      will fail". Ihre Konten dürfen **nicht** aus der Ansicht verschwinden.
+- [ ] **Kein ✕ mehr** im Kopf einer Tenant-Karte (zu- und aufgeklappt) und an keiner
+      Kontozeile. Entfernen gibt es nur noch im Bearbeiten: Zahnrad bzw. Stift.
+- [ ] Zahnrad → unter den Feldern links „Remove tenant", rechts „Cancel" und „Save".
+      Label ändern → **Cancel** → Konfiguration klappt zu; erneut öffnen → der
+      gespeicherte Wert steht wieder da.
+- [ ] „Remove tenant" **einmal** klicken → wird zu einem rot gefüllten „Click again
+      to remove". 5 s warten → wieder „Remove tenant". Erneut scharf schalten, dann
+      Cancel bzw. Zahnrad → ebenfalls zurückgesetzt. Tooltip sagt, dass aktive Rollen
+      bis zum Ablauf aktiv bleiben.
+- [ ] „Remove tenant" **zweimal** auf einem Tenant mit zwei Konten → Karte verschwindet,
+      Restart-Banner. `appsettings.local.json` ohne Eintrag, `settings.json` ohne
+      Ticketsystem des Tenants, `accounts.json` ohne beide Konten. Im App-Log steht pro
+      Konto eine Zeile „Account removed (oid …, tenant …, cloud …)" und **keine**
+      „Account removed without cache purge" — nur so sind auch die Tokens weg.
+- [ ] Zahnrad → „Remove tenant" scharf schalten → **Esc** → die Konfiguration klappt
+      zu, der Button ist zurückgesetzt, das Popup bleibt offen. Dasselbe mit dem Fokus
+      in einem der Textfelder **und** direkt nach dem Öffnen per Zahnrad (Fokus noch auf
+      dem Zahnrad). Bei zugeklappter Konfiguration schließt Esc das Popup wie bisher.
+- [ ] **Kein Entfernen in einer Geste:** Doppelklick auf „Remove tenant" → nur scharf
+      geschaltet, nichts entfernt. Mit Tab auf den Button, **Enter gedrückt halten**
+      (mehrere Sekunden) → bleibt bei „Click again to remove" bzw. fällt nach 5 s
+      zurück, entfernt nichts. Erst ein zweiter, eigener Klick nach kurzer Pause entfernt.
+- [ ] Karte ohne Registration (Eintrag von Hand aus `appsettings.local.json` löschen,
+      Neustart) → die Karte bleibt mit Status „No App Registration — sign-in for this
+      tenant will fail", ihre Konten bleiben sichtbar. „Remove tenant" ist trotzdem da
+      und entfernt Konten und Ticketsystem, ohne Restart-Banner.
+- [ ] **Teilfehler:** `accounts.json` schreibgeschützt setzen, dann „Remove tenant" →
+      Fehler-Toast „Remove account", Registration und Karte bleiben stehen.
+      Schreibschutz entfernen, erneut → klappt.
+- [ ] Während eines Refresh (Refresh-Button) eine Karte aufklappen **und** in einer
+      Kontozeile den Stift öffnen → „Remove tenant" und „Remove account" sind
+      deaktiviert (grau), bis er fertig ist. Ein vorher scharf geschalteter Button wird
+      beim Start des Refresh zurückgesetzt.
+- [ ] Hover über „Remove tenant"/„Remove account" → die Schrift bleibt rot. Scharf
+      geschaltet und gehovert → die Schrift bleibt weiß auf Rot (helles **und**
+      dunkles Theme).
 - [ ] Gleichen Tenant erneut hinzufügen (anderer Label) → ein Eintrag, nicht zwei.
 - [ ] Zahnrad auf einer Tenant-Karte → Konfiguration klappt auf, Client-ID, Label
       und Ticketsystem sind vorbelegt, die **Tenant-ID steht nur als Text da**
@@ -420,7 +450,12 @@ Aktivierung und beantragt sofort neu.
 > Rollennamen gefilterten Liste nichts wieder.
 
 - [ ] Settings → TENANTS: Stift-Icon in einer Kontozeile → die Namenszeile wird
-      zum Eingabefeld, der Cursor steht bereits darin, Text ist markiert.
+      zum Eingabefeld, der Cursor steht bereits darin, Text ist markiert. Darunter
+      „Remove account" links, „Cancel" und „Save" rechts; kein ✓ mehr.
+- [ ] „Remove account" einmal → „Click again to remove"; **Esc** (auch mit dem Fokus
+      auf dem Button) → Bearbeiten endet, Button zurückgesetzt, Popup bleibt offen.
+      Zweimal → das Konto verschwindet aus der Karte, der Hauptliste und den
+      Shortcuts.
 - [ ] „EADM" + Enter → die Zeile zeigt „EADM"; UPN- und Tenant-Zeile darunter
       bleiben **unverändert sichtbar**. Avatar-Initialen folgen dem Alias.
 - [ ] **Esc im Alias-Feld bricht nur die Umbenennung ab und schließt das Popup nicht.**

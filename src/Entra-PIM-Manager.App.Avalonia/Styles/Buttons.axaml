@@ -2,9 +2,14 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
   <!--
-    Five button variants for the Entra PIM Manager popup.
+    Six button variants for the Entra PIM Manager popup.
 
     - `primary`   accent-coloured primary CTA (one per view)
+    - `destructive` filled danger red, only for an armed destructive action
+                  ("Click again to remove") — not `danger`, which already
+                  modifies `icon` and would turn every danger icon button red.
+                  `ghost.dangertext` is its unarmed state: the same button
+                  switches classes, so it keeps the keyboard focus
     - `secondary` neutral surface, dezenter Border
     - `ghost`     transparent, hovered surface — for Cancel, Validate, Refresh-Text
     - `icon`      square 32x32, transparent, hover Surface2 — wraps a PathIcon
@@ -18,6 +23,7 @@
   <!-- ===== Common base ===== -->
 
   <Style Selector="Button.primary,
+                   Button.destructive,
                    Button.secondary,
                    Button.ghost,
                    Button.icon">
@@ -30,6 +36,7 @@
   </Style>
 
   <Style Selector="Button.primary /template/ ContentPresenter,
+                   Button.destructive /template/ ContentPresenter,
                    Button.secondary /template/ ContentPresenter,
                    Button.ghost /template/ ContentPresenter,
                    Button.icon /template/ ContentPresenter">
@@ -60,6 +67,29 @@
   <Style Selector="Button.primary:disabled /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
     <Setter Property="Opacity" Value="0.4" />
+  </Style>
+
+  <!-- ===== Destructive ===== -->
+  <!-- The armed state of a ghost.dangertext button. The foreground is pinned on the -->
+  <!-- ContentPresenter for hover and press: Fluent recolours it there, and the white -->
+  <!-- label would otherwise turn black on the red fill in the light theme.          -->
+
+  <Style Selector="Button.destructive">
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+    <Setter Property="Padding" Value="14,6" />
+  </Style>
+  <Style Selector="Button.destructive /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource DangerBrush}" />
+  </Style>
+  <Style Selector="Button.destructive:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource DangerBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+    <Setter Property="Opacity" Value="0.9" />
+  </Style>
+  <Style Selector="Button.destructive:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource DangerBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentForegroundBrush}" />
+    <Setter Property="Opacity" Value="0.8" />
   </Style>
 
   <!-- ===== Secondary ===== -->
@@ -97,6 +127,19 @@
   </Style>
   <Style Selector="Button.ghost:pointerover">
     <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+
+  <!-- Danger-text modifier: a ghost button whose label is a destructive action -->
+  <!-- ("Remove tenant"). Red at rest, and pinned red on the ContentPresenter   -->
+  <!-- for hover and press, where Fluent and ghost:pointerover would recolour   -->
+  <!-- it. Disabled still greys out through Fluent's :disabled rule.            -->
+
+  <Style Selector="Button.ghost.dangertext">
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+  </Style>
+  <Style Selector="Button.ghost.dangertext:pointerover /template/ ContentPresenter,
+                   Button.ghost.dangertext:pressed /template/ ContentPresenter">
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
   </Style>
 
   <!-- ===== Link ===== -->

@@ -28,7 +28,6 @@ public sealed partial class TenantNodeViewModel : ObservableObject
 {
     private readonly Func<string[]> _verifiedClientIds;
     private readonly Action<TenantNodeViewModel> _save;
-    private readonly Action<TenantNodeViewModel> _remove;
     private readonly Action<TenantNodeViewModel> _addAccount;
 
     /// <summary>True while the configuration disclosure is open. In memory only.</summary>
@@ -60,20 +59,22 @@ public sealed partial class TenantNodeViewModel : ObservableObject
         TenantSlot slot,
         Func<string[]> verifiedClientIds,
         Action<TenantNodeViewModel> save,
-        Action<TenantNodeViewModel> remove,
-        Action<TenantNodeViewModel> addAccount)
+        Func<TenantNodeViewModel, Task> remove,
+        Action<TenantNodeViewModel> addAccount,
+        Func<bool> isBusy)
     {
         ArgumentNullException.ThrowIfNull(slot);
         ArgumentNullException.ThrowIfNull(verifiedClientIds);
         ArgumentNullException.ThrowIfNull(save);
         ArgumentNullException.ThrowIfNull(remove);
         ArgumentNullException.ThrowIfNull(addAccount);
+        ArgumentNullException.ThrowIfNull(isBusy);
 
         Slot = slot;
         _verifiedClientIds = verifiedClientIds;
         _save = save;
-        _remove = remove;
         _addAccount = addAccount;
+        RemoveConfirmation = new ArmedConfirmation(() => remove(this), () => !isBusy());
 
         Accounts.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasAccounts));
     }
@@ -140,6 +141,13 @@ public sealed partial class TenantNodeViewModel : ObservableObject
 
     /// <summary>Save is allowed once the client id parses as a GUID.</summary>
     public bool CanSave => Guid.TryParse(ClientIdDraft, out _);
+
+    /// <summary>
+    /// The second click "Remove tenant" asks for. It sits inside the configuration rather
+    /// than as an X in the header, where it was read as "cancel" — and removed the
+    /// registration on the spot.
+    /// </summary>
+    public ArmedConfirmation RemoveConfirmation { get; }
 
     /// <summary>
     /// Applies the current configuration to this node in place. Only raises change
@@ -216,11 +224,22 @@ public sealed partial class TenantNodeViewModel : ObservableObject
         IsConfigExpanded = !IsConfigExpanded;
     }
 
+    /// <summary>Closes the configuration without saving, exactly like the gear does.</summary>
+    [RelayCommand]
+    private void CancelConfig() => IsConfigExpanded = false;
+
     [RelayCommand(CanExecute = nameof(CanSave))]
     private void Save() => _save(this);
 
-    [RelayCommand]
-    private void Remove() => _remove(this);
+    // Cancel, the gear and a successful Save all collapse the editor; none of them may
+    // leave an armed remove button behind for the next time it opens.
+    partial void OnIsConfigExpandedChanged(bool value)
+    {
+        if (!value)
+        {
+            RemoveConfirmation.Disarm();
+        }
+    }
 
     [RelayCommand]
     private void AddAccount() => _addAccount(this);

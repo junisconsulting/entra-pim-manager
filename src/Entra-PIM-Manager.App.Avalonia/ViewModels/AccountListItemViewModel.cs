@@ -29,7 +29,10 @@ public sealed partial class AccountListItemViewModel : ObservableObject
     [ObservableProperty]
     private string? _accountAlias;
 
-    /// <summary>True while the row's name line is swapped for the alias text box.</summary>
+    /// <summary>
+    /// True while the row's name line is swapped for the alias text box — and the only time
+    /// the row offers "Remove account", next to Cancel and Save.
+    /// </summary>
     [ObservableProperty]
     private bool _isRenaming;
 
@@ -41,19 +44,23 @@ public sealed partial class AccountListItemViewModel : ObservableObject
         SignedInAccount account,
         Action<AccountListItemViewModel, string?> rename,
         IRelayCommand<SignedInAccount?> select,
-        IAsyncRelayCommand<SignedInAccount?> remove)
+        Func<SignedInAccount, Task> remove,
+        Func<bool> isBusy)
     {
         ArgumentNullException.ThrowIfNull(account);
         ArgumentNullException.ThrowIfNull(rename);
         ArgumentNullException.ThrowIfNull(select);
         ArgumentNullException.ThrowIfNull(remove);
+        ArgumentNullException.ThrowIfNull(isBusy);
         Account = account;
         _rename = rename;
         SelectCommand = select;
-        RemoveCommand = remove;
+
+        // The shell's batch removal, with just this enrollment in it.
+        RemoveConfirmation = new ArmedConfirmation(() => remove(account), () => !isBusy());
     }
 
-    /// <summary>The underlying account — passed as the parameter of the two commands below.</summary>
+    /// <summary>The underlying account — the parameter of the shell's select command.</summary>
     public SignedInAccount Account { get; }
 
     /// <summary>
@@ -68,8 +75,11 @@ public sealed partial class AccountListItemViewModel : ObservableObject
     /// </remarks>
     public IRelayCommand<SignedInAccount?> SelectCommand { get; }
 
-    /// <summary>Removes this enrollment. See <see cref="SelectCommand"/> for why it lives here.</summary>
-    public IAsyncRelayCommand<SignedInAccount?> RemoveCommand { get; }
+    /// <summary>
+    /// "Remove account" and the second click it asks for. Disabled while the shell is busy,
+    /// which would silently refuse the removal.
+    /// </summary>
+    public ArmedConfirmation RemoveConfirmation { get; }
 
     /// <summary>
     /// Name line of the row (and the source of the avatar initials): the alias
@@ -116,6 +126,15 @@ public sealed partial class AccountListItemViewModel : ObservableObject
 
     [RelayCommand]
     private void CancelRename() => IsRenaming = false;
+
+    // Save, Cancel and Escape all end the editing; none may leave the button armed.
+    partial void OnIsRenamingChanged(bool value)
+    {
+        if (!value)
+        {
+            RemoveConfirmation.Disarm();
+        }
+    }
 
     partial void OnTenantNameChanged(string? value) => OnPropertyChanged(nameof(TenantLabel));
 

@@ -38,6 +38,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     private readonly IShortcutService _shortcuts;
     private readonly EntraPimManagerOptions _options;
     private readonly INetworkDiagnosticsService _networkDiagnostics;
+    private readonly IToastService _toastService;
     private readonly ILogger<SettingsPanelViewModel> _logger;
 
     /// <summary>
@@ -190,6 +191,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         IShortcutService shortcuts,
         IOptions<EntraPimManagerOptions> options,
         INetworkDiagnosticsService networkDiagnostics,
+        IToastService toastService,
         ILogger<SettingsPanelViewModel> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -198,6 +200,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         _shortcuts = shortcuts;
         _options = options.Value;
         _networkDiagnostics = networkDiagnostics;
+        _toastService = toastService;
         _logger = logger;
 
         _selectedTheme = ThemeOptions[0];
@@ -279,8 +282,9 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
     /// <summary>
     /// The tenants, each with its registration and the accounts signed into it. The
-    /// union of what is configured and what is enrolled: removing a registration leaves
-    /// its accounts in place by design, and they must still have a card to sit under.
+    /// union of what is configured and what is enrolled: "Remove tenant" takes both, but a
+    /// registration removed outside the app — a hand edit, the install script — leaves its
+    /// accounts behind, and they still need a card to sit under and be removed from.
     /// </summary>
     public ObservableCollection<TenantNodeViewModel> Nodes { get; } = [];
 
@@ -320,6 +324,16 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(host);
         _accountsHost = host;
         _accountsHost.Accounts.CollectionChanged += (_, _) => SyncTenantNodes();
+        _accountsHost.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(IAccountsHost.IsBusy))
+            {
+                foreach (var node in Nodes)
+                {
+                    node.RemoveConfirmation.Refresh();
+                }
+            }
+        };
         SyncTenantNodes();
     }
 
@@ -430,7 +444,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         foreach (var slot in TenantSlot.Merge(accountSlots, registrationSlots))
         {
             var node = Nodes.FirstOrDefault(n => string.Equals(n.Key, slot.Key, StringComparison.Ordinal))
-                ?? new TenantNodeViewModel(slot, VerifiedClientIds, SaveNode, RemoveNode, AddAccountToNode);
+                ?? new TenantNodeViewModel(slot, VerifiedClientIds, SaveNode, RemoveNodeAsync, AddAccountToNode, () => _accountsHost?.IsBusy ?? false);
 
             // Sign-in needs both: an entry the user has not removed, and one the startup
             // configuration already knew about. A removal disables the button before the
@@ -527,33 +541,59 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Removes a tenant's registration from the per-user config. Accounts already
-    /// enrolled through it keep their entries and their card; after the restart they have
-    /// no registration to authenticate with, and the card says so.
+    /// Removes a tenant completely: every account enrolled in it, with its tokens, then its
+    /// registration from the per-user config, then its ticketing system.
     /// </summary>
-    private void RemoveNode(TenantNodeViewModel node)
+    /// <remarks>
+    /// Accounts go first, and a failure there stops the removal before the registration is
+    /// touched — the host has already said why, and the card stays for a retry. The token
+    /// purge resolves the MSAL client through the registration, so a registration removed
+    /// ahead of a failed account would, after the next restart, leave that account's tokens
+    /// with nothing to purge them through. A purge that itself fails is not caught on a
+    /// retry: see "Account removal drops the store entry before the token purge" in
+    /// docs/engineering-backlog.md. Aliases, pins, favourites and scope sets stay on disk:
+    /// invisible without the accounts, and back if the tenant is added again.
+    /// </remarks>
+    private async Task RemoveNodeAsync(TenantNodeViewModel node)
     {
-        try
+        var accounts = node.Accounts.Select(a => a.Account).ToList();
+        if (accounts.Count > 0 && (_accountsHost is null || !await _accountsHost.RemoveAccountsAsync(accounts)))
         {
-            LocalConfigStore.RemoveTenantRegistration(AppPaths.LocalConfigFile, node.Cloud, node.TenantId);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to remove the App Registration for cloud {Cloud}, tenant {TenantId}", node.Cloud, node.TenantId);
             return;
         }
 
         var existing = _registrations.FirstOrDefault(r => SlotOf(r)?.Key == node.Key);
         if (existing is not null)
         {
+            try
+            {
+                LocalConfigStore.RemoveTenantRegistration(AppPaths.LocalConfigFile, node.Cloud, node.TenantId);
+            }
+            catch (Exception ex)
+            {
+                // The accounts are already gone at this point, so a log line alone would leave
+                // the user looking at an emptied card that silently refuses to go away.
+                _logger.LogError(ex, "Failed to remove the App Registration for cloud {Cloud}, tenant {TenantId}", node.Cloud, node.TenantId);
+                var detail = accounts.Count > 0
+                    ? "Its accounts were removed, but its App Registration could not be removed from appsettings.local.json."
+                    : "Its App Registration could not be removed from appsettings.local.json.";
+                _toastService.ShowError("Remove tenant", $"{detail} Check that the file is writable and valid JSON, then try again.");
+                return;
+            }
+
             _registrations.Remove(existing);
+            ShowRestartPrompt = true;
+            _logger.LogInformation(
+                "App Registration removed for cloud {Cloud}, tenant {TenantId}; awaiting restart.",
+                node.Cloud,
+                node.TenantId);
         }
 
-        ShowRestartPrompt = true;
-        _logger.LogInformation(
-            "App Registration removed for cloud {Cloud}, tenant {TenantId}; awaiting restart.",
-            node.Cloud,
-            node.TenantId);
+        if (_userSettings.Current.TicketSystemFor(node.TenantId) is not null)
+        {
+            SaveTicketSystem(node.TenantId, null);
+        }
+
         SyncTenantNodes();
     }
 

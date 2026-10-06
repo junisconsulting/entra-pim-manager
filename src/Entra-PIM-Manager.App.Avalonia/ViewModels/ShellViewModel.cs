@@ -491,6 +491,92 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     public Task ReactivateCurrentExpiryAlertAsync()
         => _currentAlertRow is { } row ? ReactivateAsync(row) : Task.CompletedTask;
 
+    /// <inheritdoc />
+    public async Task<bool> RemoveAccountsAsync(IReadOnlyList<SignedInAccount> accounts)
+    {
+        ArgumentNullException.ThrowIfNull(accounts);
+        if (IsBusy)
+        {
+            return false;
+        }
+
+        IsBusy = true;
+        try
+        {
+            foreach (var account in accounts)
+            {
+                await _authService.RemoveAccountAsync(account.ObjectId, account.TenantId, account.Cloud);
+
+                // Signing in again after the Azure consent was finally granted is the
+                // obvious remedy, and the backoff key would otherwise survive it.
+                _aggregator.ForgetAzureBackoff(account);
+
+                var item = Accounts.FirstOrDefault(a => IsSameEnrollment(a.Account, account));
+                if (item is not null)
+                {
+                    Accounts.Remove(item);
+                }
+
+                if (ActiveAccount is { } current && IsSameEnrollment(current, account))
+                {
+                    // Hand over to an account outside this batch. The next one in it would
+                    // switch — and persist — the active account once per removal, and back-to-
+                    // back settings writes can overtake each other and revert one another.
+                    ActiveAccount = Accounts
+                        .Select(a => a.Account)
+                        .FirstOrDefault(a => !accounts.Any(b => IsSameEnrollment(a, b)));
+                }
+
+                // Drop the removed enrollment's group + active rows. Other
+                // enrollments of the same identity in different tenants stay.
+                var staleGroup = EligibilityGroups
+                    .FirstOrDefault(g => IsSameEnrollment(g.Account, account));
+                if (staleGroup is not null)
+                {
+                    EligibilityGroups.Remove(staleGroup);
+                }
+
+                var staleActive = ActiveAssignments
+                    .Where(a => IsSameEnrollment(a.Account, account))
+                    .ToList();
+                foreach (var row in staleActive)
+                {
+                    ActiveAssignments.Remove(row);
+                }
+
+                // Per account rather than once after the loop, so a failure part-way leaves
+                // the derived state matching the accounts that are already gone. The
+                // shortcut sections are derived from EligibilityGroups, so they only
+                // drop the removed enrollment's rows when something rebuilds them — and
+                // the refresh that normally does is stopped below once the last account
+                // is gone. Without this a pinned row outlives its account, sits next to
+                // the "no accounts" empty state, and routes a click at an enrollment
+                // that no longer exists.
+                RebuildShortcutSections();
+
+                UpdateActiveCount();
+                UpdateEligibleCount();
+                IsSignedIn = ActiveAccount is not null;
+                if (Accounts.Count == 0)
+                {
+                    _refreshTimer.Stop();
+                }
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Remove account failed");
+            _toastService.ShowError("Remove account", PimErrorMapper.MapException(ex).Message);
+            return false;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     /// <summary>Refreshes eligibilities and active assignments across all enrolled accounts.</summary>
     [RelayCommand]
     private async Task RefreshAsync()
@@ -539,78 +625,6 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         catch (Exception ex)
         {
             _logger.LogError(ex, "Refresh failed");
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    [RelayCommand]
-    private async Task RemoveAccountAsync(SignedInAccount? account)
-    {
-        if (account is null || IsBusy)
-        {
-            return;
-        }
-
-        IsBusy = true;
-        try
-        {
-            await _authService.RemoveAccountAsync(account.ObjectId, account.TenantId, account.Cloud);
-
-            // Signing in again after the Azure consent was finally granted is the
-            // obvious remedy, and the backoff key would otherwise survive it.
-            _aggregator.ForgetAzureBackoff(account);
-
-            var item = Accounts.FirstOrDefault(a => IsSameEnrollment(a.Account, account));
-            if (item is not null)
-            {
-                Accounts.Remove(item);
-            }
-
-            if (ActiveAccount is { } current && IsSameEnrollment(current, account))
-            {
-                ActiveAccount = Accounts.FirstOrDefault()?.Account;
-            }
-
-            // Drop the removed enrollment's group + active rows. Other
-            // enrollments of the same identity in different tenants stay.
-            var staleGroup = EligibilityGroups
-                .FirstOrDefault(g => IsSameEnrollment(g.Account, account));
-            if (staleGroup is not null)
-            {
-                EligibilityGroups.Remove(staleGroup);
-            }
-
-            var staleActive = ActiveAssignments
-                .Where(a => IsSameEnrollment(a.Account, account))
-                .ToList();
-            foreach (var row in staleActive)
-            {
-                ActiveAssignments.Remove(row);
-            }
-
-            // The shortcut sections are derived from EligibilityGroups, so they only
-            // drop the removed enrollment's rows when something rebuilds them — and
-            // the refresh that normally does is stopped below once the last account
-            // is gone. Without this a pinned row outlives its account, sits next to
-            // the "no accounts" empty state, and routes a click at an enrollment
-            // that no longer exists.
-            RebuildShortcutSections();
-
-            UpdateActiveCount();
-            UpdateEligibleCount();
-            IsSignedIn = ActiveAccount is not null;
-            if (Accounts.Count == 0)
-            {
-                _refreshTimer.Stop();
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Remove account failed");
-            _toastService.ShowError("Remove account", PimErrorMapper.MapException(ex).Message);
         }
         finally
         {
@@ -818,6 +832,15 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     }
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
+
+    // The rows' remove buttons are disabled while busy — the removal would be refused.
+    partial void OnIsBusyChanged(bool value)
+    {
+        foreach (var item in Accounts)
+        {
+            item.RemoveConfirmation.Refresh();
+        }
+    }
 
     partial void OnEligibleCountChanged(int value) => OnPropertyChanged(nameof(StatsLabel));
 
@@ -1669,7 +1692,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             Accounts.Remove(existing);
         }
 
-        var item = new AccountListItemViewModel(account, RenameAccount, SelectAccountCommand, RemoveAccountCommand)
+        var item = new AccountListItemViewModel(account, RenameAccount, SelectAccountCommand, a => RemoveAccountsAsync([a]), () => IsBusy)
         {
             AccountAlias = AliasFor(account),
         };

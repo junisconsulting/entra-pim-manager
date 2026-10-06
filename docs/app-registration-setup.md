@@ -141,10 +141,15 @@ and applies it on the next restart (**Restart now** in the banner). Repeat for
 every tenant you sign in to — with the same client id for every tenant a
 multi-tenant registration is consented in.
 
-Click an entry to edit it (the form switches to **Save**; changing the tenant id
-or cloud moves the entry); ✕ removes it. An account that was enrolled through a
-removed entry keeps its place in the list but can no longer sign in — its group
-says so; remove the account or add the entry again.
+The gear on a tenant's card opens its entry: client id, label and ticket system →
+**Save**, or **Cancel**. Tenant id and cloud are the card itself and cannot be
+edited — a different tenant id or cloud is a different tenant: add it as a new
+one, and remove the old card if it is no longer needed. **Remove tenant**
+in the same place removes the tenant completely — its accounts and their
+sign-ins, its App Registration and its ticket system — and asks for a second
+click. An entry removed outside the app (a hand edit of the file) leaves its
+accounts on their card, which says they can no longer sign in; remove the tenant
+or add the entry again.
 
 The green **Verified** badge only appears once an account has actually signed in
 with that entry; it is per registration, because a sign-in with one client id

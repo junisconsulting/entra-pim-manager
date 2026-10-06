@@ -29,12 +29,17 @@ public partial class TrayPopupWindow : Window
     private TenantNodeViewModel? _potentialDragSource;
     private PointerPressedEventArgs? _potentialDragSourceEvent;
     private Point _dragStartPoint;
+    private bool _enterHeld;
 
     public TrayPopupWindow()
     {
         InitializeComponent();
         Deactivated += OnDeactivated;
         KeyDown += OnKeyDown;
+
+        // Tunnel, so these see Enter before the focused button turns it into a click.
+        AddHandler(KeyDownEvent, OnEnterRepeatFilter, RoutingStrategies.Tunnel);
+        AddHandler(KeyUpEvent, OnEnterReleased, RoutingStrategies.Tunnel);
     }
 
     /// <summary>
@@ -48,7 +53,41 @@ public partial class TrayPopupWindow : Window
     private void OnDeactivated(object? sender, EventArgs e)
     {
         LastHiddenByDeactivation = DateTimeOffset.UtcNow;
+
+        // The key-up of a held Enter goes to whatever window has the focus now.
+        _enterHeld = false;
         Hide();
+    }
+
+    /// <summary>
+    /// Swallows Enter's auto-repeat on buttons. Avalonia's Button clicks on every KeyDown of
+    /// Enter, so holding it presses the focused button over and over — and gets through the
+    /// two-step "Click again to remove" in one gesture, whatever the confirmation's own wait,
+    /// because the first repeat only arrives after the system repeat delay (up to a second).
+    /// Only the first KeyDown of each press reaches the button.
+    /// </summary>
+    private void OnEnterRepeatFilter(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+        {
+            return;
+        }
+
+        if (_enterHeld && e.Source is Button)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        _enterHeld = true;
+    }
+
+    private void OnEnterReleased(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            _enterHeld = false;
+        }
     }
 
     private void InitializeComponent()
@@ -158,6 +197,11 @@ public partial class TrayPopupWindow : Window
     /// otherwise Escape bubbles to <see cref="OnKeyDown"/> and hides the whole
     /// popup in the middle of a rename.
     /// </summary>
+    /// <remarks>
+    /// Wired to the alias box and to the Remove / Cancel / Save line under it, so Escape
+    /// also cancels — and disarms "Remove account" — with the focus on one of those
+    /// buttons. Enter on a focused button never gets here: the button handles it as a click.
+    /// </remarks>
     private void OnAliasBoxKeyDown(object? sender, KeyEventArgs e)
     {
         if (sender is not Control control || control.DataContext is not AccountListItemViewModel vm)
@@ -173,6 +217,27 @@ public partial class TrayPopupWindow : Window
         else if (e.Key == Key.Escape)
         {
             vm.CancelRenameCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Escape on a card whose configuration is open cancels it — which also disarms
+    /// "Remove tenant" — instead of bubbling to <see cref="OnKeyDown"/> and hiding the
+    /// popup with the editor still open, the same way the alias editing behaves.
+    /// </summary>
+    /// <remarks>
+    /// On the whole card, not just the configuration: right after the gear opens it, the
+    /// focus is still on the gear in the header. An alias edit inside the card handles its
+    /// own Escape first, so that one only ends the rename.
+    /// </remarks>
+    private void OnTenantCardKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape
+            && sender is Control control
+            && control.DataContext is TenantNodeViewModel { IsConfigExpanded: true } vm)
+        {
+            vm.CancelConfigCommand.Execute(null);
             e.Handled = true;
         }
     }

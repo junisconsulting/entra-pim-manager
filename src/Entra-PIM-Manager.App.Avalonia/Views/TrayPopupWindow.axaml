@@ -150,7 +150,7 @@
     </DataTemplate>
 
     <!-- One enrolled account, rendered inside its tenant card. The row reaches its
-         own commands (SelectCommand / RemoveCommand) rather than walking up to an
+         own commands (SelectCommand, RemoveConfirmation) rather than walking up to an
          enclosing items control: nested inside a tenant, that walk would find the
          inner control and silently bind to the wrong data context. -->
     <DataTemplate x:Key="AccountRowTemplate" x:DataType="vm:AccountListItemViewModel">
@@ -159,8 +159,11 @@
               BorderBrush="{DynamicResource BorderSubtleBrush}"
               BorderThickness="1"
               Margin="0,0,0,4">
-        <Grid ColumnDefinitions="*,Auto,Auto">
+        <!-- The alias box and the pencil stay siblings in this grid: the pencil's click
+             handler finds the box there to focus it. -->
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
           <TextBox Grid.Column="0"
+                   Grid.ColumnSpan="2"
                    Margin="6,4"
                    FontSize="{DynamicResource FontSmall}"
                    PlaceholderText="Alias, e.g. EADM"
@@ -224,9 +227,10 @@
           <Button Grid.Column="1"
                   Classes="ghost"
                   Padding="10,6"
+                  CornerRadius="0,6,6,0"
                   IsVisible="{Binding !IsRenaming}"
                   Click="OnRenameAccountClick"
-                  ToolTip.Tip="Rename this account">
+                  ToolTip.Tip="Rename or remove this account">
             <TextBlock Text="&#x270E;"
                        FontSize="13"
                        Foreground="{DynamicResource TextTertiaryBrush}"
@@ -234,35 +238,45 @@
                        HorizontalAlignment="Center" />
           </Button>
 
-          <Button Grid.Column="1"
-                  Classes="ghost"
-                  Padding="10,6"
-                  IsVisible="{Binding IsRenaming}"
-                  Command="{Binding CommitRenameCommand}"
-                  ToolTip.Tip="Save the alias (Enter). An empty field clears it.">
-            <TextBlock Text="&#x2713;"
-                       FontSize="13"
-                       FontWeight="SemiBold"
-                       Foreground="{DynamicResource AccentBrush}"
-                       VerticalAlignment="Center"
-                       HorizontalAlignment="Center" />
-          </Button>
-
-          <Button Grid.Column="2"
-                  Classes="ghost"
-                  Padding="10,6"
-                  CornerRadius="0,6,6,0"
-                  IsVisible="{Binding !IsRenaming}"
-                  Command="{Binding RemoveCommand}"
-                  CommandParameter="{Binding Account}"
-                  ToolTip.Tip="Remove this account">
-            <TextBlock Text="&#x2715;"
-                       FontSize="12"
-                       FontWeight="SemiBold"
-                       Foreground="{DynamicResource DangerBrush}"
-                       VerticalAlignment="Center"
-                       HorizontalAlignment="Center" />
-          </Button>
+          <!-- Editing is the only place an account is removed, as with a tenant's
+               configuration: an X on the row sat one click from losing the sign-in.
+               The key handler is on this line too, so Escape on a focused button still
+               cancels instead of hiding the whole popup. -->
+          <Grid Grid.Row="1"
+                Grid.ColumnSpan="2"
+                ColumnDefinitions="Auto,*,Auto,Auto"
+                Margin="6,0,6,6"
+                IsVisible="{Binding IsRenaming}"
+                KeyDown="OnAliasBoxKeyDown">
+            <!-- One button, as on the tenant card: it keeps the focus when it arms. -->
+            <Button Grid.Column="0"
+                    Classes="dangertext"
+                    Classes.ghost="{Binding !RemoveConfirmation.IsArmed}"
+                    Classes.destructive="{Binding RemoveConfirmation.IsArmed}"
+                    Padding="8,4"
+                    FontSize="{DynamicResource FontSmall}"
+                    Command="{Binding RemoveConfirmation.Command}"
+                    ToolTip.Tip="Removes this account and its sign-in from this device. Active roles stay active until they expire.">
+              <Panel>
+                <TextBlock Text="Remove account" IsVisible="{Binding !RemoveConfirmation.IsArmed}" />
+                <TextBlock Text="Click again to remove" IsVisible="{Binding RemoveConfirmation.IsArmed}" />
+              </Panel>
+            </Button>
+            <Button Grid.Column="2"
+                    Classes="secondary"
+                    Padding="10,4"
+                    Margin="0,0,6,0"
+                    FontSize="{DynamicResource FontSmall}"
+                    Content="Cancel"
+                    Command="{Binding CancelRenameCommand}" />
+            <Button Grid.Column="3"
+                    Classes="primary"
+                    Padding="12,4"
+                    FontSize="{DynamicResource FontSmall}"
+                    Content="Save"
+                    Command="{Binding CommitRenameCommand}"
+                    ToolTip.Tip="Save the alias (Enter). An empty field clears it." />
+          </Grid>
         </Grid>
       </Border>
     </DataTemplate>
@@ -280,10 +294,11 @@
               Padding="0,0,0,6"
               DragDrop.AllowDrop="True"
               DragDrop.DragOver="OnTenantRowDragOver"
-              DragDrop.Drop="OnTenantRowDrop">
+              DragDrop.Drop="OnTenantRowDrop"
+              KeyDown="OnTenantCardKeyDown">
         <StackPanel Spacing="6">
 
-          <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+          <Grid ColumnDefinitions="Auto,*,Auto">
             <!-- The grip hides without accounts (there is nothing to reorder), but its
                  22 px column always stays: it is the card's left gutter, and everything
                  below aligns to it (Margin 12 + the buttons' 10 px padding). Collapsing
@@ -360,28 +375,13 @@
             <Button Grid.Column="2"
                     Classes="ghost"
                     Padding="10,6"
+                    CornerRadius="0,6,0,0"
                     VerticalAlignment="Top"
                     Command="{Binding ToggleConfigCommand}"
                     ToolTip.Tip="App Registration and ticket system for this tenant">
               <TextBlock Text="&#x2699;"
                          FontSize="14"
                          Foreground="{DynamicResource TextTertiaryBrush}"
-                         VerticalAlignment="Center"
-                         HorizontalAlignment="Center" />
-            </Button>
-
-            <Button Grid.Column="3"
-                    Classes="ghost"
-                    Padding="10,6"
-                    CornerRadius="0,6,0,0"
-                    VerticalAlignment="Top"
-                    IsVisible="{Binding HasRegistration}"
-                    Command="{Binding RemoveCommand}"
-                    ToolTip.Tip="Remove this tenant's App Registration. Accounts already signed in keep their entry.">
-              <TextBlock Text="&#x2715;"
-                         FontSize="12"
-                         FontWeight="SemiBold"
-                         Foreground="{DynamicResource DangerBrush}"
                          VerticalAlignment="Center"
                          HorizontalAlignment="Center" />
             </Button>
@@ -415,10 +415,35 @@
                      PlaceholderText="Ticket system (optional) — e.g. ServiceNow"
                      ToolTip.Tip="Prefilled into the activation form for this tenant when a role requires a ticket. Takes effect immediately and stays editable per activation."
                      FontSize="{DynamicResource FontBody}" />
-            <Button Classes="primary"
-                    HorizontalAlignment="Right"
-                    Content="Save"
-                    Command="{Binding SaveCommand}" />
+            <!-- Removing lives here, next to Cancel and Save, instead of as an X in the
+                 header: users read that X as "cancel" and lost the registration with one
+                 click. The first press arms the button, the second removes. -->
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+              <!-- One button that changes its look when armed, never a second one swapped
+                   in: hiding the button that has the focus would send Escape to the
+                   window, which hides the popup with the button still armed. -->
+              <Button Grid.Column="0"
+                      Classes="dangertext"
+                      Classes.ghost="{Binding !RemoveConfirmation.IsArmed}"
+                      Classes.destructive="{Binding RemoveConfirmation.IsArmed}"
+                      Padding="10,5"
+                      Command="{Binding RemoveConfirmation.Command}"
+                      ToolTip.Tip="Removes this tenant: its accounts and their sign-ins, its App Registration and its ticket system. Active roles stay active until they expire.">
+                <Panel>
+                  <TextBlock Text="Remove tenant" IsVisible="{Binding !RemoveConfirmation.IsArmed}" />
+                  <TextBlock Text="Click again to remove" IsVisible="{Binding RemoveConfirmation.IsArmed}" />
+                </Panel>
+              </Button>
+              <Button Grid.Column="2"
+                      Classes="secondary"
+                      Content="Cancel"
+                      Command="{Binding CancelConfigCommand}"
+                      Margin="0,0,8,0" />
+              <Button Grid.Column="3"
+                      Classes="primary"
+                      Content="Save"
+                      Command="{Binding SaveCommand}" />
+            </Grid>
           </StackPanel>
 
           <ItemsControl ItemsSource="{Binding Accounts}"
