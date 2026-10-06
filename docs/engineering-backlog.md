@@ -339,3 +339,37 @@ not a detail** — it requires admin consent in every tenant again, and 0.9.0 al
 budget on Azure Service Management. The `entra-pim-graph-api` skill warns that `$expand` fails
 silently on some PIM surfaces, so verify against a live tenant before relying on it, and keep the
 id as the fallback the way `TenantLabelFormatter` falls back to the tenant GUID.
+
+## Deployment path: edge cases outside the Intune flow
+
+**Evidence:** a code review of the endpoint scripts on 2026-10-06, while checking the Intune
+package. None of them touches an Intune install on a fresh profile with `-NoStart`; each is a silent
+wrong result on a path admins also use:
+
+- `scripts/install-entra-pim-manager.ps1`, step 6: `Get-Process -Name Entra-PIM-Manager` returns
+  the instances of every session. On a multi-session host (RDS/AVD) a run without `-NoStart`
+  either fails at `Stop-Process` ("Access is denied" → exit 1 after the config was written) or, run
+  elevated, ends other users' tray apps.
+- `Program.SaveTicketSystem`: `UserSettingsService.LoadAsync` falls back to defaults when
+  `settings.json` cannot be read or parsed, and the deployment call then saves those defaults plus
+  the ticket system over the user's file — a locked or damaged file loses durations and favourites.
+- The script's `$quote` escapes `"` but not a trailing backslash: `-Label 'Contoso\'` makes the
+  label swallow the next argument, and the script still reports success.
+- The launcher-stub fallback in step 3 is dead and would be wrong if reached. Velopack's install
+  fails when `current\<main exe>` is missing, and the stub only spawns `Update.exe start -- <args>`
+  and returns 0 at once (Velopack 1.2.0 `src/bins/src/stub.rs`). The "unverified" wording about the
+  stub in the script and in `docs/unattended-deployment.md` can be replaced by that fact.
+- The app stores the client id as typed — `DeploymentArguments.Parse` (`ClientId = clientId.Trim()`)
+  and the Settings → TENANTS save path alike — so a braced client id passes validation and reaches
+  sign-in with its braces. `install-entra-pim-manager.ps1` normalises both ids before the call, but
+  the raw `--client-id` command (step 2, and the `AllSigned` fallback) does not. The root fix is
+  `Guid.ToString()` in both save paths; the script's normalisation is then redundant.
+- A ticket system written by `--ticket-system` while the tray app runs is lost on the instance's
+  next settings save: it rewrites its whole in-memory `UserSettings`, and the script's step 5 only
+  checks `appsettings.local.json`. `docs/unattended-deployment.md` says to configure the ticket
+  system with the app closed; a fix would reload or merge before saving.
+
+**What makes the fix safe:** each fix is local — a filter on the current `SessionId`, a load that
+tells "missing" from "unreadable", argv-correct quoting, deleting the fallback, `Guid.ToString()`
+for the client id, a reload before saving settings — and checklist 5d covers the script on a
+real device.

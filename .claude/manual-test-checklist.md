@@ -579,6 +579,10 @@ gesetzt, mindestens ein Konto enrolled), dann die neue Version darüber installi
       → läuft ohne Fehler durch und meldet „Done." Danach ab- und wieder anmelden →
       App startet über Autostart, zeigt **nicht** den Konfigurations-CTA, und der
       Tenant steht im „Sign in with"-Picker.
+- [ ] **GUID-Schreibweise:** `-TenantId '{<GUID in Großbuchstaben>}'` (mit Klammern) →
+      Exit-Code `0`, „Done.", in `appsettings.local.json` steht die Tenant-ID klein und
+      ohne Klammern. Ohne die Normalisierung im Skript schlägt hier dessen Prüfschritt fehl
+      — unter Intune hieße das: Installation „fehlgeschlagen", Wiederholung.
 - [ ] **Mehrwortiges Label:** `-Label "junis DEV"` → in der Tenant-Karte steht
       „junis DEV", nicht „junis". Fällt das Quoting im Skript weg, kommen bei der App
       zwei Argumente an und alles ab dem Leerzeichen wird stillschweigend verworfen.
@@ -629,7 +633,8 @@ gesetzt, mindestens ein Konto enrolled), dann die neue Version darüber installi
       the pinned SHA256". Hash zurücksetzen.
 - [ ] **App anlegen:** Windows app (Win32), Paket hochladen. Install-Kommando mit
       Tenant-/Client-ID und `-NoStart`, Uninstall-Kommando
-      `uninstall-entra-pim-manager.cmd`, Install behavior **User**, Detection Registry
+      `uninstall-entra-pim-manager.cmd`, Install behavior **User**, Requirements x64 und
+      mindestens Windows 10 1809, Detection Registry
       `DisplayVersion` **≥** Basisversion des Testbuilds (`0.11.1` für
       `0.11.1-local.*`), Logo `app-registration-logo.png`.
 - [ ] **Installieren:** einem Testnutzer zuweisen → Intune bzw. Company Portal meldet

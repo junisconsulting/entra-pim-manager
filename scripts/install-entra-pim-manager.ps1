@@ -34,7 +34,7 @@
 .PARAMETER TicketSystem
     Optional ticketing system for this tenant, e.g. "ServiceNow". Prefilled into the
     activation form for every user in the tenant. Stored in settings.json rather than
-    with the registration, and applies without a restart.
+    with the registration; like the registration it takes effect at the next app start.
 
 .PARAMETER NoStart
     Do not launch the app when finished. Use this for an unattended rollout that should
@@ -78,6 +78,13 @@ if (-not ($ClientId -as [guid])) {
 if ($Cloud -notin @("Global", "China")) {
     throw "Cloud must be 'Global' or 'China', got '$Cloud'."
 }
+
+# Pass and compare the canonical form. The app accepts any GUID format but stores the tenant
+# id as Guid.ToString(), so a braced or 32-digit tenant id would be written fine and then fail
+# the check in step 5 - an install Intune would report as failed and retry. The client id it
+# stores as given, so a braced one would reach sign-in with its braces.
+$TenantId = ([guid]$TenantId).ToString()
+$ClientId = ([guid]$ClientId).ToString()
 
 # 2. Install. Silent means no dialogs - and no app launch either, which is exactly why
 #    the configuration below is a second, separate call.

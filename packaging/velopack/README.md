@@ -61,9 +61,11 @@ nichts — beide räumt der `OnBeforeUninstallFastCallback`-Hook in `Program.cs`
 
 Der Hook feuert **ausschließlich** bei `--veloapp-uninstall`. Ein Update läuft über den
 separaten `--veloapp-updated`-Hook (in `VelopackApp.Run()` ein eigener Dictionary-Eintrag),
-Konfiguration und Anmeldungen überleben Updates also. Velopack gibt dem Hook 30 Sekunden
-und wertet eine geworfene Exception als **gescheiterte Deinstallation** (`Process.Exit(-1)`) —
-deshalb ist jeder Schritt best effort und schluckt seine Fehler.
+Konfiguration und Anmeldungen überleben Updates also. Velopack (1.2) gibt dem Hook 60 Sekunden
+und wertet sein Ergebnis nicht aus: eine geworfene Exception beendet nur den Hook
+(`Process.Exit(-1)`), die Deinstallation läuft trotzdem weiter (`commands/uninstall.rs`). Deshalb
+ist jeder Schritt best effort und schluckt seine Fehler — ein gescheiterter Schritt darf den
+nächsten nicht vom Aufräumen abhalten.
 
 ## Erststart-Einrichtung (Autostart & Startmenü)
 

@@ -81,8 +81,10 @@ Run it once per tenant to configure several. An entry for a tenant that is alrea
 replaced, not duplicated.
 
 The first four go into `appsettings.local.json` and take effect at the next app start. The ticket
-system goes into `settings.json` instead — it is workflow rather than auth configuration, and it
-applies without a restart.
+system goes into `settings.json` instead — it is workflow rather than auth configuration — and also
+takes effect at the next start. A running instance keeps the settings it loaded and drops the entry
+the next time it saves its own, which is one reason the script restarts a running instance; with
+`-NoStart` it does not, so configure the ticket system while the app is not running.
 
 ### Exit codes
 
@@ -109,6 +111,7 @@ Add it in Intune as a **Windows app (Win32)** and enter:
 | Uninstall command | `uninstall-entra-pim-manager.cmd` |
 | Install behavior | **User** |
 | Return codes | the defaults — installer and uninstaller exit `0` on success and `1` on failure |
+| Requirements | Operating system architecture **x64** only · Minimum operating system **Windows 10 1809** (the WAM broker needs it). ARM64 is left out on purpose: it would run the x64 build under emulation, which nobody has tested |
 | Detection rule | **Registry** · key `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Uninstall\Entra-PIM-Manager` · value `DisplayVersion` · **Version comparison** · **Greater than or equal to** the release you upload, e.g. `0.12.0` |
 | Logo | [`app-registration-logo.png`](../src/Entra-PIM-Manager.App.Avalonia/Assets/app-registration-logo.png) from this repository |
 
@@ -130,6 +133,19 @@ Why these values, and not the obvious alternatives:
 - **The uninstall is a script** because Intune does not expand environment variables in the
   uninstall command, and `Update.exe` lives under `%LOCALAPPDATA%`. It removes the app **and** its
   data: accounts, token cache, configuration.
+
+Two consequences to plan for:
+
+- **Detection proves "installed", not "configured".** Where the app is already installed at the
+  uploaded version or newer — by hand, or through another Intune app — Intune counts it as detected
+  and never runs the install command, so the tenant is not configured there. (An *older* install is
+  not detected: Intune installs over it, which configures the tenant but restarts the app, see the
+  next point.) One Intune app configures one tenant on fresh
+  installs; a second tenant on the same devices needs the script run separately, or **Settings →
+  TENANTS**.
+- **An Intune reinstall or upgrade ends the running app.** `Setup.exe --silent` installs over an
+  existing install without asking — a downgrade included — and stops a running tray app first.
+  With `-NoStart` it comes back at the next logon.
 
 The scripts are not signed. Where a GPO enforces the `AllSigned` execution policy, it overrides
 `-ExecutionPolicy Bypass` and the install fails. Use the two raw commands from step 2 instead, in one

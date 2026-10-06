@@ -239,9 +239,10 @@ public static class Program
     /// <remarks>
     /// Only reached through <c>--veloapp-uninstall</c>. An update runs the separate
     /// <c>--veloapp-updated</c> hook, so a user's configuration and sign-ins survive
-    /// updates — this deletes data solely on a real uninstall. Velopack allows the hook
-    /// 30 seconds and treats a thrown exception as a failed uninstall, so every step is
-    /// best effort: leftover files are better than an uninstall that errors out.
+    /// updates — this deletes data solely on a real uninstall. Velopack (1.2) allows the hook
+    /// 60 seconds and does not act on its outcome: a throw or a timeout only ends the hook,
+    /// and the uninstall goes ahead either way. So every step is best effort, and one that
+    /// fails must not keep the next from cleaning up what it can.
     /// </remarks>
     private static void RemoveUserData()
     {
