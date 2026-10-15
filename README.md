@@ -6,7 +6,7 @@
 
 <p align="center">
   <b>Just-in-time admin rights, one click from your taskbar — in every tenant you manage.</b><br />
-  Microsoft Entra PIM for directory roles, groups and Azure resources, as a Windows tray app.
+  <b>Entra roles · PIM groups · Azure resource roles</b> — Microsoft Entra PIM as a Windows tray app.
 </p>
 
 <p align="center">
