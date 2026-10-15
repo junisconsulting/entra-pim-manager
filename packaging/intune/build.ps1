@@ -22,15 +22,26 @@
 .PARAMETER OutputDir
     Directory the .intunewin is written to.
 
+.PARAMETER LogoPath
+    Optional PNG packed as logo.png, for an organization's own package; the install
+    command then passes -LogoPath .\logo.png. The release package carries no logo.
+
 .EXAMPLE
     ./packaging/intune/build.ps1 -SetupExe .\Entra-PIM-Manager-win-Setup.exe -OutputDir .
 #>
 param(
     [Parameter(Mandatory)][string]$SetupExe,
-    [Parameter(Mandatory)][string]$OutputDir
+    [Parameter(Mandatory)][string]$OutputDir,
+    [string]$LogoPath = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+# Staged, it is always called logo.png, so the install script's own .png check can no longer
+# catch an SVG - this is the last place that sees the real file name.
+if ($LogoPath -and ([IO.Path]::GetExtension($LogoPath) -ne ".png" -or -not (Test-Path -LiteralPath $LogoPath -PathType Leaf))) {
+    throw "LogoPath '$LogoPath' is not an existing .png file. The app shows PNG logos only."
+}
 
 $toolVersion = "1.8.7"
 $toolSha256 = "C1BA45B5CB939E84AF064BB7FF4B38FB3DFE33C8DC1078FD9B157672EAE671F6"
@@ -51,7 +62,7 @@ if ($actualSha256 -ne $toolSha256) {
     throw "IntuneWinAppUtil.exe does not match the pinned SHA256 (expected $toolSha256, got $actualSha256)."
 }
 
-# 2. Stage exactly the three files the package carries: the tool zips the whole folder.
+# 2. Stage exactly the files the package carries: the tool zips the whole folder.
 if (Test-Path $content) {
     Remove-Item $content -Recurse -Force
 }
@@ -60,6 +71,9 @@ New-Item -ItemType Directory -Path $content | Out-Null
 Copy-Item $SetupExe (Join-Path $content "Entra-PIM-Manager-win-Setup.exe")
 Copy-Item (Join-Path $repoRoot "scripts\install-entra-pim-manager.ps1") $content
 Copy-Item (Join-Path $repoRoot "scripts\uninstall-entra-pim-manager.cmd") $content
+if ($LogoPath) {
+    Copy-Item -LiteralPath $LogoPath (Join-Path $content "logo.png")
+}
 
 # 3. Pack. -q: no prompts, create the output folder, overwrite an existing package. The output
 #    is named after the setup file, which is what makes the asset Entra-PIM-Manager-win-Setup.intunewin.

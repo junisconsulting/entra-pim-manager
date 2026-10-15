@@ -6,6 +6,7 @@ using System.IO;
 using System.Reflection;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -26,6 +27,10 @@ using Microsoft.Extensions.Options;
 /// </summary>
 public sealed partial class SettingsPanelViewModel : ObservableObject
 {
+    // The panel draws the logo 24 px tall; three times that keeps it sharp up to
+    // 300 % display scaling without holding a print-size image in memory.
+    private const int LogoDecodeHeight = 72;
+
     /// <summary>
     /// Outer guard for the whole network-check run; each probe already caps
     /// itself at 10 s and all probes run in parallel, so this never fires in
@@ -81,6 +86,14 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
     [ObservableProperty]
     private ThemeOption _selectedTheme;
+
+    /// <summary>The logo at <see cref="AppPaths.LogoFile"/>, or <c>null</c>.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LogoButtonText))]
+    private Bitmap? _logo;
+
+    [ObservableProperty]
+    private string? _logoError;
 
     [ObservableProperty]
     private bool _startWithWindows;
@@ -204,6 +217,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         _logger = logger;
 
         _selectedTheme = ThemeOptions[0];
+        _logo = File.Exists(AppPaths.LogoFile) ? LoadLogo(() => File.OpenRead(AppPaths.LogoFile)) : null;
         _selectedDuration = DurationOptions[0];
         _selectedExpiryThreshold = ExpiryThresholdOptions[0];
         _selectedLogLevel = LogLevelOptions[1];
@@ -230,6 +244,20 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     /// subscribes and forwards to the window's clipboard; the VM has no view dependency.
     /// </summary>
     public event Func<string, Task>? CopyReportRequested;
+
+    /// <summary>
+    /// Raised by the logo button to ask for a PNG; answers with its local path, or
+    /// <c>null</c> when the user cancelled. <see cref="Tray.TrayPopupController"/> forwards
+    /// it to the window's file picker; the VM has no view dependency.
+    /// </summary>
+    public event Func<Task<string?>>? PickLogoRequested;
+
+    /// <summary>
+    /// One button that removes the logo there is, or picks one when there is none. Not
+    /// two swapped by visibility, so Remove keeps the keyboard focus; Choose… gives it
+    /// up to the file dialog, as every async button here does while it runs.
+    /// </summary>
+    public string LogoButtonText => Logo is null ? "Choose…" : "Remove";
 
     /// <summary>
     /// The WAM out-of-process caveat, shown under the results and appended to
@@ -370,6 +398,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             SyncTenantNodes();
             ClearForm();
             ShowRestartPrompt = false;
+            LogoError = null;
 
             // A verdict from an earlier visit says nothing about now — a release
             // published since would make it read as a denial.
@@ -649,6 +678,52 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             cloud,
             tenantId);
         SyncTenantNodes();
+    }
+
+    [RelayCommand]
+    private async Task ChooseOrRemoveLogoAsync()
+    {
+        LogoError = null;
+        try
+        {
+            if (Logo is not null)
+            {
+                File.Delete(AppPaths.LogoFile);
+                Logo = null;
+                return;
+            }
+
+            var path = PickLogoRequested is null ? null : await PickLogoRequested();
+            if (path is null)
+            {
+                return;
+            }
+
+            // Read once and asynchronously: a file still downloading (OneDrive, a share) must
+            // not freeze the popup, and the bytes written are the bytes checked. Unlike
+            // File.Copy, writing them carries no read-only attribute over and copes with
+            // picking logo.png itself.
+            var png = await File.ReadAllBytesAsync(path);
+
+            // Decode before writing, so a file the app cannot show is turned down here,
+            // with a message, instead of becoming a log line at every start.
+            var logo = LoadLogo(() => new MemoryStream(png));
+            if (logo is null)
+            {
+                LogoError = "This file is not a PNG the app can read.";
+                return;
+            }
+
+            await File.WriteAllBytesAsync(AppPaths.LogoFile, png);
+            Logo = logo;
+        }
+        catch (Exception ex)
+        {
+            // Includes the file dialog failing: a cosmetic setting must never take the
+            // tray app down with it.
+            _logger.LogWarning(ex, "Could not change logo.png");
+            LogoError = "The logo could not be changed — see the log for details.";
+        }
     }
 
     /// <summary>
@@ -1003,6 +1078,22 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to persist user settings from the settings panel");
+        }
+    }
+
+    private Bitmap? LoadLogo(Func<Stream> open)
+    {
+        try
+        {
+            using var stream = open();
+            return Bitmap.DecodeToHeight(stream, LogoDecodeHeight);
+        }
+        catch (Exception ex)
+        {
+            // Branding is decoration: a locked, truncated or non-PNG file costs the
+            // logo, never the start of a privileged-access tool.
+            _logger.LogWarning(ex, "Logo file could not be read; showing no logo");
+            return null;
         }
     }
 

@@ -82,6 +82,9 @@ public sealed class TrayPopupController
         _viewModel.SettingsPanel.CopyReportRequested += text =>
             _window.Clipboard?.SetTextAsync(text) ?? Task.CompletedTask;
 
+        // The logo's file picker, for the same reason: it needs the window's StorageProvider.
+        _viewModel.SettingsPanel.PickLogoRequested += _window.PickPngAsync;
+
         // The taskbar can change colour under a running app. Avalonia raises this
         // for any OS colour or theme change; which variant that means is then read
         // from the registry, because Avalonia reports the *app* theme, not the

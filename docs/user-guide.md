@@ -222,7 +222,8 @@ Before you press it:
 
 The gear icon, top right.
 
-**APPEARANCE** — Theme: System, Light or Dark.
+**APPEARANCE** — Theme: System, Light or Dark. **Logo** puts your organization's logo next to the
+app name: **Choose…** takes a PNG, **Remove** takes it away again.
 
 **BEHAVIOR** — Start with Windows. Keep a Start-menu entry. Default activation duration (the
 slider's starting value, not a limit — the limit is your admin's policy).
@@ -300,6 +301,7 @@ Everything sits under `%LocalAppData%\junis\Entra-PIM-Manager`, in your own user
 - which accounts you connected, and your tenants' App Registration entries
 - the Windows-managed token cache that keeps you signed in
 - the log files
+- your organization's logo, if there is one
 
 No password is ever stored — sign-in is handled by Windows. Nothing is written outside your profile:
 no `Program Files`, no machine-wide registry, no service, no scheduled task. Outside this folder,

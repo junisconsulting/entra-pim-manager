@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using EntraPimManager.AppAvalonia.ViewModels;
 
@@ -31,6 +32,10 @@ public partial class TrayPopupWindow : Window
     private Point _dragStartPoint;
     private bool _enterHeld;
 
+    // True while the logo file dialog is open. The dialog takes the focus, and the
+    // auto-hide would pull the popup out from under it.
+    private bool _filePickerOpen;
+
     public TrayPopupWindow()
     {
         InitializeComponent();
@@ -50,12 +55,41 @@ public partial class TrayPopupWindow : Window
     /// </summary>
     public DateTimeOffset LastHiddenByDeactivation { get; private set; } = DateTimeOffset.MinValue;
 
+    /// <summary>
+    /// Asks the user for a PNG and returns its local path, or <c>null</c> when they
+    /// cancelled. Keeps the popup open meanwhile — see <see cref="_filePickerOpen"/>.
+    /// </summary>
+    public async Task<string?> PickPngAsync()
+    {
+        _filePickerOpen = true;
+        try
+        {
+            var options = new FilePickerOpenOptions
+            {
+                Title = "Choose a logo",
+                FileTypeFilter = [new FilePickerFileType("PNG image") { Patterns = ["*.png"] }],
+            };
+            var files = await StorageProvider.OpenFilePickerAsync(options);
+            using var file = files.FirstOrDefault();
+            return file?.TryGetLocalPath();
+        }
+        finally
+        {
+            _filePickerOpen = false;
+        }
+    }
+
     private void OnDeactivated(object? sender, EventArgs e)
     {
-        LastHiddenByDeactivation = DateTimeOffset.UtcNow;
-
-        // The key-up of a held Enter goes to whatever window has the focus now.
+        // The key-up of a held Enter goes to whatever window has the focus now —
+        // the file dialog included.
         _enterHeld = false;
+        if (_filePickerOpen)
+        {
+            return;
+        }
+
+        LastHiddenByDeactivation = DateTimeOffset.UtcNow;
         Hide();
     }
 

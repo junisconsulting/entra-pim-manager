@@ -76,6 +76,7 @@ The user lands on "Add account" instead of the configuration prompt.
 | `--cloud <Global\|China>` | `-Cloud` | no | Defaults to `Global` |
 | `--label <text>` | `-Label` | no | Tenant alias in the sign-in picker and tenant list |
 | `--ticket-system <text>` | `-TicketSystem` | no | e.g. `ServiceNow`, prefilled into the activation form |
+| — | `-LogoPath <file.png>` | no | Script only, see [Your organization's logo](#your-organizations-logo) |
 
 Run it once per tenant to configure several. An entry for a tenant that is already configured is
 replaced, not duplicated.
@@ -98,6 +99,20 @@ The app is a GUI executable and has no console, so the exit code is the only fee
 printed even when run from a terminal. Both ids are validated before anything is written: a typo
 fails with code `1` and leaves the configuration untouched.
 
+### Your organization's logo
+
+`-LogoPath <file.png>` puts your logo at the top of the panel, right of the app name. The script
+copies it to `%LocalAppData%\junis\Entra-PIM-Manager\logo.png`, and the app reads it at startup.
+
+- **PNG only**, ideally with a transparent background. The panel has a light and a dark theme, so
+  pick a version that reads on both — a dark wordmark disappears on the dark one.
+- It is drawn 24 px tall and at most 160 px wide, so a logo wider than about 6.5:1 comes out smaller.
+  72 px of height keeps it sharp up to 300 % display scaling. Crop it tightly: a transparent margin
+  counts toward both limits, so the logo comes out smaller and no longer lines up with the edge.
+- A run without the parameter leaves an existing logo in place. Users can also choose or remove
+  one themselves under **Settings → APPEARANCE → Logo**, which writes the same file.
+- A file the app cannot decode shows no logo, and the reason is in the log.
+
 ## 3. Intune: the ready-made Win32 app
 
 Every release also carries `Entra-PIM-Manager-win-Setup.intunewin`: the same Setup.exe, packed for
@@ -119,6 +134,16 @@ Add it in Intune as a **Windows app (Win32)** and enter:
 command too. To install without configuring a tenant, make the install command
 `Entra-PIM-Manager-win-Setup.exe --silent`; users then add their tenant under **Settings →
 TENANTS**.
+
+The release package carries no logo. For [yours](#your-organizations-logo), build a package of your
+own with `packaging/intune/build.ps1 -LogoPath <file.png>` and add `-LogoPath .\logo.png` to the
+install command. That package does not need rebuilding for later releases: Intune only does the
+first install, and updates come from the app itself. For the same reason it never reaches devices
+that already run the app — Intune counts them as detected, the limit described below for a second
+tenant. There, run the install script with `-LogoPath` once, copy `logo.png` into
+`%LocalAppData%\junis\Entra-PIM-Manager` with a script of your own — without the read-only
+attribute, or neither **Remove** nor the uninstall can delete it — or let users choose it in
+Settings.
 
 Why these values, and not the obvious alternatives:
 

@@ -631,64 +631,100 @@
           <!-- Title strip: app name · stats · refresh · settings.
                Replaces the old HERO bar. The popup is global-by-default now —
                no per-account filtering, so the per-account avatar/name was
-               misleading affordance. -->
-          <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center" Margin="2,2,2,2">
-            <TextBlock Grid.Column="0"
-                       Text="Entra PIM Manager"
-                       FontSize="{DynamicResource FontSubtitle}"
-                       FontWeight="SemiBold"
-                       Foreground="{DynamicResource TextPrimaryBrush}"
-                       VerticalAlignment="Center" />
+               misleading affordance.
+               With an organization logo (placed by a rollout or chosen in Settings) the
+               name and the logo get a row of their own above it: in one row, the logo
+               would leave the stats no width. -->
+          <StackPanel>
+            <!-- HighQuality, because the default filter skips pixels when it shrinks the
+                 3x-decoded bitmap, and thin wordmark strokes come out broken. -->
+            <Grid ColumnDefinitions="*,Auto"
+                  Margin="2"
+                  IsVisible="{Binding SettingsPanel.Logo, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <TextBlock Text="Entra PIM Manager"
+                         FontSize="{DynamicResource FontSubtitle}"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource TextPrimaryBrush}"
+                         VerticalAlignment="Center" />
+              <Image Grid.Column="1"
+                     Source="{Binding SettingsPanel.Logo}"
+                     Height="24"
+                     MaxWidth="160"
+                     RenderOptions.BitmapInterpolationMode="HighQuality" />
+            </Grid>
 
-            <!-- Stats: "X eligible · Y active". Replaced by a loading caption
-                 while a refresh is in flight so the user sees the app is
-                 working and not just frozen. -->
-            <TextBlock Grid.Column="1"
-                       Text="{Binding StatsLabel}"
-                       FontSize="{DynamicResource FontSmall}"
-                       Foreground="{DynamicResource TextSecondaryBrush}"
-                       VerticalAlignment="Center"
-                       HorizontalAlignment="Center"
-                       IsVisible="{Binding !IsBusy}" />
-            <TextBlock Grid.Column="1"
-                       Text="Loading your roles…"
-                       FontSize="{DynamicResource FontSmall}"
-                       Foreground="{DynamicResource TextSecondaryBrush}"
-                       VerticalAlignment="Center"
-                       HorizontalAlignment="Center"
-                       IsVisible="{Binding IsBusy}" />
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto"
+                  VerticalAlignment="Center"
+                  Margin="2,2,2,2"
+                  Classes.with-logo="{Binding SettingsPanel.Logo, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <Grid.Styles>
+                <Style Selector="TextBlock.stats">
+                  <Setter Property="HorizontalAlignment" Value="Center" />
+                </Style>
+                <!-- Under the name, the stats read as its subtitle, not centered in an empty row. -->
+                <Style Selector="Grid.with-logo > TextBlock.stats">
+                  <Setter Property="HorizontalAlignment" Value="Left" />
+                </Style>
+              </Grid.Styles>
 
-            <Button Grid.Column="2"
-                    Classes="icon"
-                    Command="{Binding RefreshCommand}"
-                    IsEnabled="{Binding !IsBusy}"
-                    ToolTip.Tip="Refresh">
-              <Panel>
-                <PathIcon Data="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
-                          Width="14" Height="14"
-                          IsVisible="{Binding !IsBusy}" />
-                <Border Classes="spinner" Width="13" Height="13"
-                        IsVisible="{Binding IsBusy}">
-                  <Border.RenderTransform>
-                    <RotateTransform />
-                  </Border.RenderTransform>
-                  <Path Data="M 6.5,1 A 5.5,5.5 0 1 1 1,6.5"
-                        Stroke="{DynamicResource TextSecondaryBrush}"
-                        StrokeThickness="1.6"
-                        StrokeLineCap="Round" />
-                </Border>
-              </Panel>
-            </Button>
+              <TextBlock Grid.Column="0"
+                         Text="Entra PIM Manager"
+                         FontSize="{DynamicResource FontSubtitle}"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource TextPrimaryBrush}"
+                         VerticalAlignment="Center"
+                         IsVisible="{Binding SettingsPanel.Logo, Converter={x:Static ObjectConverters.IsNull}}" />
 
-            <Button Grid.Column="3"
-                    Classes="icon"
-                    Command="{Binding OpenSettingsPanelCommand}"
-                    ToolTip.Tip="Settings"
-                    Margin="2,0,0,0">
-              <PathIcon Data="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94 0 .31.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"
-                        Width="14" Height="14" />
-            </Button>
-          </Grid>
+              <!-- Stats: "X eligible · Y active". Replaced by a loading caption
+                   while a refresh is in flight so the user sees the app is
+                   working and not just frozen. -->
+              <TextBlock Grid.Column="1"
+                         Classes="stats"
+                         Text="{Binding StatsLabel}"
+                         FontSize="{DynamicResource FontSmall}"
+                         Foreground="{DynamicResource TextSecondaryBrush}"
+                         VerticalAlignment="Center"
+                         IsVisible="{Binding !IsBusy}" />
+              <TextBlock Grid.Column="1"
+                         Classes="stats"
+                         Text="Loading your roles…"
+                         FontSize="{DynamicResource FontSmall}"
+                         Foreground="{DynamicResource TextSecondaryBrush}"
+                         VerticalAlignment="Center"
+                         IsVisible="{Binding IsBusy}" />
+
+              <Button Grid.Column="2"
+                      Classes="icon"
+                      Command="{Binding RefreshCommand}"
+                      IsEnabled="{Binding !IsBusy}"
+                      ToolTip.Tip="Refresh">
+                <Panel>
+                  <PathIcon Data="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
+                            Width="14" Height="14"
+                            IsVisible="{Binding !IsBusy}" />
+                  <Border Classes="spinner" Width="13" Height="13"
+                          IsVisible="{Binding IsBusy}">
+                    <Border.RenderTransform>
+                      <RotateTransform />
+                    </Border.RenderTransform>
+                    <Path Data="M 6.5,1 A 5.5,5.5 0 1 1 1,6.5"
+                          Stroke="{DynamicResource TextSecondaryBrush}"
+                          StrokeThickness="1.6"
+                          StrokeLineCap="Round" />
+                  </Border>
+                </Panel>
+              </Button>
+
+              <Button Grid.Column="3"
+                      Classes="icon"
+                      Command="{Binding OpenSettingsPanelCommand}"
+                      ToolTip.Tip="Settings"
+                      Margin="2,0,0,0">
+                <PathIcon Data="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94 0 .31.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"
+                          Width="14" Height="14" />
+              </Button>
+            </Grid>
+          </StackPanel>
 
           <!-- ===== ACTIVE — only visible when there are active assignments ===== -->
           <Border Classes="section"
@@ -2168,6 +2204,29 @@
                     </ComboBox.ItemTemplate>
                   </ComboBox>
                 </Grid>
+
+                <!-- Logo: what a rollout can place, chosen here for an install by hand. -->
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalAlignment="Center">
+                  <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="Logo"
+                               FontSize="{DynamicResource FontBody}"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <TextBlock Text="Your organization's logo next to the app name. A tightly cropped PNG, ideally transparent."
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="1"
+                          Classes="secondary"
+                          Content="{Binding LogoButtonText}"
+                          Command="{Binding ChooseOrRemoveLogoCommand}"
+                          VerticalAlignment="Center" />
+                </Grid>
+                <TextBlock Text="{Binding LogoError}"
+                           FontSize="{DynamicResource FontSmall}"
+                           Foreground="{DynamicResource DangerBrush}"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding LogoError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
               </StackPanel>
               </Border>
 

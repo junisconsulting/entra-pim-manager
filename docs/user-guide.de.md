@@ -234,7 +234,8 @@ Bevor du ihn drückst:
 
 Das Zahnrad oben rechts.
 
-**APPEARANCE** — Theme: System, hell oder dunkel.
+**APPEARANCE** — Theme: System, hell oder dunkel. **Logo** setzt das Logo deiner Organisation neben
+den App-Namen: **Choose…** nimmt ein PNG, **Remove** entfernt es wieder.
 
 **BEHAVIOR** — Mit Windows starten. Startmenü-Eintrag behalten. Standard-Aktivierungsdauer (der
 Startwert des Schiebereglers, keine Obergrenze — die kommt aus der Richtlinie deines Admins).
@@ -317,6 +318,7 @@ Alles liegt unter `%LocalAppData%\junis\Entra-PIM-Manager`, in deinem eigenen Be
 - welche Konten du verbunden hast und die App-Registration-Einträge deiner Tenants
 - der von Windows verwaltete Token-Cache, der dich angemeldet hält
 - die Logdateien
+- das Logo deiner Organisation, falls es eines gibt
 
 Ein Passwort wird nie gespeichert — die Anmeldung macht Windows. Außerhalb deines Profils wird
 nichts geschrieben: kein `Programme`-Ordner, keine maschinenweite Registry, kein Dienst, keine

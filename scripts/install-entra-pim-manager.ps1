@@ -36,6 +36,10 @@
     activation form for every user in the tenant. Stored in settings.json rather than
     with the registration; like the registration it takes effect at the next app start.
 
+.PARAMETER LogoPath
+    Optional PNG with your organization's logo, shown next to the app name. Copied into
+    the per-user data folder as logo.png; takes effect at the next app start. PNG only.
+
 .PARAMETER NoStart
     Do not launch the app when finished. Use this for an unattended rollout that should
     not put a tray icon in front of the user mid-install - autostart is already set, so
@@ -57,13 +61,15 @@ param(
     [string]$Cloud = "Global",
     [string]$Label = "",
     [string]$TicketSystem = "",
+    [string]$LogoPath = "",
     [switch]$NoStart
 )
 
 $ErrorActionPreference = "Stop"
 
 $installRoot = Join-Path $env:LOCALAPPDATA "Entra-PIM-Manager"
-$configFile = Join-Path $env:LOCALAPPDATA "junis\Entra-PIM-Manager\appsettings.local.json"
+$dataDir = Join-Path $env:LOCALAPPDATA "junis\Entra-PIM-Manager"
+$configFile = Join-Path $dataDir "appsettings.local.json"
 
 # 1. Validate here, where a human typed the values. The app rejects a bad id with exit
 #    code 1 and writes nothing, but a message at this point is worth more than a code.
@@ -77,6 +83,12 @@ if (-not ($ClientId -as [guid])) {
 
 if ($Cloud -notin @("Global", "China")) {
     throw "Cloud must be 'Global' or 'China', got '$Cloud'."
+}
+
+# The app shows nothing for a file it cannot decode and only logs why, so an SVG would
+# fail silently on every device. Say it here instead.
+if ($LogoPath -and ([IO.Path]::GetExtension($LogoPath) -ne ".png" -or -not (Test-Path -LiteralPath $LogoPath -PathType Leaf))) {
+    throw "LogoPath '$LogoPath' is not an existing .png file. The app shows PNG logos only."
 }
 
 # Pass and compare the canonical form. The app accepts any GUID format but stores the tenant
@@ -162,10 +174,18 @@ if (-not $written) {
     throw "No entry for tenant $TenantId in $configFile. The arguments did not reach the app."
 }
 
+# 6. The logo goes next to the configuration the app just wrote, so the folder exists.
+#    The app reads it at startup - the restart below picks it up too.
+#    Clear read-only: Copy-Item carries the attribute over, and the app's Remove and the
+#    uninstall could no longer delete the file.
+if ($LogoPath) {
+    (Copy-Item -LiteralPath $LogoPath (Join-Path $dataDir "logo.png") -Force -PassThru).IsReadOnly = $false
+}
+
 Write-Host ""
 Write-Host "Done. Tenant $TenantId is configured for cloud $Cloud." -ForegroundColor Green
 
-# 6. Start the app so the result is visible at once. An already-running instance still
+# 7. Start the app so the result is visible at once. An already-running instance still
 #    holds the configuration it read at ITS startup - the registration list is bound with
 #    reloadOnChange:false - so launching a second process would only signal the old one to
 #    show its window, still without the new tenant. Restart it instead.

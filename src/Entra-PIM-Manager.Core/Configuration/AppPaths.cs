@@ -49,6 +49,12 @@ public static class AppPaths
     public static string LocalConfigFile { get; } = Path.Combine(DataDirectory, "appsettings.local.json");
 
     /// <summary>
+    /// Optional organization logo, shown next to the app name. A rollout places it
+    /// (install script <c>-LogoPath</c>) or the user picks one in Settings; no file, no logo.
+    /// </summary>
+    public static string LogoFile { get; } = Path.Combine(DataDirectory, "logo.png");
+
+    /// <summary>
     /// Sentinel written by the Velopack <c>OnFirstRun</c> hook to signal that the
     /// one-time first-run setup dialog (autostart / Start menu opt-out) should be
     /// shown on this launch. The dialog deletes it once the choice is applied, so
