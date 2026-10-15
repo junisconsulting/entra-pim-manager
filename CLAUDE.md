@@ -107,6 +107,10 @@ from `CONTRIBUTING.md` work as documented; the flags above are the Linux-host ad
   window's handler and hides the popup — found in the review of the two-step remove buttons.
   Avalonia's `Button` also clicks on every Enter auto-repeat; `TrayPopupWindow` swallows those
   in the tunnel phase, so a held key never presses a button twice.
+- `TrayPopupWindow` hides whenever it loses focus. Anything that opens another window from it — a
+  file dialog — must hold that off while it is open (`_filePickerOpen` in `PickPngAsync`).
+- An `Image` that shrinks a bitmap sets `RenderOptions.BitmapInterpolationMode="HighQuality"`. The
+  default samples without mipmaps and drops thin strokes at 100–125 % display scaling.
 - Comment intent, not mechanics: the maintainers are identity admins as much as developers.
 
 ## Security conventions

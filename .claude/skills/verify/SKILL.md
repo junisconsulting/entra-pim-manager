@@ -144,7 +144,9 @@ condition did not apply is reported as skipped, with the reason — not as passe
 
 - **Running the app.** It is Windows-only (WAM broker, UWP toasts). On Linux, verify proves it
   builds and that `Core` behaves — nothing about the running UI. Real-device behaviour is covered by
-  `.claude/manual-test-checklist.md`, which is a pre-release gate, not part of verify.
+  `.claude/manual-test-checklist.md`, which is a pre-release gate, not part of verify. To *see* a
+  changed layout without Windows, render the XAML headlessly — not a gate, a look:
+  `references/headless-render.md`.
 - **Anything touching a tenant.** No sign-in, no Graph calls, no activation. Never activate a real
   PIM role to "check" a change.
 - **`/ponytail-review`.** A judgment pass on the final diff before committing (see CLAUDE.md,
