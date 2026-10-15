@@ -34,6 +34,7 @@ option.
 | set up a tenant (admin, once) | [App Registration setup](docs/app-registration-setup.md) |
 | roll it out to a team with Intune | [Rolling out to a team](#rolling-out-to-a-team) |
 | know what it does on your machine and in your tenant | [Security and footprint](#security-and-footprint) |
+| make every activation ask for a fresh sign-in | [Authentication context](#recommended-a-fresh-sign-in-for-every-activation) |
 | build it or contribute | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 ## Why
@@ -135,6 +136,27 @@ This is a privileged-access tool, so here is exactly what it does and does not d
 - **A per-user footprint.** Everything lives under `%LocalAppData%`, and registry entries stay in
   `HKCU` — the uninstall entry and the optional autostart value. No admin rights, no service, no
   scheduled task. Uninstalling removes all of it, cached tokens included.
+
+### Recommended: a fresh sign-in for every activation
+
+Three clicks should not mean less assurance. PIM's own "require MFA on activation" accepts an MFA
+claim already in the session, so it may not prompt at all. We recommend protecting each role with a
+**Conditional Access authentication context** instead:
+
+1. Under Conditional Access, create an authentication context, e.g. "PIM activation".
+2. Create a Conditional Access policy that targets this context and all users, or the eligible
+   ones — not the directory role, which nobody holds yet at the moment of activation. Grant an
+   authentication strength such as phishing-resistant MFA, and set the session's sign-in frequency
+   to **Every time**.
+3. In the PIM settings of each role, set **On activation, require Microsoft Entra Conditional
+   Access authentication context** to that context.
+
+Entra PIM Manager reads the requirement from the role's policy and asks Windows for a token that
+satisfies it, so every activation brings up the Windows sign-in — for directory roles, PIM for
+Groups and Azure resource roles alike. Entra waives the prompt for further activations within ten
+minutes, so ticking three subscriptions asks once. A device-code sign-in cannot satisfy an
+authentication context; those accounts need the normal sign-in. Microsoft's walkthrough:
+[On activation, require Conditional Access authentication context](https://learn.microsoft.com/entra/id-governance/privileged-identity-management/pim-how-to-change-default-settings#on-activation-require-microsoft-entra-conditional-access-authentication-context).
 
 Found a vulnerability? Please report it privately — see [SECURITY.md](SECURITY.md).
 
