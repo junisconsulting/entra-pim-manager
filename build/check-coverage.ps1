@@ -1,4 +1,5 @@
 #requires -Version 7
+
 <#
 .SYNOPSIS
     Enforces the Entra-PIM-Manager.Core line-coverage gate.

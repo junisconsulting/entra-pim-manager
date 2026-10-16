@@ -20,7 +20,7 @@
 >
 > **Using Entra China (21Vianet) too?** National clouds are physically isolated
 > instances of Entra, so a Global App Registration does not exist there. Work
-> through this guide once per cloud and see [§7](#7-sovereign-clouds-entra-china-21vianet)
+> through this guide once per cloud and see [§7](#7-sovereign-clouds-entra-china--21vianet)
 > for what differs. **Upgrading from 0.6.x?** See [§8](#8-upgrading-from-06x).
 
 ## junis-hosted: consent only

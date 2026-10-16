@@ -1,4 +1,5 @@
 #requires -Version 7
+
 <#
 .SYNOPSIS
     Builds a Velopack release package for Entra PIM Manager.

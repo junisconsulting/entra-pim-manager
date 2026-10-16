@@ -1,4 +1,5 @@
 #requires -Version 5.1
+
 <#
 .SYNOPSIS
     Installs Entra PIM Manager and pins one App Registration to a tenant, unattended.

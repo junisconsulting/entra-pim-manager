@@ -1,4 +1,5 @@
 #requires -Version 5.1
+
 <#
 .SYNOPSIS
     Wraps the Velopack Setup.exe and the endpoint scripts into an Intune Win32 app package.

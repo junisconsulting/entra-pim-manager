@@ -1,4 +1,5 @@
 #requires -Version 7
+
 <#
 .SYNOPSIS
     Creates and consents the Entra App Registration for Entra PIM Manager.
