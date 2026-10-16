@@ -412,7 +412,7 @@ Aktivierung und beantragt sofort neu.
 ## 4. Tray-App & UI — Phase 4
 
 - [ ] App startet ohne sichtbares Hauptfenster, nur Tray-Icon.
-- [ ] Kontextmenü: Eligible Roles…, Active Assignments…, Refresh, Sign out, Quit.
+- [ ] Kontextmenü: Open, Refresh, Settings…, Start with Windows, Exit.
 - [ ] Tray-Icon-Variante bei ≥ 1 aktiver Rolle ist sichtbar anders.
 - [ ] „Refresh" aktualisiert beide Listen.
 - [ ] Hintergrund-Refresh (~60 s) aktualisiert die Daten ohne Nutzeraktion.
@@ -420,7 +420,7 @@ Aktivierung und beantragt sofort neu.
 - [ ] Ablauf-Fenster einer Azure-Rolle nennt den **Scope** unter der Tenant-/Konto-Zeile
       („Management group: …"). Zwei gleichnamige Rollen auf verschiedenen Scopes:
       „+1 more expiring soon" stimmt, und „Dismiss" auf der einen lässt die andere stehen.
-- [ ] „Quit" beendet den Prozess vollständig (Tray-Icon verschwindet).
+- [ ] „Exit" beendet den Prozess vollständig (Tray-Icon verschwindet).
 - [ ] In der UI erscheinen ausschließlich gemappte, freundliche Meldungen —
       keine Stacktraces, keine rohen Graph-Fehlertexte.
 
@@ -479,6 +479,29 @@ Aktivierung und beantragt sofort neu.
 - [ ] **Sicherheit:** Das Aktivierungspanel zeigt weiterhin die echte Identität
       (Entra-Anzeigename/UPN), nicht den Alias.
 - [ ] Der Alias-Text taucht in den Logs **nirgends** auf (auch nicht in DEBUG).
+
+## 4d. Organisations-Logo & Kopfzeile — ab 0.13.0
+
+> Testlogo: ein eng zugeschnittenes PNG mit transparentem Hintergrund, etwa 96 px hoch.
+> Dazu eine SVG, die in `.png` umbenannt ist, und eine PNG-Kopie mit Schreibschutz.
+
+- [ ] **Ohne Logo:** links „Entra PIM Manager", darunter „X eligible · Y active", rechts nichts.
+      ⟳ steht neben „ELIGIBILITIES (n)", ⚙ allein unten rechts, links unten „vX · junis GmbH" + GitHub.
+- [ ] ⟳ neben ELIGIBILITIES lädt neu: Spinner dreht, Button gesperrt, Kopf zeigt „Loading your roles…".
+- [ ] ⚙ unten rechts öffnet Settings — auch bei einer langen, nach unten gescrollten Liste sichtbar.
+- [ ] Settings → APPEARANCE → Logo → **Choose…**: der Datei-Dialog öffnet sich, das Popup bleibt
+      **offen** dahinter. PNG wählen → Logo erscheint sofort oben rechts, Button heißt **Remove**.
+- [ ] Dialog **abbrechen** → nichts ändert sich; danach schließt ein Klick neben das Popup es wie gewohnt.
+- [ ] Umbenannte SVG wählen → roter Hinweis „This file is not a PNG the app can read.", kein Logo,
+      `logo.png` unverändert. Settings schließen und öffnen → Hinweis ist weg.
+- [ ] Schreibgeschütztes PNG wählen → Logo erscheint; danach **Remove** → Logo weg, `logo.png` im
+      Datenordner gelöscht, Button heißt wieder **Choose…**.
+- [ ] Theme hell und dunkel: Logo, ⟳ und ⚙ in beiden gut erkennbar.
+- [ ] Rollout: `install-entra-pim-manager.ps1 -TenantId … -ClientId … -LogoPath .\logo.png` →
+      `logo.png` liegt in `%LocalAppData%\junis\Entra-PIM-Manager`, **ohne** Schreibschutz, auch bei
+      schreibgeschützter Quelle; nach dem Neustart ist das Logo da.
+- [ ] `-LogoPath .\logo.svg` → das Skript bricht mit klarer Meldung ab, **bevor** es installiert.
+- [ ] Deinstallation entfernt `logo.png` mit dem Datenordner.
 
 ## 5. Packaging, Install & Auto-Update — Phase 5
 
