@@ -55,7 +55,10 @@ jobs:
         run: |
           # Velopack needs the existing feed on disk to generate a delta package
           # (a few hundred KB instead of a ~65 MB full download). Missing on the
-          # first-ever release, hence continue-on-error.
+          # first-ever release, hence continue-on-error. The token is not for access
+          # (the repo is public) but for the rate limit: anonymous API calls share a
+          # per-IP quota with every other job on the runner, and v0.13.0 lost its
+          # delta to a 403.
           $project = 'src/Entra-PIM-Manager.App.Avalonia/Entra-PIM-Manager.App.Avalonia.csproj'
           $velopack = ([xml](Get-Content $project)).Project.ItemGroup.PackageReference |
               Where-Object { $_.Include -eq 'Velopack' } |
@@ -63,6 +66,7 @@ jobs:
           dotnet tool install --global vpk --version $velopack
           vpk download github `
               --repoUrl '${{ github.server_url }}/${{ github.repository }}' `
+              --token '${{ github.token }}' `
               --channel win `
               --outputDir packaging/velopack/releases
 

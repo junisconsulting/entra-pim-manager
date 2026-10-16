@@ -103,7 +103,10 @@ Then confirm the release body matches `packaging/release-notes/{version}.md`.
 - **`Missing release notes: packaging/release-notes/X.Y.Z.md`** — created the file with a `v`
   prefix, or forgot it. Fix, delete the tag, re-tag.
 - **`vpk download github` failed** — the `Fetch previous releases` step is `continue-on-error` on
-  purpose. Expected on the first-ever release; the build proceeds without a delta package.
+  purpose. Expected on the first-ever release; the build proceeds without a delta package. On any
+  later release, read the step log: `403 (rate limit exceeded)` means the call went out without
+  `--token` and hit the anonymous per-IP API quota of the shared runner — seen on v0.13.0, fixed by
+  passing `github.token`. The release is still valid; clients just download the full package.
 - **No delta package in the output** — harmless; the full package still updates clients.
 - **`IntuneWinAppUtil.exe does not match the pinned SHA256`** — the packer downloaded from
   Microsoft's repo is not the reviewed build. Do not just paste the new hash: check the upstream
