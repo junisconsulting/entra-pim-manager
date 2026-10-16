@@ -103,12 +103,17 @@ fails with code `1` and leaves the configuration untouched.
 
 `-LogoPath <file.png>` puts your logo at the top right of the panel. The script
 copies it to `%LocalAppData%\junis\Entra-PIM-Manager\logo.png`, and the app reads it at startup.
+The path is read on the device, in the user's context: a file inside your own Intune package
+(`.\logo.png`, see [step 3](#3-intune-the-ready-made-win32-app)), or a share the user can read
+(`\\server\branding\logo.png`), which works with the release package as it is — not yet tested in
+Intune.
 
 - **PNG only**, ideally with a transparent background. The panel has a light and a dark theme, so
   pick a version that reads on both — a dark wordmark disappears on the dark one.
 - It is drawn 32 px tall and at most 140 px wide, so a logo wider than about 4.4:1 comes out
-  smaller. 96 px of height keeps it sharp up to 300 % display scaling. Crop it tightly: a transparent margin
-  counts toward both limits, so the logo comes out smaller and no longer lines up with the edge.
+  smaller. 96 px of height keeps it sharp up to 300 % display scaling. Crop it tightly: a
+  transparent margin counts toward both limits, so the logo comes out smaller and no longer lines
+  up with the edge.
 - A run without the parameter leaves an existing logo in place. Users can also choose or remove
   one themselves under **Settings → APPEARANCE → Logo**, which writes the same file.
 - A file the app cannot decode shows no logo, and the reason is in the log.
@@ -187,7 +192,9 @@ cmd.exe /c "start "" /wait Entra-PIM-Manager-win-Setup.exe --silent && start "" 
 programs, `cmd /c` does not reliably wait for those, and without it the second command would run
 before the install has finished. What this line loses is the script's check that the entry actually
 landed in `appsettings.local.json`: a `0` here means only that the app accepted the arguments. Check
-that file on the first device by hand.
+that file on the first device by hand. It also sets no logo — the app itself takes no logo argument —
+so place `logo.png` in `%LocalAppData%\junis\Entra-PIM-Manager` another way, or let users choose it
+in Settings.
 
 To build the package from a local Setup.exe, run `packaging/intune/build.ps1` on Windows — it is the
 same script the release uses.
