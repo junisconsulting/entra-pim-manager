@@ -2,6 +2,7 @@ namespace EntraPimManager.Tests.ErrorHandling;
 
 using EntraPimManager.Core.Arm;
 using EntraPimManager.Core.Auth;
+using EntraPimManager.Core.Configuration;
 using EntraPimManager.Core.ErrorHandling;
 using EntraPimManager.Core.Models;
 using Microsoft.Graph.Models.ODataErrors;
@@ -373,5 +374,187 @@ public sealed class PimErrorMapperTests
 
         Assert.Contains("Couldn't load eligibilities", caption, StringComparison.Ordinal);
         Assert.DoesNotContain("upstream", caption, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("AADSTS65001: The user or administrator has not consented to use the application.")]
+    [InlineData("AADSTS65004: User declined to consent to access the app.")]
+    [InlineData("AADSTS90094: Admin consent is required for the permissions requested by this application.")]
+    public void MapException_ConsentMissingOnAJunisHostedTenant_AsksForTheAdminsConsentAndFlagsIt(string message)
+    {
+        var mapped = PimErrorMapper.MapException(new MsalServiceException("invalid_grant", message), AppRegistrationHosting.JunisHosted);
+
+        Assert.Equal("An admin of this tenant must consent to Entra PIM Manager once.", mapped.Message);
+        Assert.True(mapped.ConsentMissing);
+    }
+
+    [Fact]
+    public void MapException_ConsentMissingOnASelfHostedTenant_NamesTheRegistrationAndFlagsIt()
+    {
+        var mapped = PimErrorMapper.MapException(new MsalUiRequiredException("invalid_grant", "AADSTS65001: not consented"));
+
+        Assert.Contains("lacks admin consent", mapped.Message, StringComparison.Ordinal);
+        Assert.True(mapped.ConsentMissing);
+    }
+
+    [Fact]
+    public void MapException_ConsentRequiredClassification_CountsAsMissingConsent()
+    {
+        var msal = new MsalUiRequiredException("invalid_grant", "no code in here", null, UiRequiredExceptionClassification.ConsentRequired);
+
+        Assert.True(PimErrorMapper.MapException(msal, AppRegistrationHosting.JunisHosted).ConsentMissing);
+    }
+
+    [Fact]
+    public void MapException_NotAssigned_SaysAnAdminAssignsIt()
+    {
+        var mapped = PimErrorMapper.MapException(new MsalServiceException("invalid_grant", "AADSTS50105: The signed in user is not assigned to a role for the application."));
+
+        Assert.StartsWith("Your account is not assigned to Entra PIM Manager", mapped.Message, StringComparison.Ordinal);
+        Assert.False(mapped.ConsentMissing);
+    }
+
+    [Theory]
+    [InlineData("AADSTS7000112: Application is disabled.")]
+    [InlineData("AADSTS70001: Application with identifier was disabled.")]
+    public void MapException_DisabledApp_OnAJunisHostedTenantNamesBothPossibleCauses(string message)
+    {
+        // The code does not say who switched it off; a tenant admin disabling sign-in looks
+        // exactly like junis' kill switch, so neither may be blamed alone.
+        var mapped = PimErrorMapper.MapException(new MsalServiceException("unauthorized_client", message), AppRegistrationHosting.JunisHosted);
+
+        Assert.Contains("either by an admin of this tenant or by junis", mapped.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MapException_DisabledApp_OnASelfHostedTenantSaysTheRegistrationIsDisabled()
+    {
+        var mapped = PimErrorMapper.MapException(new MsalServiceException("unauthorized_client", "AADSTS7000112: Application is disabled."));
+
+        Assert.Equal("The App Registration is disabled in this tenant.", mapped.Message);
+    }
+
+    [Fact]
+    public void MapException_UnknownApp_IsNotMistakenForADisabledOne()
+    {
+        // AADSTS700016 starts with "AADSTS70001"; a substring match would call it disabled.
+        var mapped = PimErrorMapper.MapException(new MsalServiceException("unauthorized_client", "AADSTS700016: Application with identifier was not found in the directory."));
+
+        Assert.Contains("unknown in the selected tenant", mapped.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MapException_UnknownAppOnAJunisHostedTenant_AsksForConsentInsteadOfAClientIdCheck()
+    {
+        var mapped = PimErrorMapper.MapException(
+            new MsalServiceException("unauthorized_client", "AADSTS700016: Application with identifier was not found in the directory."),
+            AppRegistrationHosting.JunisHosted);
+
+        Assert.DoesNotContain("client id", mapped.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.True(mapped.ConsentMissing);
+    }
+
+    [Fact]
+    public void MapException_PublicClientErrorOnAJunisHostedTenant_DoesNotAskToChangeJunisApp()
+    {
+        var mapped = PimErrorMapper.MapException(
+            new MsalServiceException(MsalError.InvalidClient, "AADSTS7000218: The request body must contain 'client_assertion' or 'client_secret'."),
+            AppRegistrationHosting.JunisHosted);
+
+        Assert.Equal("Device-code sign-in needs a self-hosted App Registration for this tenant.", mapped.Message);
+    }
+
+    [Fact]
+    public void MapException_DeviceCodeRefusedForJunisHosted_SaysItNeedsSelfHosted()
+    {
+        var mapped = PimErrorMapper.MapException(new MsalServiceException("device_code_junis_hosted", "refused"));
+
+        Assert.Equal("Device-code sign-in needs a self-hosted App Registration for this tenant.", mapped.Message);
+    }
+
+    [Fact]
+    public void MapException_CancelledWhileAddingAnAccount_IsACancelledSignInNotAnActivation()
+    {
+        var cancel = new MsalClientException(MsalError.AuthenticationCanceledError, "User canceled authentication.");
+
+        var mapped = PimErrorMapper.MapException(cancel, addingAccount: true);
+
+        Assert.Equal("Sign-in was cancelled.", mapped.Message);
+        Assert.False(mapped.ConsentMissing);
+    }
+
+    [Fact]
+    public void MapException_CancelledWhileAddingToAJunisHostedTenant_CarriesTheConsentHint()
+    {
+        // Closing WAM's "admin approval required" page most likely arrives as a cancel.
+        var cancel = new MsalClientException(MsalError.AuthenticationCanceledError, "User canceled authentication.");
+
+        var mapped = PimErrorMapper.MapException(cancel, AppRegistrationHosting.JunisHosted, addingAccount: true);
+
+        Assert.StartsWith("Sign-in was cancelled.", mapped.Message, StringComparison.Ordinal);
+        Assert.True(mapped.ConsentMissing);
+    }
+
+    [Fact]
+    public void MapException_CancelledOutsideAddAccount_KeepsTheActivationWording()
+    {
+        var mapped = PimErrorMapper.MapException(
+            new MsalClientException(MsalError.AuthenticationCanceledError, "User canceled authentication."),
+            AppRegistrationHosting.JunisHosted);
+
+        Assert.Equal("Verification was cancelled. The role was not activated.", mapped.Message);
+    }
+
+    [Fact]
+    public void DescribeFetchFailure_ConsentMissingOnAJunisHostedTenant_AsksForTheAdminsConsent()
+    {
+        var caption = PimErrorMapper.DescribeFetchFailure(
+            new MsalUiRequiredException("invalid_grant", "AADSTS65001: not consented"),
+            AuthMethod.Broker,
+            AppRegistrationHosting.JunisHosted);
+
+        Assert.StartsWith("An admin of this tenant must consent to Entra PIM Manager once", caption, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DescribeFetchFailure_ReWrappedByTheThrottle_StillFindsTheCause()
+    {
+        // MSAL's UiRequired throttle repeats a failure in a different exception type.
+        Assert.StartsWith(
+            "Your account is not assigned",
+            PimErrorMapper.DescribeFetchFailure(new MsalClientException("throttled", "AADSTS50105: not assigned")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "either by an admin of this tenant or by junis",
+            PimErrorMapper.DescribeFetchFailure(new MsalClientException("throttled", "AADSTS7000112: disabled"), null, AppRegistrationHosting.JunisHosted),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MapException_ReWrappedAsAClientException_StillGetsTheHint()
+    {
+        // The panel, the activation panel and toasts must say what the caption says.
+        var mapped = PimErrorMapper.MapException(new MsalClientException("throttled", "AADSTS50105: not assigned"));
+
+        Assert.StartsWith("Your account is not assigned", mapped.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MapException_InvalidClientWithoutAADSTS7000218OnAJunisHostedTenant_IsNotBlamedOnDeviceCode()
+    {
+        // A broker sign-in never touched device code; only the exact code means "needs a secret".
+        var mapped = PimErrorMapper.MapException(
+            new MsalServiceException(MsalError.InvalidClient, "AADSTS7000215: Invalid client secret provided."),
+            AppRegistrationHosting.JunisHosted);
+
+        Assert.Equal("Sign-in failed. See the log file for details.", mapped.Message);
+    }
+
+    [Fact]
+    public void MapException_ClientExceptionCausedByTheNetwork_StillSaysNoConnection()
+    {
+        var msal = new MsalClientException("request_failed", "Network failure", new HttpRequestException("No such host is known."));
+
+        Assert.Equal(ErrorSeverity.Offline, PimErrorMapper.MapException(msal).Severity);
     }
 }

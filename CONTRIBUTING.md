@@ -89,7 +89,7 @@ Graph errors are mapped to user-friendly messages via `PimErrorMapper`. Do not s
 Entra PIM Manager is a privileged-access tool — please take these constraints seriously:
 
 - **Per-user install only.** No writes to `HKLM`, `Program Files`, no Windows services, no scheduled tasks running as SYSTEM. Autostart goes via `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` only.
-- **No hardcoded tenant or client IDs.** All identifiers come from `appsettings.json` (placeholder values, committed) and `appsettings.local.json` (real values, gitignored).
+- **No hardcoded tenant or client IDs**, with one named exception. Real identifiers come from `appsettings.local.json` (gitignored) or the per-user config; `appsettings.local.json.sample` carries placeholders. The committed `appsettings.json` holds the scopes and exactly one id, `EntraPimManager:JunisHostedClientId`: the client id of the [junis-hosted App Registration](SECURITY.md#the-junis-hosted-app-registration), public by design because every consent screen shows it, and read only from that shipped file. It stays empty on `main` until the registration goes live ([ADR 0002](docs/adr/0002-junis-hosted-app-registration.md)).
 - **Never log access tokens, ID tokens, refresh tokens, or justification text.** Justifications may contain sensitive incident information.
 - **User identifiers in logs** are limited to the OID (object ID); never UPN or mail in plaintext.
 - Ticket numbers may be logged (they are not sensitive themselves).

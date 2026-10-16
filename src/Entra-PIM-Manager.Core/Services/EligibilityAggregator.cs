@@ -3,9 +3,11 @@ namespace EntraPimManager.Core.Services;
 using System.Collections.Concurrent;
 using EntraPimManager.Core.Arm;
 using EntraPimManager.Core.Auth;
+using EntraPimManager.Core.Configuration;
 using EntraPimManager.Core.ErrorHandling;
 using EntraPimManager.Core.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.Identity.Client;
 
 /// <summary>
@@ -38,15 +40,19 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
     private static readonly TimeSpan AzureBackoff = TimeSpan.FromHours(1);
 
     private readonly IAccountScopedServices _accountServices;
+    private readonly EntraPimManagerOptions _options;
     private readonly ILogger<EligibilityAggregator> _logger;
     private readonly ConcurrentDictionary<string, (DateTimeOffset Until, string Reason)> _azureBackoff =
         new(StringComparer.OrdinalIgnoreCase);
 
     public EligibilityAggregator(
         IAccountScopedServices accountServices,
+        IOptions<EntraPimManagerOptions> options,
         ILogger<EligibilityAggregator> logger)
     {
+        ArgumentNullException.ThrowIfNull(options);
         _accountServices = accountServices;
+        _options = options.Value;
         _logger = logger;
     }
 
@@ -224,7 +230,7 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
                 fetchLabel,
                 account.ObjectId,
                 account.TenantId);
-            return (Array.Empty<T>(), PimErrorMapper.DescribeFetchFailure(ex, account.AuthMethod));
+            return (Array.Empty<T>(), PimErrorMapper.DescribeFetchFailure(ex, account.AuthMethod, _options.HostingFor(account.Cloud, account.TenantId)));
         }
     }
 
@@ -263,7 +269,7 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
 
             var reason = "Azure resource roles unavailable: " + (ex is OperationCanceledException
                 ? "the request timed out."
-                : PimErrorMapper.DescribeFetchFailure(ex, account.AuthMethod));
+                : PimErrorMapper.DescribeFetchFailure(ex, account.AuthMethod, _options.HostingFor(account.Cloud, account.TenantId)));
 
             // Only a failed sign-in earns the hour. Anything cancelled — a slow read on
             // a large estate, a token call that didn't finish — may well succeed on the

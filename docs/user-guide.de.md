@@ -48,10 +48,19 @@ Klick auf das Symbol. Beim ersten Mal steht dort **Welcome to Entra PIM Manager*
 Wie es weitergeht, hängt davon ab, woher du die App hast:
 
 - **Von der IT verteilt** — der Tenant ist schon hinterlegt. **Add account**, dann **Sign in**.
-- **Selbst installiert** — es fehlt noch die App Registration des Tenants: **Set up your first
-  tenant**, dann Tenant-ID und Client-ID eintragen. Beides bekommst du von deinem Admin — die zwei
-  IDs benennen den Tenant und die App Registration, raten kann man sie nicht. Danach das Konto
-  hinzufügen.
+- **Selbst installiert** — es fehlt noch dein Tenant: **Set up your first tenant**, Tenant-ID
+  eintragen und wählen, wie die App sich dort anmeldet:
+  - **junis-hosted** — „No setup — an admin consents once." Die App Registration, die junis
+    veröffentlicht; du tippst nur die Tenant-ID. Ein Admin deines Tenants stimmt ihr einmal zu, und
+    solange das noch niemand getan hat, zeigt das Anmelde-Panel den Link, den du ihm schickst. Nur
+    für die globale Cloud, verfügbar ab dem Release, das die junis-Client-ID ausliefert.
+  - **self-hosted** — „Your own App Registration (client id)." Die eigene App Registration deines
+    Tenants: deren Client-ID eintragen. Steht die Cloud auf Entra China, gibt es nur diese Wahl:
+    „Entra China needs your own App Registration."
+
+  Welche es ist und die IDs bekommst du von deinem Admin — raten kann man sie nicht. Einen Tenant,
+  der schon da ist, lehnt das Formular ab: „This tenant is already configured. Use the gear on its
+  card to change it." Danach das Konto hinzufügen.
 
 **Sign in** öffnet die normale Windows-Kontoauswahl. Nimm das Admin-Konto, mit dem du die Rollen
 hältst — bei vielen ist das ein anderes als das, mit dem sie sich an Windows anmelden. In der App
@@ -69,6 +78,11 @@ Admin-Konto wird dir nie angeboten.
 Dafür gibt es **Device code** bei den Anmeldeoptionen. Es zeigt eine URL und einen kurzen Code, den
 du auf dem Handy oder in einem privaten Browserfenster eingibst — dort, wo noch nichts angemeldet
 ist.
+
+Device Code braucht eine **self-hosted** App Registration. Bei einem junis-hosted Tenant fehlt im
+Anmelde-Panel der Abschnitt **Advanced**; dort steht stattdessen „Device-code sign-in needs a
+self-hosted App Registration for this tenant." Brauchst du ihn dort, frag deinen Admin nach einer
+self-hosted Registration.
 
 Zwei Dinge vorher. Manche Unternehmen sperren die Device-Code-Anmeldung per Conditional Access; dann
 scheitert sie und der normale Weg ist der einzige. Und Rollen, die durch einen *Authentication
@@ -255,8 +269,14 @@ angemeldeten Konten. Du kannst einem Konto ein kurzes Kürzel geben („EADM"), 
 langen UPN zu lesen, und die Tenants in deine Reihenfolge ziehen. Das Zahnrad einer Karte zeigt
 ihre Tenant-ID, die du markieren und kopieren kannst. **Remove tenant** unter dem Zahnrad entfernt
 den Tenant samt seinen Konten und deren Anmeldungen; ein einzelnes Konto entfernst du unter seinem
-Stift. Beides fragt mit einem zweiten Klick nach. Eine geänderte App Registration greift erst nach
-einem Neustart — die App sagt es dann auch.
+Stift. Beides fragt mit einem zweiten Klick nach.
+
+Neben der Cloud zeigt jede Karte, ob der Tenant **junis-hosted** oder **self-hosted** ist. Das
+Zahnrad stellt es um: den anderen Weg wählen, bei self-hosted mit Client-ID, und **Save**. Hat der
+Tenant Konten, wird Save zuerst zu „Remove N accounts and save" und fragt mit einem zweiten Klick
+nach: Die Konten, die über die alte App Registration angemeldet sind, werden entfernt, und du fügst
+sie nach dem Neustart neu hinzu. Eine geänderte App Registration greift erst nach einem Neustart —
+die App sagt es dann auch; bis dahin bleibt **+ Add account…** auf dieser Karte gesperrt.
 
 ## Updates
 
@@ -294,7 +314,9 @@ muss.
 
 **Die Anmeldung scheitert mit einer Consent- oder Berechtigungsmeldung.** Der App Registration wurde
 in diesem Tenant nicht zugestimmt. Ein Admin macht das einmalig, siehe
-[app-registration-setup.md](app-registration-setup.md).
+[app-registration-setup.md](app-registration-setup.md). Bei einem junis-hosted Tenant zeigt das
+Anmelde-Panel den Link dafür, unter „Send this link to an admin of this tenant:" — markieren,
+kopieren und einem Admin schicken.
 
 **Die Aktivierung scheitert und nennt Authentication Context oder Conditional Access.** Die Rolle
 verlangt eine stärkere Anmeldung, als die Sitzung hat. Wenn du dich per Device Code angemeldet hast,

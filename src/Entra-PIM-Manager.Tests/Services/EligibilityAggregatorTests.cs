@@ -2,14 +2,18 @@ namespace EntraPimManager.Tests.Services;
 
 using EntraPimManager.Core.Arm;
 using EntraPimManager.Core.Auth;
+using EntraPimManager.Core.Configuration;
 using EntraPimManager.Core.Models;
 using EntraPimManager.Core.Services;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.Identity.Client;
 using Moq;
 
 public sealed class EligibilityAggregatorTests
 {
+    private static readonly IOptions<EntraPimManagerOptions> NoOptions = Options.Create(new EntraPimManagerOptions());
+
     [Theory]
     [InlineData(PimResourceKind.DirectoryRole)]
     [InlineData(PimResourceKind.GroupMembership)]
@@ -45,7 +49,7 @@ public sealed class EligibilityAggregatorTests
         var scoped = new Mock<IAccountScopedServices>();
         scoped.Setup(s => s.GetServicesFor(account)).Returns(bundle);
 
-        var aggregator = new EligibilityAggregator(scoped.Object, NullLogger<EligibilityAggregator>.Instance);
+        var aggregator = new EligibilityAggregator(scoped.Object, NoOptions, NullLogger<EligibilityAggregator>.Instance);
 
         var result = await aggregator.ActivateAsync(account, request);
 
@@ -96,7 +100,7 @@ public sealed class EligibilityAggregatorTests
         var scoped = new Mock<IAccountScopedServices>();
         scoped.Setup(s => s.GetServicesFor(account)).Returns(bundle);
 
-        var aggregator = new EligibilityAggregator(scoped.Object, NullLogger<EligibilityAggregator>.Instance);
+        var aggregator = new EligibilityAggregator(scoped.Object, NoOptions, NullLogger<EligibilityAggregator>.Instance);
 
         var result = await aggregator.DeactivateAsync(account, assignment);
 
@@ -137,7 +141,7 @@ public sealed class EligibilityAggregatorTests
         scoped.Setup(s => s.GetServicesFor(goodAccount)).Returns(goodBundle);
         scoped.Setup(s => s.GetServicesFor(badAccount)).Returns(badBundle);
 
-        var aggregator = new EligibilityAggregator(scoped.Object, NullLogger<EligibilityAggregator>.Instance);
+        var aggregator = new EligibilityAggregator(scoped.Object, NoOptions, NullLogger<EligibilityAggregator>.Instance);
 
         var result = await aggregator.GetAggregatedActiveAssignmentsAsync(new[] { goodAccount, badAccount });
 
@@ -186,7 +190,7 @@ public sealed class EligibilityAggregatorTests
         scoped.Setup(s => s.GetServicesFor(goodAccount)).Returns(goodBundle);
         scoped.Setup(s => s.GetServicesFor(badAccount)).Returns(badBundle);
 
-        var aggregator = new EligibilityAggregator(scoped.Object, NullLogger<EligibilityAggregator>.Instance);
+        var aggregator = new EligibilityAggregator(scoped.Object, NoOptions, NullLogger<EligibilityAggregator>.Instance);
 
         var result = await aggregator.GetAggregatedEligibilitiesAsync(new[] { goodAccount, badAccount });
 
@@ -315,6 +319,27 @@ public sealed class EligibilityAggregatorTests
     }
 
     [Fact]
+    public async Task GetAggregatedEligibilitiesAsync_JunisHostedTenantWithoutConsent_AsksForTheAdminsConsent()
+    {
+        // The customer cannot "grant consent for the App Registration" of junis' app; the
+        // caption must name what they can do instead.
+        const string junisAppId = "5d0c1f2e-0000-4000-8000-0000000000f1";
+        const string tenant = "7b1c4d2e-0000-4000-8000-0000000000aa";
+        var options = new EntraPimManagerOptions();
+        options.UseJunisHostedClientId(junisAppId);
+        options.TenantAppRegistrations.Add(new TenantAppRegistration { TenantId = tenant, ClientId = junisAppId, Cloud = "Global" });
+        var account = MakeAccount("oid-a", tenant);
+        var azure = new Mock<IPimAzureResourceService>();
+        azure
+            .Setup(s => s.GetEligibleAzureRolesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new MsalUiRequiredException("invalid_grant", "AADSTS65001: not consented"));
+
+        var result = await BuildAggregator(account, azure.Object, Options.Create(options)).GetAggregatedEligibilitiesAsync(new[] { account });
+
+        Assert.Contains("must consent to Entra PIM Manager", result[account].LoadError, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ForgetAzureBackoff_AfterConsentAndAReSignIn_TriesTheAzureSurfaceAgain()
     {
         // The backoff key is (oid, tenant, cloud), so removing the account and signing
@@ -343,6 +368,7 @@ public sealed class EligibilityAggregatorTests
     {
         var aggregator = new EligibilityAggregator(
             Mock.Of<IAccountScopedServices>(),
+            NoOptions,
             NullLogger<EligibilityAggregator>.Instance);
 
         aggregator.ForgetAzureBackoff(MakeAccount("oid-a", "tenant-a"));
@@ -353,6 +379,7 @@ public sealed class EligibilityAggregatorTests
     {
         var aggregator = new EligibilityAggregator(
             Mock.Of<IAccountScopedServices>(),
+            NoOptions,
             NullLogger<EligibilityAggregator>.Instance);
 
         var result = await aggregator.GetAggregatedEligibilitiesAsync(Array.Empty<SignedInAccount>());
@@ -377,7 +404,10 @@ public sealed class EligibilityAggregatorTests
         Assert.Same(expected, result);
     }
 
-    private static EligibilityAggregator BuildAggregator(SignedInAccount account, IPimAzureResourceService azure)
+    private static EligibilityAggregator BuildAggregator(
+        SignedInAccount account,
+        IPimAzureResourceService azure,
+        IOptions<EntraPimManagerOptions>? options = null)
     {
         var role = new Mock<IPimRoleService>();
         role
@@ -396,7 +426,7 @@ public sealed class EligibilityAggregatorTests
         var bundle = new AccountScopedServiceBundle(role.Object, group.Object, azure, Mock.Of<IPolicyService>());
         var scoped = new Mock<IAccountScopedServices>();
         scoped.Setup(s => s.GetServicesFor(account)).Returns(bundle);
-        return new EligibilityAggregator(scoped.Object, NullLogger<EligibilityAggregator>.Instance);
+        return new EligibilityAggregator(scoped.Object, options ?? NoOptions, NullLogger<EligibilityAggregator>.Instance);
     }
 
     private static IPimGroupService EmptyGroupService()

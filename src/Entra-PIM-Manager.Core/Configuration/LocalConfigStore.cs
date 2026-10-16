@@ -34,6 +34,13 @@ public static class LocalConfigStore
             throw new ArgumentException($"TenantId '{registration.TenantId}' is not a GUID.", nameof(registration));
         }
 
+        // The validator rejects a non-GUID client id at startup and shuts the app down
+        // without a window, so an entry that would do that is never written.
+        if (!Guid.TryParse(registration.ClientId, out _))
+        {
+            throw new ArgumentException($"ClientId '{registration.ClientId}' is not a GUID.", nameof(registration));
+        }
+
         var root = LoadRoot(configFilePath);
         var list = TenantRegistrationsOf(SectionOf(root));
         Upsert(list, cloud, tenantId, registration.ClientId, registration.Label);

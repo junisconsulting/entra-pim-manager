@@ -334,28 +334,43 @@
                            TextTrimming="CharacterEllipsis"
                            VerticalAlignment="Center"
                            ToolTip.Tip="{Binding TenantId}" />
-                <Border Grid.Column="1"
-                        Background="{DynamicResource AccentSoftBrush}"
-                        CornerRadius="4"
-                        Padding="6,2"
-                        VerticalAlignment="Center"
-                        IsVisible="{Binding !IsChina}">
-                  <TextBlock Text="{Binding CloudName}"
-                             FontSize="10"
-                             FontWeight="Medium"
-                             Foreground="{DynamicResource AccentTextBrush}" />
-                </Border>
-                <Border Grid.Column="1"
-                        Background="{DynamicResource WarningSoftBrush}"
-                        CornerRadius="4"
-                        Padding="6,2"
-                        VerticalAlignment="Center"
-                        IsVisible="{Binding IsChina}">
-                  <TextBlock Text="{Binding CloudName}"
-                             FontSize="10"
-                             FontWeight="Medium"
-                             Foreground="{DynamicResource WarningBrush}" />
-                </Border>
+                <!-- Whose App Registration the tenant uses, from the saved entry: a save
+                     shows here at once, before the restart applies it. A plain text chip,
+                     not focusable, like the "Device code" badge. -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                  <Border Background="{DynamicResource Surface1Brush}"
+                          BorderBrush="{DynamicResource BorderSubtleBrush}"
+                          BorderThickness="1"
+                          CornerRadius="4"
+                          Padding="5,1"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding ShowHostingChip}">
+                    <TextBlock Text="{Binding HostingChipText}"
+                               FontSize="10"
+                               FontWeight="Medium"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                  </Border>
+                  <Border Background="{DynamicResource AccentSoftBrush}"
+                          CornerRadius="4"
+                          Padding="6,2"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding !IsChina}">
+                    <TextBlock Text="{Binding CloudName}"
+                               FontSize="10"
+                               FontWeight="Medium"
+                               Foreground="{DynamicResource AccentTextBrush}" />
+                  </Border>
+                  <Border Background="{DynamicResource WarningSoftBrush}"
+                          CornerRadius="4"
+                          Padding="6,2"
+                          VerticalAlignment="Center"
+                          IsVisible="{Binding IsChina}">
+                    <TextBlock Text="{Binding CloudName}"
+                               FontSize="10"
+                               FontWeight="Medium"
+                               Foreground="{DynamicResource WarningBrush}" />
+                  </Border>
+                </StackPanel>
               </Grid>
               <StackPanel Orientation="Horizontal" Spacing="5">
                 <Ellipse Width="6" Height="6" VerticalAlignment="Center"
@@ -405,9 +420,37 @@
                                    Foreground="{DynamicResource TextSecondaryBrush}"
                                    TextTrimming="CharacterEllipsis" />
             </Grid>
+            <!-- The way, as in the add form: one radio group, both buttons always shown.
+                 Hidden where only self-hosted exists (China, or no junis id shipped). No
+                 GroupName: a name would group these buttons with every other card's. -->
+            <StackPanel Spacing="2" IsVisible="{Binding IsHostingChoiceVisible}">
+              <RadioButton IsChecked="{Binding IsJunisHostedDraft}">
+                <StackPanel>
+                  <TextBlock Text="junis-hosted"
+                             FontSize="{DynamicResource FontBody}"
+                             Foreground="{DynamicResource TextPrimaryBrush}" />
+                  <TextBlock Text="No setup — an admin consents once."
+                             FontSize="{DynamicResource FontSmall}"
+                             Foreground="{DynamicResource TextTertiaryBrush}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+              </RadioButton>
+              <RadioButton IsChecked="{Binding !IsJunisHostedDraft, Mode=OneWay}">
+                <StackPanel>
+                  <TextBlock Text="self-hosted"
+                             FontSize="{DynamicResource FontBody}"
+                             Foreground="{DynamicResource TextPrimaryBrush}" />
+                  <TextBlock Text="Your own App Registration (client id)."
+                             FontSize="{DynamicResource FontSmall}"
+                             Foreground="{DynamicResource TextTertiaryBrush}"
+                             TextWrapping="Wrap" />
+                </StackPanel>
+              </RadioButton>
+            </StackPanel>
             <TextBox Text="{Binding ClientIdDraft}"
                      PlaceholderText="Client id — 00000000-0000-0000-0000-000000000000"
-                     FontSize="{DynamicResource FontBody}" />
+                     FontSize="{DynamicResource FontBody}"
+                     IsVisible="{Binding !IsJunisHostedDraft}" />
             <TextBox Text="{Binding LabelDraft}"
                      PlaceholderText="Label (optional)"
                      FontSize="{DynamicResource FontBody}" />
@@ -422,11 +465,14 @@
               <!-- One button that changes its look when armed, never a second one swapped
                    in: hiding the button that has the focus would send Escape to the
                    window, which hides the popup with the button still armed. -->
+              <!-- Steps aside while Save is armed: the row has no room for both long
+                   labels, and the focus is on Save then, never here. -->
               <Button Grid.Column="0"
                       Classes="dangertext"
                       Classes.ghost="{Binding !RemoveConfirmation.IsArmed}"
                       Classes.destructive="{Binding RemoveConfirmation.IsArmed}"
                       Padding="10,5"
+                      IsVisible="{Binding !SaveConfirmation.IsArmed}"
                       Command="{Binding RemoveConfirmation.Command}"
                       ToolTip.Tip="Removes this tenant: its accounts and their sign-ins, its App Registration and its ticket system. Active roles stay active until they expire.">
                 <Panel>
@@ -439,10 +485,17 @@
                       Content="Cancel"
                       Command="{Binding CancelConfigCommand}"
                       Margin="0,0,8,0" />
+              <!-- Asks for a second click only when the new client id would remove the
+                   tenant's accounts; one button either way, so it keeps the focus. -->
               <Button Grid.Column="3"
-                      Classes="primary"
-                      Content="Save"
-                      Command="{Binding SaveCommand}" />
+                      Classes.primary="{Binding !SaveConfirmation.IsArmed}"
+                      Classes.destructive="{Binding SaveConfirmation.IsArmed}"
+                      Command="{Binding SaveConfirmation.Command}">
+                <Panel>
+                  <TextBlock Text="Save" IsVisible="{Binding !SaveConfirmation.IsArmed}" />
+                  <TextBlock Text="{Binding ArmedSaveText}" IsVisible="{Binding SaveConfirmation.IsArmed}" />
+                </Panel>
+              </Button>
             </Grid>
           </StackPanel>
 
@@ -970,7 +1023,7 @@
                              FontSize="{DynamicResource FontSubtitle}"
                              FontWeight="Medium"
                              HorizontalAlignment="Center" />
-                  <TextBlock Text="To get started, configure your Entra App Registration."
+                  <TextBlock Text="To get started, add your tenant in Settings."
                              FontSize="{DynamicResource FontBody}"
                              Foreground="{DynamicResource TextSecondaryBrush}"
                              TextWrapping="Wrap"
@@ -1856,14 +1909,38 @@
                       Padding="10,8"
                       IsVisible="{Binding ErrorMessage,
                                           Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                <TextBlock Text="{Binding ErrorMessage}"
-                           TextWrapping="Wrap"
-                           FontSize="{DynamicResource FontSmall}"
-                           Foreground="{DynamicResource DangerBrush}" />
+                <StackPanel Spacing="6">
+                  <TextBlock Text="{Binding ErrorMessage}"
+                             TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSmall}"
+                             Foreground="{DynamicResource DangerBrush}" />
+                  <!-- Junis-hosted without consent: the link for an admin, as text to
+                       select and copy. Nothing opens a browser from the popup. -->
+                  <StackPanel Spacing="2"
+                              IsVisible="{Binding ConsentUrl,
+                                                  Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <TextBlock Text="Send this link to an admin of this tenant:"
+                               TextWrapping="Wrap"
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource TextSecondaryBrush}" />
+                    <SelectableTextBlock Text="{Binding ConsentUrl}"
+                                         TextWrapping="Wrap"
+                                         FontSize="{DynamicResource FontSmall}"
+                                         Foreground="{DynamicResource TextPrimaryBrush}" />
+                  </StackPanel>
+                </StackPanel>
               </Border>
 
+              <!-- The junis-hosted registration has public client flows off, so a
+                   junis-hosted target gets this caption instead of the disclosure. -->
+              <TextBlock Text="Device-code sign-in needs a self-hosted App Registration for this tenant."
+                         TextWrapping="Wrap"
+                         FontSize="{DynamicResource FontSmall}"
+                         Foreground="{DynamicResource TextTertiaryBrush}"
+                         IsVisible="{Binding !IsDeviceCodeAvailable}" />
+
               <!-- Advanced: device-code escape hatch -->
-              <StackPanel Spacing="10">
+              <StackPanel Spacing="10" IsVisible="{Binding IsDeviceCodeAvailable}">
                 <Button Classes="ghost"
                         Command="{Binding ToggleAdvancedCommand}"
                         HorizontalAlignment="Left"
@@ -2069,7 +2146,7 @@
                 </Button>
 
                 <StackPanel Spacing="8" IsVisible="{Binding IsTenantsSectionExpanded}">
-                  <TextBlock Text="One card per tenant: its App Registration, its ticket system, and the accounts signed into it. A multi-tenant registration is listed once per tenant with the same client id."
+                  <TextBlock Text="One card per tenant: its App Registration, its ticket system, and the accounts signed into it."
                              FontSize="{DynamicResource FontSmall}"
                              Foreground="{DynamicResource TextTertiaryBrush}"
                              TextWrapping="Wrap" />
@@ -2115,9 +2192,47 @@
                     <TextBox Text="{Binding NewTenantId}"
                              PlaceholderText="Tenant id — 00000000-0000-0000-0000-000000000000"
                              FontSize="{DynamicResource FontBody}" />
+                    <TextBlock Text="This tenant is already configured. Use the gear on its card to change it."
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource WarningBrush}"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding IsNewTenantAlreadyConfigured}" />
+                    <!-- The way: one radio group, both buttons always shown. Absent while
+                         the build ships no junis id — then self-hosted is all there is. -->
+                    <StackPanel Spacing="2" IsVisible="{Binding IsHostingChoiceAvailable}">
+                      <RadioButton IsChecked="{Binding NewIsJunisHosted}"
+                                   IsEnabled="{Binding !IsNewTenantChina}">
+                        <StackPanel>
+                          <TextBlock Text="junis-hosted"
+                                     FontSize="{DynamicResource FontBody}"
+                                     Foreground="{DynamicResource TextPrimaryBrush}" />
+                          <TextBlock Text="No setup — an admin consents once."
+                                     FontSize="{DynamicResource FontSmall}"
+                                     Foreground="{DynamicResource TextTertiaryBrush}"
+                                     TextWrapping="Wrap" />
+                        </StackPanel>
+                      </RadioButton>
+                      <RadioButton IsChecked="{Binding !NewIsJunisHosted, Mode=OneWay}">
+                        <StackPanel>
+                          <TextBlock Text="self-hosted"
+                                     FontSize="{DynamicResource FontBody}"
+                                     Foreground="{DynamicResource TextPrimaryBrush}" />
+                          <TextBlock Text="Your own App Registration (client id)."
+                                     FontSize="{DynamicResource FontSmall}"
+                                     Foreground="{DynamicResource TextTertiaryBrush}"
+                                     TextWrapping="Wrap" />
+                        </StackPanel>
+                      </RadioButton>
+                      <TextBlock Text="Entra China needs your own App Registration."
+                                 FontSize="{DynamicResource FontSmall}"
+                                 Foreground="{DynamicResource TextTertiaryBrush}"
+                                 TextWrapping="Wrap"
+                                 IsVisible="{Binding IsNewTenantChina}" />
+                    </StackPanel>
                     <TextBox Text="{Binding NewClientId}"
                              PlaceholderText="Client id — 00000000-0000-0000-0000-000000000000"
-                             FontSize="{DynamicResource FontBody}" />
+                             FontSize="{DynamicResource FontBody}"
+                             IsVisible="{Binding !NewIsJunisHosted}" />
                     <TextBox Text="{Binding NewLabel}"
                              PlaceholderText="Label (optional)"
                              FontSize="{DynamicResource FontBody}" />

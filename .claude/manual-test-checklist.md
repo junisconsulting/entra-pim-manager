@@ -134,7 +134,7 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 - [ ] Hover über „Remove tenant"/„Remove account" → die Schrift bleibt rot. Scharf
       geschaltet und gehovert → die Schrift bleibt weiß auf Rot (helles **und**
       dunkles Theme).
-- [ ] Gleichen Tenant erneut hinzufügen (anderer Label) → ein Eintrag, nicht zwei.
+- [ ] Gleichen Tenant erneut hinzufügen → **Add** bleibt gesperrt, Hinweis „This tenant is already configured. Use the gear on its card to change it.“ (ab junis-hosted; Client-ID/Label ändert das Zahnrad).
 - [ ] Zahnrad auf einer Tenant-Karte → Konfiguration klappt auf, Client-ID, Label
       und Ticketsystem sind vorbelegt, die **Tenant-ID steht nur als Text da**
       (nicht editierbar). Label ändern → Save → Karte aktualisiert, Restart-Banner.
@@ -238,6 +238,84 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
       tragen. Zähler und Abzeichen stehen nebeneinander.
 - [ ] Die Sektionsüberschrift ist trotz 10 px **noch als klickbar erkennbar**:
       Hover färbt die ganze Zeile, das Chevron bleibt sichtbar.
+
+## 1e. junis-hosted App Registration — ab der Version, die die junis-Client-ID ausliefert
+
+> Läuft **vor** dem Release-Gate (`release`-Skill, §1): mit der echten junis-Registration
+> aus einem lokalen Build, in dessen `src/Entra-PIM-Manager.App.Avalonia/appsettings.json`
+> die junis-Client-ID als `JunisHostedClientId` steht — nur im Arbeitsverzeichnis, **nie
+> committen**. Die Test-Tenants benennt der Maintainer vor dem Lauf; ihre IDs kommen nicht
+> ins Repository. Gebraucht: ein Tenant ohne und einer mit Consent, je ein Konto mit Cloud
+> Application Administrator, mit Privileged Role Administrator und ohne Admin-Rolle, dazu
+> ein Gastkonto. Bei **Notieren** festhalten, was tatsächlich ankam — davon hängen Doku und
+> Fallbacks ab.
+
+- [ ] **Consent-Link:** den Link aus `docs/app-registration-setup.md` („junis-hosted:
+      consent only") als Cloud Application Administrator öffnen und zustimmen.
+      **Notieren:** wo der Browser landet und ob die Zustimmung unter Enterprise
+      applications eingetragen ist. Eingetragen, aber Fehlerseite → Link bleibt, die Doku
+      nennt die Seite als erwartet. **Nicht** eingetragen → Link aus App und Doku nehmen
+      und auf die Zustimmung über die Anmeldung der App verweisen (Punkt „Consent über die
+      App"). Eine Web-Redirect-URI an der junis-App ist **keine** Lösung.
+- [ ] **Anmeldung ohne Consent:** Konto ohne Admin-Rolle in einem Tenant ohne Consent → WAM
+      zeigt „admin approval required". Nach dem Schließen zeigt das Add-account-Panel
+      „Sign-in was cancelled. If Entra asked for an admin's approval, …", darunter „Send
+      this link to an admin of this tenant:" mit dem Link als markierbarem Text — kein
+      Button, kein Browser. **Notieren:** was die App bekam (Fehlercode im Log).
+- [ ] **Consent über die App:** Privileged Role Administrator meldet sich in einem Tenant
+      ohne Consent an und hakt „Consent on behalf of your organization" an → Anmeldung
+      läuft durch, Eligibilities erscheinen.
+- [ ] **Nicht zugewiesen:** „Assignment required" an der junis-Enterprise-App an, Konto
+      nicht zugewiesen → „Your account is not assigned to Entra PIM Manager in this
+      tenant. An admin assigns it under Enterprise applications."
+- [ ] **Device Code:** Add-account-Panel mit junis-hosted-Ziel → **kein** „Advanced",
+      stattdessen „Device-code sign-in needs a self-hosted App Registration for this
+      tenant." Im Picker auf ein self-hosted-Ziel wechseln → „Advanced" ist wieder da.
+      Gegenprobe außerhalb der App: ein Device-Code-Request mit der junis-Client-ID
+      scheitert am Token-Endpunkt mit `AADSTS7000218`.
+- [ ] **Umstellen per Zahnrad:** einen Tenant von junis-hosted auf self-hosted und zurück.
+      Der Chip neben der Cloud folgt jedem Save sofort; „+ Add account…" bleibt bis zum
+      Neustart deaktiviert; nach dem Neustart funktioniert der Tenant. Mit Konten wird
+      Save zu „Remove N accounts and save" (bei einem: „Remove 1 account and save"), erst
+      der zweite Klick entfernt die Konten und speichert; im Log pro Konto „Account removed
+      (…)" und **kein** „Account removed without cache purge".
+- [ ] **Abgeschaltet, zweimal:**
+  - [ ] **Nur vor dem Release:** an der junis-App `isDisabled` setzen → **Notieren:**
+        Fehlercode; der Hinweis „Entra PIM Manager is switched off for this tenant, either
+        by an admin of this tenant or by junis for all tenants. …" erscheint. Wieder
+        aktivieren. Der Audit-Alarm an junis security muss dabei auslösen.
+  - [ ] In einem Test-Tenant an der junis-Enterprise-App „Enabled for users to sign-in?" =
+        No → **Notieren:** Fehlercode; derselbe Hinweis. Zurückstellen.
+- [ ] **Downgrade:** 0.13.0 mit einer Konfiguration starten, die einen junis-hosted-Eintrag
+      enthält → startet und meldet an.
+- [ ] **Gast:** Gastkonto in einem zweiten Tenant, der zugestimmt hat → dessen
+      Eligibilities erscheinen.
+- [ ] **Verified:** zwei junis-hosted-Tenants, einer mit, einer ohne Consent → nur der mit
+      Consent zeigt „Verified".
+- [ ] **Add-Formular:** bereits konfigurierten Tenant erneut hinzufügen → abgelehnt mit
+      „This tenant is already configured. Use the gear on its card to change it." Cloud
+      Entra China wählen → junis-hosted gesperrt, „Entra China needs your own App
+      Registration.", Client-ID ist Pflicht.
+- [ ] **Install-Skript** (`docs/unattended-deployment.md`):
+  - [ ] ohne `-ClientId` → junis-hosted-Eintrag (Client-ID = junis-ID, Chip
+        „junis-hosted");
+  - [ ] mit `-ClientId` → Verhalten wie bisher;
+  - [ ] `-Cloud China` ohne `-ClientId` → Abbruch **vor** der Installation;
+  - [ ] ohne `-SetupExe` gegen ein installiertes 0.13.0, ohne `-ClientId` → „This
+        installation does not offer junis-hosted yet; pass -ClientId or install a newer
+        version.";
+  - [ ] erneuter Lauf ohne `-ClientId` über einem self-hosted-Eintrag → junis-hosted,
+        Prüfschritt besteht; umgekehrt mit `-ClientId` → self-hosted;
+  - [ ] läuft unter Windows PowerShell 5.1 aus Intune (IME-Log: Exit-Code `0`).
+- [ ] **Consent-Bildschirm:** zeigt den verifizierten Herausgeber „junis GmbH" und das Logo.
+- [ ] **Log:** nach den Fehlerfällen oben (ohne Consent, nicht zugewiesen, abgeschaltet)
+      enthält das Log **keinen** UPN und keine Mail-Adresse. Sonst fällt das Release-Gate,
+      bis Core Mail-förmige Zeichenketten aus geloggten Exception-Messages entfernt (mit
+      Unit-Test).
+- [ ] **Ohne junis-ID:** Build mit leerem `JunisHostedClientId` → keine junis-hosted-Wahl,
+      kein Hosting-Chip, nirgends junis-Wortlaut (Add-Formular, Karten, Add-account-Panel).
+- [ ] **Lokale Überschreibung wirkt nicht:** `JunisHostedClientId` im per-User-
+      `appsettings.local.json` setzen → ändert nichts, mit leerer wie mit ausgelieferter ID.
 
 ## 2. Read-Pfade (Eligibilities & Active Assignments) — Phase 2
 
@@ -787,6 +865,7 @@ Logdateien: `%LocalAppData%\Entra-PIM-Manager\logs\pim-manager-*.log`
 | 1b Sovereign Cloud  | OK                     |  |
 | 1c Tenants & App-Reg| OK                     |  |
 | 1d Sektionen        | OK                     | Azure-Faltung nur mit wenigen Eligibilities; 400er-Fall verschoben (Backlog) |
+| 1e junis-hosted     |                        |  |
 | 2 Read-Pfade        | OK                     |  |
 | 3 Aktivierung       | OK                     |  |
 | 4 Tray & UI         | OK                     |  |

@@ -109,6 +109,33 @@ public sealed class LocalConfigStoreTests : IDisposable
         Assert.Null(options.ClientIdFor(EntraCloud.Global, TenantB));
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("not-a-guid")]
+    public void SaveTenantRegistration_AClientIdThatIsNotAGuid_IsNeverWritten(string clientId)
+    {
+        // The validator rejects it at the next start and the app closes without a window.
+        Assert.Throws<ArgumentException>(() => LocalConfigStore.SaveTenantRegistration(_filePath, Pinned(TenantA, clientId, "Global", null)));
+
+        Assert.False(File.Exists(_filePath));
+    }
+
+    [Fact]
+    public void SaveTenantRegistration_ANewTenant_LeavesTheOtherEntriesByteIdentical()
+    {
+        // Adding a junis-hosted tenant must not touch anyone's existing entries.
+        const string tenantC = "7b1c4d2e-0000-4000-8000-0000000000cc";
+        LocalConfigStore.SaveTenantRegistration(_filePath, Pinned(TenantA, GlobalAppId, "Global", "Contoso"));
+        LocalConfigStore.SaveTenantRegistration(_filePath, Pinned(TenantB, ChinaAppId, "China", null));
+        var before = EntriesAsJson();
+
+        LocalConfigStore.SaveTenantRegistration(_filePath, Pinned(tenantC, "5d0c1f2e-0000-4000-8000-0000000000f1", "Global", null));
+
+        var after = EntriesAsJson();
+        Assert.Equal(3, after.Count);
+        Assert.Equal(before, after.Take(2));
+    }
+
     private static TenantAppRegistration Pinned(string tenantId, string clientId, string cloud, string? label)
         => new() { TenantId = tenantId, ClientId = clientId, Cloud = cloud, Label = label };
 
@@ -118,4 +145,9 @@ public sealed class LocalConfigStoreTests : IDisposable
             .GetProperty("EntraPimManager")
             .GetProperty("TenantAppRegistrations")
             .Deserialize<List<TenantAppRegistration>>()!;
+
+    private List<string> EntriesAsJson()
+        => [.. System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(_filePath))!["EntraPimManager"]!["TenantAppRegistrations"]!
+            .AsArray()
+            .Select(entry => entry!.ToJsonString())];
 }

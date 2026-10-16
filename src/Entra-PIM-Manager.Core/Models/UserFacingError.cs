@@ -10,7 +10,13 @@ namespace EntraPimManager.Core.Models;
 /// Which input field the error relates to (<c>justification</c>, <c>ticket</c>,
 /// <c>duration</c>), for inline validation — or <c>null</c>.
 /// </param>
+/// <param name="ConsentMissing">
+/// True when the cause is a tenant that has not consented to the App Registration. The
+/// add-account panel then shows the junis-hosted admin-consent link below the message —
+/// the one thing the user can hand to an admin.
+/// </param>
 public sealed record UserFacingError(
     ErrorSeverity Severity,
     string Message,
-    string? FieldHint);
+    string? FieldHint,
+    bool ConsentMissing = false);

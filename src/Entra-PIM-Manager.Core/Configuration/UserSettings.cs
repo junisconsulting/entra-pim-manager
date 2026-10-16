@@ -1,5 +1,7 @@
 namespace EntraPimManager.Core.Configuration;
 
+using EntraPimManager.Core.Auth;
+
 /// <summary>
 /// Persisted user preferences for the in-app Settings panel and per-user
 /// shell layout. Everything else (auth config, refresh intervals, internal
@@ -90,6 +92,13 @@ namespace EntraPimManager.Core.Configuration;
 /// is workflow, not auth configuration, and a registration change only takes effect
 /// after a restart while these settings apply at once.
 /// </param>
+/// <param name="VerifiedJunisHostedRegistrations">
+/// The junis-hosted registrations a sign-in has succeeded with, as
+/// <c>{cloud}|{tenant}|{client id}</c> keys. Every junis-hosted tenant shares one client id
+/// but consents on its own, so <paramref name="VerifiedClientIds"/> would let one tenant's
+/// sign-in mark all of them as verified. Self-hosted tenants keep using that set unchanged;
+/// older versions ignore this one. <c>null</c> until the first junis-hosted sign-in.
+/// </param>
 public sealed record UserSettings(
     ThemePreference Theme,
     double DefaultDurationHours,
@@ -109,7 +118,8 @@ public sealed record UserSettings(
     Dictionary<string, string>? TicketSystems = null,
     List<string>? PinnedEligibilities = null,
     List<string>? RecentEligibilities = null,
-    string? LastSeenVersion = null)
+    string? LastSeenVersion = null,
+    string[]? VerifiedJunisHostedRegistrations = null)
 {
     /// <summary>Defaults applied when no settings file exists or the file is unreadable.</summary>
     public static UserSettings Default { get; } = new(
@@ -140,4 +150,33 @@ public sealed record UserSettings(
             .FirstOrDefault(entry => string.Equals(entry.Key, tenantId, StringComparison.OrdinalIgnoreCase))
             .Value;
     }
+
+    /// <summary>
+    /// True once a sign-in through <paramref name="clientId"/> succeeded for this tenant: per
+    /// client id for a self-hosted registration, per (cloud, tenant, client id) for the
+    /// junis-hosted one, whose single client id is consented tenant by tenant.
+    /// </summary>
+    public bool IsRegistrationVerified(EntraCloud cloud, string tenantId, string clientId, AppRegistrationHosting hosting)
+        => hosting == AppRegistrationHosting.JunisHosted
+            ? (VerifiedJunisHostedRegistrations ?? []).Contains(VerifiedKey(cloud, tenantId, clientId), StringComparer.OrdinalIgnoreCase)
+            : (VerifiedClientIds ?? []).Contains(clientId.Trim(), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// These settings with the registration recorded as verified, or the same instance when it
+    /// already is — so the common case does not rewrite the settings file.
+    /// </summary>
+    public UserSettings WithRegistrationVerified(EntraCloud cloud, string tenantId, string clientId, AppRegistrationHosting hosting)
+    {
+        if (IsRegistrationVerified(cloud, tenantId, clientId, hosting))
+        {
+            return this;
+        }
+
+        return hosting == AppRegistrationHosting.JunisHosted
+            ? this with { VerifiedJunisHostedRegistrations = [.. VerifiedJunisHostedRegistrations ?? [], VerifiedKey(cloud, tenantId, clientId)] }
+            : this with { VerifiedClientIds = [.. VerifiedClientIds ?? [], clientId.Trim()] };
+    }
+
+    private static string VerifiedKey(EntraCloud cloud, string tenantId, string clientId)
+        => $"{new TenantSlot(cloud, tenantId).Key}|{TenantSlot.NormaliseTenantId(clientId)}";
 }

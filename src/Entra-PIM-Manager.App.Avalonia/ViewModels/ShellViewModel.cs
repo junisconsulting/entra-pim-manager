@@ -258,6 +258,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         // dependency on Shell), so the host has to be plugged in here once
         // both view models exist. See IAccountsHost for the rationale.
         _settingsPanel.AttachAccountsHost(this);
+        _addTenantPanel.IsTargetLoaded = target => _settingsPanel.IsRegistrationLoaded(target.Cloud, target.TenantId);
 
         // HasNoAccounts / ShowEligibilityUi are computed off the Accounts
         // collection — re-raise both so the empty-state CTA + the
@@ -378,9 +379,14 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             // still proven by a real sign-in — against the client ids configured
             // then, which for an upgrade are necessarily the current ones. Adopt
             // them once so the user isn't told to verify an already-working setup.
-            if (_userSettings.Current.VerifiedClientIds is null && Accounts.Count > 0)
+            // Only an install with no record of either kind is that old, and only its
+            // self-hosted tenants: junis-hosted is newer, and a tenant a script switched
+            // without removing its accounts has proven nothing through its new id.
+            if (_userSettings.Current is { VerifiedClientIds: null, VerifiedJunisHostedRegistrations: null } && Accounts.Count > 0)
             {
-                MarkAppRegistrationVerified(Accounts.Select(a => a.Account));
+                MarkAppRegistrationVerified(Accounts
+                    .Select(a => a.Account)
+                    .Where(a => _options.HostingFor(a.Cloud, a.TenantId) == AppRegistrationHosting.SelfHosted));
             }
 
             // Restore last-used account if it's still enrolled. ReplaceAccounts
@@ -906,7 +912,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         catch (Exception ex)
         {
             _logger.LogError(ex, "Loading policy failed");
-            var mapped = PimErrorMapper.MapException(ex).Message;
+            var mapped = PimErrorMapper.MapException(ex, _options.HostingFor(account.Cloud, account.TenantId)).Message;
             _toastService.ShowError("Activation", mapped);
             item.ActivationErrorText = mapped;
         }
@@ -996,7 +1002,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         catch (Exception ex)
         {
             _logger.LogError(ex, "Loading policy for re-activation failed");
-            _toastService.ShowError("Extend time", PimErrorMapper.MapException(ex).Message);
+            _toastService.ShowError("Extend time", PimErrorMapper.MapException(ex, _options.HostingFor(account.Cloud, account.TenantId)).Message);
         }
     }
 
@@ -1227,7 +1233,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         catch (Exception ex)
         {
             _logger.LogError(ex, "Ending the running activation failed");
-            return PimErrorMapper.MapException(ex);
+            return PimErrorMapper.MapException(ex, _options.HostingFor(account.Cloud, account.TenantId));
         }
     }
 
@@ -1311,7 +1317,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         catch (Exception ex)
         {
             _logger.LogError(ex, "Deactivation failed");
-            var mapped = PimErrorMapper.MapException(ex).Message;
+            var mapped = PimErrorMapper.MapException(ex, _options.HostingFor(item.Account.Cloud, item.Account.TenantId)).Message;
             _toastService.ShowError("Deactivation failed", mapped);
             SetDeactivationErrorText(deactivationKey, $"Deactivation failed — {mapped}");
             ClearDeactivatingState(deactivationKey);
@@ -1512,27 +1518,35 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
 
     /// <summary>
     /// Stamps the app registrations <paramref name="accounts"/> resolve to as proven —
-    /// a sign-in against them actually succeeded. Ids already recorded are skipped,
-    /// so the common case doesn't rewrite the settings file. All accounts are folded
-    /// into a single write; two <see cref="PersistShellSettings"/> calls in a row
+    /// a sign-in against them actually succeeded: per client id for a self-hosted
+    /// registration, per tenant for the junis-hosted one. Registrations already recorded
+    /// are skipped, so the common case doesn't rewrite the settings file. All accounts are
+    /// folded into a single write; two <see cref="PersistShellSettings"/> calls in a row
     /// would both read the same pre-write snapshot and one would lose.
     /// </summary>
     private void MarkAppRegistrationVerified(IEnumerable<SignedInAccount> accounts)
     {
-        var verified = _userSettings.Current.VerifiedClientIds ?? [];
-        var added = accounts
-            .Select(a => _options.ClientIdFor(a.Cloud, a.TenantId))
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(id => !verified.Contains(id!, StringComparer.OrdinalIgnoreCase))
-            .ToArray();
+        var current = _userSettings.Current;
+        var updated = current;
+        foreach (var account in accounts)
+        {
+            if (_options.ClientIdFor(account.Cloud, account.TenantId) is { Length: > 0 } clientId)
+            {
+                updated = updated.WithRegistrationVerified(
+                    account.Cloud,
+                    account.TenantId,
+                    clientId,
+                    _options.HostingOf(account.Cloud, clientId));
+            }
+        }
 
-        if (added.Length == 0)
+        // WithRegistrationVerified hands back the same instance when nothing was new.
+        if (ReferenceEquals(updated, current))
         {
             return;
         }
 
-        PersistShellSettings(s => s with { VerifiedClientIds = [.. verified, .. added!] });
+        PersistShellSettings(_ => updated);
         _settingsPanel.NotifyAppRegistrationVerificationChanged();
     }
 

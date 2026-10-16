@@ -26,8 +26,8 @@ using EntraPimManager.Core.Configuration;
 /// </remarks>
 public sealed partial class TenantNodeViewModel : ObservableObject
 {
-    private readonly Func<string[]> _verifiedClientIds;
-    private readonly Action<TenantNodeViewModel> _save;
+    private readonly EntraPimManagerOptions _options;
+    private readonly Func<UserSettings> _settings;
     private readonly Action<TenantNodeViewModel> _addAccount;
 
     /// <summary>True while the configuration disclosure is open. In memory only.</summary>
@@ -41,8 +41,15 @@ public sealed partial class TenantNodeViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave))]
-    [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     private string _clientIdDraft = string.Empty;
+
+    /// <summary>
+    /// The way chosen in the editor: junis-hosted, or the tenant's own registration. Seeded
+    /// from the saved client id when the editor opens.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanSave))]
+    private bool _isJunisHostedDraft;
 
     [ObservableProperty]
     private string _labelDraft = string.Empty;
@@ -57,26 +64,39 @@ public sealed partial class TenantNodeViewModel : ObservableObject
 
     public TenantNodeViewModel(
         TenantSlot slot,
-        Func<string[]> verifiedClientIds,
-        Action<TenantNodeViewModel> save,
+        EntraPimManagerOptions options,
+        Func<UserSettings> settings,
+        Func<TenantNodeViewModel, Task> save,
         Func<TenantNodeViewModel, Task> remove,
         Action<TenantNodeViewModel> addAccount,
         Func<bool> isBusy)
     {
         ArgumentNullException.ThrowIfNull(slot);
-        ArgumentNullException.ThrowIfNull(verifiedClientIds);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(save);
         ArgumentNullException.ThrowIfNull(remove);
         ArgumentNullException.ThrowIfNull(addAccount);
         ArgumentNullException.ThrowIfNull(isBusy);
 
         Slot = slot;
-        _verifiedClientIds = verifiedClientIds;
-        _save = save;
+        _options = options;
+        _settings = settings;
         _addAccount = addAccount;
         RemoveConfirmation = new ArmedConfirmation(() => remove(this), () => !isBusy());
 
-        Accounts.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasAccounts));
+        // Only a save that removes accounts asks twice, and only that one has to wait for
+        // the shell: the removal is refused while it is busy.
+        SaveConfirmation = new ArmedConfirmation(
+            () => save(this),
+            () => CanSave && !(SaveRemovesAccounts && isBusy()),
+            () => SaveRemovesAccounts);
+
+        Accounts.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasAccounts));
+            OnPropertyChanged(nameof(ArmedSaveText));
+        };
     }
 
     /// <summary>Identity of this tenant: cloud plus normalised tenant id.</summary>
@@ -114,11 +134,46 @@ public sealed partial class TenantNodeViewModel : ObservableObject
 
     /// <summary>
     /// A registration only counts as verified once a sign-in through it succeeded
-    /// (<see cref="UserSettings.VerifiedClientIds"/>) — a saved GUID proves nothing about
+    /// (<see cref="UserSettings.IsRegistrationVerified"/>) — a saved GUID proves nothing about
     /// public client flows, the redirect URI or admin consent.
     /// </summary>
-    public bool IsVerified => HasRegistration
-        && _verifiedClientIds().Contains(_clientId, StringComparer.OrdinalIgnoreCase);
+    public bool IsVerified => _clientId is { } clientId
+        && HasRegistration
+        && _settings().IsRegistrationVerified(Cloud, TenantId, clientId, _options.HostingOf(Cloud, clientId));
+
+    /// <summary>
+    /// Whether the card shows whose registration it uses. Not without a registration, and
+    /// not at all while this build ships no junis client id — then there is only one way.
+    /// </summary>
+    public bool ShowHostingChip => HasRegistration && _options.JunisHostedClientId is not null;
+
+    /// <summary>Hosting chip text, from the saved entry — so it follows a save before the restart.</summary>
+    public string HostingChipText => _options.HostingOf(Cloud, _clientId) == AppRegistrationHosting.JunisHosted
+        ? "junis-hosted"
+        : "self-hosted";
+
+    /// <summary>The editor offers the way only where junis-hosted exists: Global, with a shipped junis id.</summary>
+    public bool IsHostingChoiceVisible => _options.JunisHostedClientId is not null && Cloud == EntraCloud.Global;
+
+    /// <summary>The client id Save would write, or <c>null</c> when the editor holds no valid one.</summary>
+    public string? ResolvedClientIdDraft => _options.ResolveClientId(
+        IsJunisHostedDraft ? AppRegistrationHosting.JunisHosted : AppRegistrationHosting.SelfHosted,
+        Cloud,
+        ClientIdDraft);
+
+    /// <summary>
+    /// True when Save would switch this tenant to another client id while accounts are
+    /// signed into it. Their tokens belong to the old registration, so they go first.
+    /// </summary>
+    public bool SaveRemovesAccounts => HasAccounts
+        && HasRegistration
+        && ResolvedClientIdDraft is { } clientId
+        && TenantSlot.NormaliseTenantId(clientId) != TenantSlot.NormaliseTenantId(_clientId);
+
+    /// <summary>The armed Save button's text.</summary>
+    public string ArmedSaveText => Accounts.Count == 1
+        ? "Remove 1 account and save"
+        : $"Remove {Accounts.Count} accounts and save";
 
     /// <summary>One-line state under the header.</summary>
     public string Status => !HasRegistration
@@ -126,9 +181,10 @@ public sealed partial class TenantNodeViewModel : ObservableObject
         : IsVerified ? "Verified" : "Not verified yet — sign in with it once";
 
     /// <summary>
-    /// False while no registration is loaded for this tenant — either none is configured,
-    /// or one was just added and the app has not restarted yet. Sign-in resolves its client
-    /// id from the startup configuration, so it would fail in both cases.
+    /// False while the saved registration is not the one the app started with — none is
+    /// configured, or one was just added or changed and the app has not restarted yet.
+    /// Sign-in resolves its client id from the startup configuration, so it would fail or
+    /// use the old registration.
     /// </summary>
     public bool CanAddAccount => _canAddAccount;
 
@@ -139,8 +195,8 @@ public sealed partial class TenantNodeViewModel : ObservableObject
             ? "Restart the app to sign in to this tenant."
             : "Add an App Registration for this tenant first.";
 
-    /// <summary>Save is allowed once the client id parses as a GUID.</summary>
-    public bool CanSave => Guid.TryParse(ClientIdDraft, out _);
+    /// <summary>Save is allowed once the chosen way yields a client id.</summary>
+    public bool CanSave => ResolvedClientIdDraft is not null;
 
     /// <summary>
     /// The second click "Remove tenant" asks for. It sits inside the configuration rather
@@ -148,6 +204,12 @@ public sealed partial class TenantNodeViewModel : ObservableObject
     /// registration on the spot.
     /// </summary>
     public ArmedConfirmation RemoveConfirmation { get; }
+
+    /// <summary>
+    /// Save, which asks for a second click when it would remove the tenant's accounts —
+    /// see <see cref="SaveRemovesAccounts"/>.
+    /// </summary>
+    public ArmedConfirmation SaveConfirmation { get; }
 
     /// <summary>
     /// Applies the current configuration to this node in place. Only raises change
@@ -160,8 +222,8 @@ public sealed partial class TenantNodeViewModel : ObservableObject
     /// <param name="canAddAccount">Whether a sign-in to this tenant can resolve a client id.</param>
     public void UpdateRegistration(string? clientId, string? label, string? ticketSystem, bool canAddAccount)
     {
-        var hadRegistration = HasRegistration;
         var wasVerified = IsVerified;
+        var clientIdChanged = !string.Equals(_clientId, clientId, StringComparison.OrdinalIgnoreCase);
 
         _clientId = clientId;
 
@@ -178,7 +240,7 @@ public sealed partial class TenantNodeViewModel : ObservableObject
             OnPropertyChanged(nameof(AddAccountHint));
         }
 
-        if (hadRegistration != HasRegistration || wasVerified != IsVerified)
+        if (clientIdChanged || wasVerified != IsVerified)
         {
             NotifyStateChanged();
         }
@@ -198,6 +260,8 @@ public sealed partial class TenantNodeViewModel : ObservableObject
         OnPropertyChanged(nameof(HasRegistration));
         OnPropertyChanged(nameof(IsVerified));
         OnPropertyChanged(nameof(Status));
+        OnPropertyChanged(nameof(ShowHostingChip));
+        OnPropertyChanged(nameof(HostingChipText));
 
         // Its wording depends on HasRegistration, so it goes stale here too — a removed
         // registration would otherwise keep saying "Restart the app to sign in".
@@ -206,7 +270,13 @@ public sealed partial class TenantNodeViewModel : ObservableObject
 
     private void SeedDrafts()
     {
-        ClientIdDraft = _clientId ?? string.Empty;
+        // A card without a registration preselects junis-hosted where it exists, as the add
+        // form does. A junis-hosted card leaves the client id blank: the field only shows
+        // for self-hosted, and the junis id is not a self-hosted value to start from.
+        IsJunisHostedDraft = HasRegistration
+            ? _options.HostingOf(Cloud, _clientId) == AppRegistrationHosting.JunisHosted
+            : IsHostingChoiceVisible;
+        ClientIdDraft = IsJunisHostedDraft ? string.Empty : _clientId ?? string.Empty;
         LabelDraft = _label ?? string.Empty;
         TicketSystemDraft = _ticketSystem ?? string.Empty;
     }
@@ -228,16 +298,25 @@ public sealed partial class TenantNodeViewModel : ObservableObject
     [RelayCommand]
     private void CancelConfig() => IsConfigExpanded = false;
 
-    [RelayCommand(CanExecute = nameof(CanSave))]
-    private void Save() => _save(this);
+    // An armed Save confirms what was on screen when it was armed; any edit disarms it.
+    partial void OnClientIdDraftChanged(string value) => DisarmSave();
+
+    partial void OnIsJunisHostedDraftChanged(bool value) => DisarmSave();
+
+    private void DisarmSave()
+    {
+        SaveConfirmation.Disarm();
+        SaveConfirmation.Refresh();
+    }
 
     // Cancel, the gear and a successful Save all collapse the editor; none of them may
-    // leave an armed remove button behind for the next time it opens.
+    // leave an armed button behind for the next time it opens.
     partial void OnIsConfigExpandedChanged(bool value)
     {
         if (!value)
         {
             RemoveConfirmation.Disarm();
+            SaveConfirmation.Disarm();
         }
     }
 

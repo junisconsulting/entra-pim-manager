@@ -1,5 +1,7 @@
 namespace EntraPimManager.Core.Configuration;
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using EntraPimManager.Core.Auth;
 
 /// <summary>
@@ -30,6 +32,47 @@ public sealed class EntraPimManagerOptions
     public string[] Scopes { get; set; } = [];
 
     /// <summary>
+    /// Client id of the multi-tenant App Registration junis publishes, in canonical GUID
+    /// form, or <c>null</c> when this build ships none — then the app offers no
+    /// junis-hosted option at all. Global cloud only.
+    /// </summary>
+    /// <remarks>
+    /// The private setter is the point: the configuration binder skips it, so neither
+    /// <c>appsettings.local.json</c> can point "junis-hosted" — and the consent link the app
+    /// hands to an admin — at another app. The only source is the shipped
+    /// <c>appsettings.json</c>, read by <see cref="ReadShippedJunisHostedClientId"/> and
+    /// applied through <see cref="UseJunisHostedClientId"/>.
+    /// </remarks>
+    public string? JunisHostedClientId { get; private set; }
+
+    /// <summary>
+    /// Reads <c>EntraPimManager:JunisHostedClientId</c> from the shipped
+    /// <c>appsettings.json</c> at <paramref name="appSettingsPath"/>, or <c>null</c> when the
+    /// file or the key is missing or unreadable. Never throws: a broken value must not stop
+    /// the app at launch, it only means no junis-hosted option.
+    /// </summary>
+    public static string? ReadShippedJunisHostedClientId(string appSettingsPath)
+    {
+        try
+        {
+            var root = JsonNode.Parse(File.ReadAllText(appSettingsPath));
+            return root?[SectionName]?["JunisHostedClientId"]?.GetValue<string>();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Sets <see cref="JunisHostedClientId"/>. Anything that is not a GUID counts as none:
+    /// a junis-hosted entry would copy it into <c>ClientId</c>, and the validator rejects a
+    /// non-GUID there at the next start.
+    /// </summary>
+    public void UseJunisHostedClientId(string? clientId)
+        => JunisHostedClientId = Guid.TryParse(clientId, out var parsed) ? parsed.ToString() : null;
+
+    /// <summary>
     /// Client id to authenticate with for <paramref name="tenantId"/> in <paramref name="cloud"/>,
     /// or <c>null</c> when no registration is pinned to that tenant. This is the whole
     /// login → registration mapping: an enrollment is identified by (oid, tenantId, cloud),
@@ -52,4 +95,55 @@ public sealed class EntraPimManagerOptions
     /// </summary>
     public IReadOnlyList<EntraCloud> ConfiguredClouds()
         => [.. Enum.GetValues<EntraCloud>().Where(c => TenantAppRegistrations.Any(r => r.IsFor(c)))];
+
+    /// <summary>
+    /// Whose registration <paramref name="clientId"/> in <paramref name="cloud"/> is. The one
+    /// rule behind the hosting chip, the device-code gate, the error wording and the consent
+    /// link: junis-hosted only in the Global cloud and only for the shipped junis client id.
+    /// </summary>
+    public AppRegistrationHosting HostingOf(EntraCloud cloud, string? clientId)
+        => cloud == EntraCloud.Global
+            && Guid.TryParse(JunisHostedClientId, out var junis)
+            && Guid.TryParse(clientId, out var parsed)
+            && parsed == junis
+                ? AppRegistrationHosting.JunisHosted
+                : AppRegistrationHosting.SelfHosted;
+
+    /// <summary>
+    /// Whose registration the tenant <paramref name="tenantId"/> in <paramref name="cloud"/>
+    /// signs in with, as configured at startup. A tenant without an entry counts as self-hosted.
+    /// </summary>
+    public AppRegistrationHosting HostingFor(EntraCloud cloud, string? tenantId)
+        => HostingOf(cloud, ClientIdFor(cloud, tenantId));
+
+    /// <summary>
+    /// The client id a new or edited entry gets when the user chose <paramref name="hosting"/>
+    /// in <paramref name="cloud"/> and typed <paramref name="typedClientId"/>, or <c>null</c>
+    /// when that combination is not valid. Junis-hosted ignores the typed value and needs the
+    /// Global cloud and a shipped junis client id; self-hosted needs a GUID, trimmed as typed.
+    /// One rule for the add form and the gear editor, so neither can save an entry the next
+    /// start rejects.
+    /// </summary>
+    public string? ResolveClientId(AppRegistrationHosting hosting, EntraCloud cloud, string? typedClientId)
+        => hosting == AppRegistrationHosting.JunisHosted
+            ? cloud == EntraCloud.Global ? JunisHostedClientId : null
+            : Guid.TryParse(typedClientId, out _) ? typedClientId!.Trim() : null;
+
+    /// <summary>
+    /// The admin-consent link for the junis-hosted registration in <paramref name="tenantId"/>,
+    /// or <c>null</c> outside the Global cloud, for a tenant id that is not a GUID, or when this
+    /// build ships no junis client id. Same parameters as the link in
+    /// <c>docs/app-registration-setup.md</c>; the redirect URI is the broker one, because the
+    /// junis registration has no other (and gets none for this).
+    /// </summary>
+    public string? JunisAdminConsentUrl(EntraCloud cloud, string? tenantId)
+    {
+        if (cloud != EntraCloud.Global || JunisHostedClientId is not { } clientId || !Guid.TryParse(tenantId, out var tenant))
+        {
+            return null;
+        }
+
+        var redirectUri = Uri.EscapeDataString($"ms-appx-web://microsoft.aad.brokerplugin/{clientId}");
+        return $"{EntraCloudInfo.AuthorityBaseUrl(cloud)}/{tenant}/adminconsent?client_id={clientId}&redirect_uri={redirectUri}";
+    }
 }

@@ -5,10 +5,12 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Collections;
+using EntraPimManager.Core.Configuration;
 using EntraPimManager.Core.ErrorHandling;
 using EntraPimManager.Core.Models;
 using EntraPimManager.Core.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 /// <summary>
 /// View model for the slide-in activation panel. Replaces the modal
@@ -70,6 +72,7 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
     private readonly IJustificationFavoritesStore _favoritesStore;
     private readonly IScopeFavoritesStore _scopeFavorites;
     private readonly IUserSettingsService _userSettings;
+    private readonly EntraPimManagerOptions _options;
     private readonly ILogger<ActivationPanelViewModel> _logger;
 
     /// <summary>Walked hierarchies by <c>{tenant}|{scope}</c>, with when they were read.</summary>
@@ -176,12 +179,15 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
         IJustificationFavoritesStore favoritesStore,
         IScopeFavoritesStore scopeFavorites,
         IUserSettingsService userSettings,
+        IOptions<EntraPimManagerOptions> options,
         ILogger<ActivationPanelViewModel> logger)
     {
+        ArgumentNullException.ThrowIfNull(options);
         _aggregator = aggregator;
         _favoritesStore = favoritesStore;
         _scopeFavorites = scopeFavorites;
         _userSettings = userSettings;
+        _options = options.Value;
         _logger = logger;
     }
 
@@ -822,7 +828,9 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Reading eligible child scopes failed (tenant {TenantId})", account.TenantId);
-                notice = PimErrorMapper.Describe(PimErrorMapper.MapException(ex), account.AuthMethod);
+                notice = PimErrorMapper.Describe(
+                    PimErrorMapper.MapException(ex, _options.HostingFor(account.Cloud, account.TenantId)),
+                    account.AuthMethod);
                 failed = true;
             }
         }
@@ -1165,7 +1173,12 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
                 "Activation submit failed (tenant {TenantId}, validationOnly {IsValidationOnly})",
                 account.TenantId,
                 request.IsValidationOnly);
-            return new ActivationResult(string.Empty, ActivationStatus.Failed, null, null, PimErrorMapper.MapException(ex));
+            return new ActivationResult(
+                string.Empty,
+                ActivationStatus.Failed,
+                null,
+                null,
+                PimErrorMapper.MapException(ex, _options.HostingFor(account.Cloud, account.TenantId)));
         }
     }
 

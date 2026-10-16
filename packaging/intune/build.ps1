@@ -5,8 +5,8 @@
 
 .DESCRIPTION
     Produces Entra-PIM-Manager-win-Setup.intunewin. The package is tenant-neutral: the tenant
-    and client id go into the install command in Intune, never into the package, so one asset
-    serves every tenant. The values to enter in Intune are in docs/unattended-deployment.md;
+    id, and for a self-hosted App Registration the client id, go into the install command in
+    Intune, never into the package, so one asset serves every tenant. The values to enter in Intune are in docs/unattended-deployment.md;
     why a Win32 app and not an MSI is in docs/adr/0001-intune-win32-package.md.
 
     Uses Microsoft's IntuneWinAppUtil, downloaded at a pinned version and checked against its

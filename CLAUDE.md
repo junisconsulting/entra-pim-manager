@@ -25,7 +25,9 @@ Assume every commit is world-readable: no tenant IDs, no internal hostnames, no 
   Management) and the consent procedure
 - `docs/engineering-backlog.md` — known gaps and deferred work, with evidence pointers
 - `docs/adr/` — decision records for hard-to-reverse choices, with the rejected alternatives
-- `SECURITY.md` — vulnerability reporting
+- `SECURITY.md` — vulnerability reporting, and how junis operates the junis-hosted App Registration
+- `PRIVACY.md` — what the app sends where. A change to the app's network destinations updates it in
+  the same commit
 
 ## Skills (read before writing code in these areas)
 
@@ -122,14 +124,22 @@ This is a privileged-access tool; these are not style preferences.
 - **Never log access, ID, or refresh tokens — and never log justification text**, which may contain
   incident detail. User identifiers in logs are limited to the OID; never UPN or mail. Ticket numbers
   are fine.
-- **No hardcoded tenant or client IDs.** Placeholders live in
-  `src/Entra-PIM-Manager.App.Avalonia/appsettings.json` (committed); real values live in
+- **No hardcoded tenant or client IDs**, with one named exception. Placeholders live in
+  `src/Entra-PIM-Manager.App.Avalonia/appsettings.local.json.sample`; real values live in
   `appsettings.local.json` next to it (gitignored) or in the per-user config under `%LocalAppData%`.
+  The committed `appsettings.json` next to them holds the scopes and exactly one id,
+  `EntraPimManager:JunisHostedClientId`: the junis-hosted registration's client id, public by
+  design because every consent screen shows it, and read only from that shipped file. It stays
+  empty on `main` until the release skill's junis-hosted gate has passed.
 - **Delegated permissions only**, least privilege. The Graph scopes in that `appsettings.json` plus
   the ARM scope derived per cloud in `EntraCloudInfo.ResourceManagerScopes` (Azure Service
   Management → `user_impersonation`) are the whole surface — adding one is a decision, not a
   detail, and needs admin consent in every tenant. Graph and ARM scopes are never mixed in one
   token request.
+- **A new scope gets a token request of its own**, silent in the background like ARM's, so missing
+  consent never opens WAM and never breaks sign-in. Until an admin consents, its feature stays
+  visible but disabled, with a hint naming the missing admin consent. No mechanism for this exists
+  yet; it comes with the first new scope (`docs/adr/0002-junis-hosted-app-registration.md`).
 
 ## Platform facts
 

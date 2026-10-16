@@ -44,9 +44,19 @@ What happens next depends on how you got the app:
 
 - **Rolled out by your company** — it already knows your tenant. Click **Add account**, then
   **Sign in**.
-- **Installed it yourself** — it needs the tenant's App Registration first: **Set up your first
-  tenant**, then enter tenant id and client id. Your admin provides both — they identify the tenant
-  and the App Registration, and there is no way to guess them. That done, add the account.
+- **Installed it yourself** — it needs your tenant first: **Set up your first tenant**, enter the
+  tenant id, and choose how the app signs in there:
+  - **junis-hosted** — "No setup — an admin consents once." The App Registration junis publishes;
+    the tenant id is all you type. An admin of your tenant consents to it once, and if nobody has
+    yet, the sign-in panel shows the link to send them. Global cloud only, and available from the
+    release that ships the junis client id.
+  - **self-hosted** — "Your own App Registration (client id)." Your tenant's own App Registration:
+    enter its client id. With the cloud set to Entra China, this is the only choice: "Entra China
+    needs your own App Registration."
+
+  Your admin tells you which one and provides the ids — there is no way to guess them. A tenant
+  that is already there is refused with "This tenant is already configured. Use the gear on its
+  card to change it." That done, add the account.
 
 **Sign in** opens the standard Windows account picker. Pick the admin account you hold the roles
 with — for many people that is a separate account from the one they log into Windows with. There is
@@ -64,6 +74,10 @@ offered the admin one.
 
 For that case there is **Device code** under the sign-in options. It shows a URL and a short code
 you enter on your phone or in a private browser window, where nothing is signed in yet.
+
+Device code needs a **self-hosted** App Registration. For a junis-hosted tenant the sign-in panel
+has no **Advanced** section and says "Device-code sign-in needs a self-hosted App Registration for
+this tenant." If you need it there, ask your admin for a self-hosted registration.
 
 Two things to know before you use it. Some companies block device-code sign-in with a Conditional
 Access policy — then it fails and the normal sign-in is the only route. And roles protected by an
@@ -240,8 +254,14 @@ can paste into a ticket. Reach for this when sign-in fails in a locked-down netw
 into it. You can give an account a short alias ("EADM") instead of reading a long UPN everywhere,
 and drag tenants into the order you want. The gear on a card shows its tenant id, which you can
 select and copy. **Remove tenant** under the gear removes the tenant with its accounts and their
-sign-ins; an account alone is removed under its pencil. Both ask for a second click. Changing an App
-Registration takes effect after a restart, and the app says so when it does.
+sign-ins; an account alone is removed under its pencil. Both ask for a second click.
+
+Next to the cloud, each card says whether the tenant is **junis-hosted** or **self-hosted**. The
+gear switches it: choose the other way, for self-hosted with its client id, and **Save**. If the
+tenant has accounts, Save first turns into "Remove N accounts and save" and asks for a second click:
+the accounts signed in through the old App Registration are removed, and you add them again after
+the restart. Changing an App Registration takes effect after a restart, and the app says so when it
+does; until then, **+ Add account…** on that card stays disabled.
 
 ## Updates
 
@@ -276,7 +296,9 @@ endpoint that is blocked instead of leaving them guessing.
 
 **Sign-in fails with a consent or permission message.** The App Registration has not been consented
 to in that tenant. An admin does it once; see
-[app-registration-setup.md](app-registration-setup.md).
+[app-registration-setup.md](app-registration-setup.md). For a junis-hosted tenant the sign-in panel
+shows the link for it, under "Send this link to an admin of this tenant:" — select it, copy it and
+send it to an admin.
 
 **Activation fails and mentions authentication context or Conditional Access.** The role demands a
 stronger sign-in than the session has. If you signed in with a device code, that is the cause —

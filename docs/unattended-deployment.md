@@ -1,13 +1,19 @@
 # Unattended deployment
 
 > How to roll Entra PIM Manager out to a team without anyone having to type a client id.
-> An admin runs one script once per tenant; every endpoint then gets two commands.
+> An admin consents once to the junis-hosted registration, or runs one script once per tenant for
+> a self-hosted one; every endpoint then gets two commands.
 
-The interactive path — install, then **Settings → TENANTS** — asks each user for a tenant id and
-a client id. Nobody outside the identity team can act on those. This page replaces that step with
-a command line.
+The interactive path — install, then **Settings → TENANTS** — asks each user for a tenant id and,
+for self-hosted, a client id. Nobody outside the identity team can act on those. This page replaces
+that step with a command line.
 
 ## 1. Create the App Registration (admin, once per tenant)
+
+**junis-hosted (Global cloud only, available from the release that ships the junis client id):
+skip this step.** An admin of the tenant consents once through
+the link in [app-registration-setup.md](app-registration-setup.md#junis-hosted-consent-only), and
+the endpoint command in step 2 leaves out `-ClientId`. The rest of this step is self-hosted.
 
 ```powershell
 pwsh ./scripts/create-app-registration.ps1
@@ -34,9 +40,19 @@ by nature and cannot be scripted from outside the tenant.
 ## 2. Deploy to the endpoints
 
 ```powershell
+# junis-hosted (Global cloud only)
+./install-entra-pim-manager.ps1 -SetupExe .\Entra-PIM-Manager-win-Setup.exe -TenantId <guid>
+
+# self-hosted
 ./install-entra-pim-manager.ps1 -SetupExe .\Entra-PIM-Manager-win-Setup.exe `
     -TenantId <guid> -ClientId <guid>
 ```
+
+Without `-ClientId` the tenant is junis-hosted: the script reads `JunisHostedClientId` from the
+installed `current\appsettings.json` and passes it on as the client id. `-Cloud China` without
+`-ClientId` is refused before anything is installed. An installed version that ships no junis
+client id stops the script with "This installation does not offer junis-hosted yet; pass -ClientId
+or install a newer version."
 
 `scripts/install-entra-pim-manager.ps1` wraps both steps, validates the ids before touching
 anything, maps the exit code to a readable error, and — the part worth having — verifies that the
@@ -46,8 +62,12 @@ If your deployment tool cannot run a script, the two commands it wraps are:
 
 ```text
 Entra-PIM-Manager-win-Setup.exe --silent
-%LocalAppData%\Entra-PIM-Manager\current\Entra-PIM-Manager.exe --tenant-id <guid> --client-id <guid>
+%LocalAppData%\Entra-PIM-Manager\current\Entra-PIM-Manager.exe --tenant-id <guid> --client-id {junis-client-id}
 ```
+
+The app's own `--client-id` stays required, also for junis-hosted: pass the junis client id,
+published in [SECURITY.md](../SECURITY.md#the-junis-hosted-app-registration) once the registration
+goes live. For self-hosted, pass your own client id instead.
 
 `current\` is the executable Velopack's own install hook invokes, and Velopack replaces its
 contents in place on update — so the path stays valid. The launcher stub one directory up
@@ -72,7 +92,7 @@ The user lands on "Add account" instead of the configuration prompt.
 | Argument | Script parameter | Required | Notes |
 | --- | --- | --- | --- |
 | `--tenant-id <guid>` | `-TenantId` | yes | Directory (tenant) id |
-| `--client-id <guid>` | `-ClientId` | yes | Application (client) id |
+| `--client-id <guid>` | `-ClientId` | app: yes · script: no | Application (client) id. The script without `-ClientId` passes the junis client id (junis-hosted, Global cloud only) |
 | `--cloud <Global\|China>` | `-Cloud` | no | Defaults to `Global` |
 | `--label <text>` | `-Label` | no | Tenant alias in the sign-in picker and tenant list |
 | `--ticket-system <text>` | `-TicketSystem` | no | e.g. `ServiceNow`, prefilled into the activation form |
@@ -80,6 +100,11 @@ The user lands on "Add account" instead of the configuration prompt.
 
 Run it once per tenant to configure several. An entry for a tenant that is already configured is
 replaced, not duplicated.
+
+That is also how a rollout switches a tenant: re-running the script without `-ClientId` makes it
+junis-hosted, re-running it with `-ClientId` makes it self-hosted again. The script cannot remove
+accounts, so have users remove the tenant's accounts in the app first. Otherwise those accounts
+show "no longer valid", and the old registration's tokens stay with Windows.
 
 The first four go into `appsettings.local.json` and take effect at the next app start. The ticket
 system goes into `settings.json` instead — it is workflow rather than auth configuration — and also
@@ -122,12 +147,13 @@ Intune.
 
 Every release also carries `Entra-PIM-Manager-win-Setup.intunewin`: the same Setup.exe, packed for
 Intune together with `install-entra-pim-manager.ps1` and `uninstall-entra-pim-manager.cmd`. It holds
-no tenant or client id — those go into the install command — so one package serves every tenant.
-Add it in Intune as a **Windows app (Win32)** and enter:
+no tenant id and no self-hosted client id — those go into the install command — so one package
+serves every tenant. Add it in Intune as a **Windows app (Win32)** and enter:
 
 | Field | Value |
 | --- | --- |
-| Install command | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File install-entra-pim-manager.ps1 -SetupExe .\Entra-PIM-Manager-win-Setup.exe -TenantId <guid> -ClientId <guid> -NoStart` |
+| Install command, junis-hosted | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File install-entra-pim-manager.ps1 -SetupExe .\Entra-PIM-Manager-win-Setup.exe -TenantId <guid> -NoStart` |
+| Install command, self-hosted | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File install-entra-pim-manager.ps1 -SetupExe .\Entra-PIM-Manager-win-Setup.exe -TenantId <guid> -ClientId <guid> -NoStart` |
 | Uninstall command | `uninstall-entra-pim-manager.cmd` |
 | Install behavior | **User** |
 | Return codes | the defaults — installer and uninstaller exit `0` on success and `1` on failure |
@@ -185,9 +211,10 @@ The scripts are not signed. Where a GPO enforces the `AllSigned` execution polic
 install command — not yet tested in Intune:
 
 ```text
-cmd.exe /c "start "" /wait Entra-PIM-Manager-win-Setup.exe --silent && start "" /wait "%LOCALAPPDATA%\Entra-PIM-Manager\current\Entra-PIM-Manager.exe" --tenant-id <guid> --client-id <guid>"
+cmd.exe /c "start "" /wait Entra-PIM-Manager-win-Setup.exe --silent && start "" /wait "%LOCALAPPDATA%\Entra-PIM-Manager\current\Entra-PIM-Manager.exe" --tenant-id <guid> --client-id {junis-client-id}"
 ```
 
+As in step 2, `--client-id` is the junis client id for junis-hosted and your own for self-hosted.
 `cmd` expands `%LOCALAPPDATA%` itself. `start /wait` is not decoration: both executables are GUI
 programs, `cmd /c` does not reliably wait for those, and without it the second command would run
 before the install has finished. What this line loses is the script's check that the entry actually

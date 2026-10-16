@@ -13,10 +13,95 @@
 > on their own **single-tenant** registration is an entry with their client id.
 > The list is also the whitelist: a tenant without an entry cannot be signed in to.
 >
+> **Two ways per tenant.** **junis-hosted**: an admin consents once to the
+> registration junis publishes — see [below](#junis-hosted-consent-only).
+> **self-hosted**: the tenant's own registration — the numbered sections §1–§8
+> describe this way.
+>
 > **Using Entra China (21Vianet) too?** National clouds are physically isolated
 > instances of Entra, so a Global App Registration does not exist there. Work
 > through this guide once per cloud and see [§7](#7-sovereign-clouds-entra-china-21vianet)
 > for what differs. **Upgrading from 0.6.x?** See [§8](#8-upgrading-from-06x).
+
+## junis-hosted: consent only
+
+> Available from the release that ships the junis client id; the release notes will say so.
+> Until then, use a self-hosted registration (§1–§5).
+
+Global cloud only — Entra China (21Vianet) needs a self-hosted registration
+([§7](#7-sovereign-clouds-entra-china--21vianet)).
+
+Instead of creating an App Registration, a tenant can use the one junis
+publishes: a verified multi-tenant registration with the same permissions as a
+self-hosted one ([§3](#3-api-permissions-delegated)). You create nothing; the
+consent adds the app under Enterprise applications in your tenant. An admin
+consents once; users then add the tenant in the app with its tenant id only and
+choose **junis-hosted**. In the configuration file it is an ordinary entry that
+carries the junis client id. How junis operates and protects the registration:
+[SECURITY.md](../SECURITY.md#the-junis-hosted-app-registration).
+
+### The consent link
+
+An admin of the tenant with **Cloud Application Administrator** or higher
+(Application Administrator, Privileged Role Administrator, Global
+Administrator) opens this link once, signs in and accepts:
+
+```text
+https://login.microsoftonline.com/{tenant-id}/adminconsent?client_id={junis-client-id}&redirect_uri=ms-appx-web%3A%2F%2Fmicrosoft.aad.brokerplugin%2F{junis-client-id}
+```
+
+`{tenant-id}` is your tenant's id. `{junis-client-id}` is the junis client id,
+published in [SECURITY.md](../SECURITY.md#the-junis-hosted-app-registration)
+once the registration goes live. When a sign-in fails for missing consent, the
+app's add-account panel shows the same link with both filled in, under "Send
+this link to an admin of this tenant:".
+
+### Verify the link before you consent
+
+The consent lets the app activate PIM roles as any user of your tenant who
+signs in to it, so check what you consent to:
+
+- the `client_id` in the link and the **App ID** on the consent screen both
+  equal the junis client id published in SECURITY.md;
+- the consent screen shows the publisher as verified: **junis GmbH**.
+
+Never rely on the display name, the logo or the domain — anyone can copy them.
+
+### Recommended hardening and detection
+
+For both ways; the app enforces none of these. They are set on the app under
+**Enterprise applications** — for junis-hosted "Entra PIM Manager" by junis
+GmbH, for self-hosted your own registration.
+
+- **Assignment required.** Properties → **Assignment required?** = **Yes**, then
+  assign a group of the eligible admins under **Users and groups**. Everyone
+  else gets "Your account is not assigned to Entra PIM Manager in this tenant."
+  Global Administrators are exempt, and assigning a group needs Entra ID P1.
+- **Block device code flow** with a Conditional Access policy (Entra ID P1). A
+  self-hosted tenant loses the app's device-code fallback with it
+  ([§6](#6-verification), step 4).
+- **An authentication context on activation**, so every activation asks for a
+  fresh sign-in — see the
+  [README](../README.md#recommended-a-fresh-sign-in-for-every-activation).
+- **The admin consent workflow** (Enterprise applications → Consent and
+  permissions → Admin consent settings), so users request approval from the
+  Windows sign-in window instead of forwarding links.
+- **Monitor** the audit events "Consent to application", "Add delegated
+  permission grant", "Update delegated permission grant" and "Add service
+  principal" for the app id, and compare the granted scopes with the list in
+  [§3](#3-api-permissions-delegated). Also watch the app's sign-ins that do not
+  come from a Windows desktop client.
+
+### Leaving junis-hosted
+
+Switching a tenant to self-hosted changes only the app; the tenant-wide consent
+stays active. Leaving for good takes two steps:
+
+1. Switch every entry for the tenant to self-hosted, in every installation —
+   the gear on the tenant's card, or the install script with `-ClientId`
+   ([unattended-deployment.md](unattended-deployment.md)).
+2. Switch the junis app off in your tenant, as described in
+   [SECURITY.md](../SECURITY.md#switch-it-off-in-your-tenant).
 
 ## 1. Create the App Registration
 
@@ -131,18 +216,22 @@ registration — the Azure Service Management one included.
 
 ## 5. Enter the registration in the app
 
-The normal path requires no file editing: start the app, open **Settings → APP
-REGISTRATION**, and add an entry: the **tenant id**, the **client id** from
-step 1, the **cloud**, and an optional **label** (e.g. the customer's name — it
-names the entry in the sign-in picker and replaces the directory's display name
-wherever the tenant is shown) → **Add**. The app saves it to your
-per-user config at `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json`
-and applies it on the next restart (**Restart now** in the banner). Repeat for
-every tenant you sign in to — with the same client id for every tenant a
-multi-tenant registration is consented in.
+The normal path requires no file editing: start the app, open **Settings →
+TENANTS**, and add an entry: the **tenant id**, **self-hosted** with the
+**client id** from step 1, the **cloud**, and an optional **label** (e.g. the
+customer's name — it names the entry in the sign-in picker and replaces the
+directory's display name wherever the tenant is shown) → **Add**. The app saves
+it to your per-user config at
+`%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` and applies it
+on the next restart (**Restart now** in the banner). Repeat for every tenant you
+sign in to — with the same client id for every tenant a multi-tenant
+registration is consented in.
 
-The gear on a tenant's card opens its entry: client id, label and ticket system →
-**Save**, or **Cancel**. Tenant id and cloud are the card itself and cannot be
+The gear on a tenant's card opens its entry: the way (junis-hosted, or
+self-hosted with its client id), label and ticket system → **Save**, or
+**Cancel**. A changed client id on a tenant that has accounts asks for a second
+click and removes those accounts first; add them again after the restart.
+Tenant id and cloud are the card itself and cannot be
 edited — a different tenant id or cloud is a different tenant: add it as a new
 one, and remove the old card if it is no longer needed. **Remove tenant**
 in the same place removes the tenant completely — its accounts and their
@@ -153,7 +242,8 @@ or add the entry again.
 
 The green **Verified** badge only appears once an account has actually signed in
 with that entry; it is per registration, because a sign-in with one client id
-proves nothing about another.
+proves nothing about another — and for junis-hosted per tenant, because one
+tenant's consent proves nothing about another's.
 
 ### Configuration shape
 
@@ -183,7 +273,9 @@ the field simply starts blank.
 `Cloud` defaults to `Global`; `Label` is optional. Keep the list in **one** file:
 .NET's configuration overlays arrays index by index, so the same key in two
 files merges entry-wise. The shipped `appsettings.json` deliberately carries
-only the scopes.
+no entries — only the scopes and `JunisHostedClientId`, the junis client id a
+junis-hosted entry stores. The app reads that one from the shipped file only; a
+value in `appsettings.local.json` is ignored.
 
 ### Running from source
 
@@ -295,7 +387,22 @@ field of the add-account panel is gone.
 
 - **`AADSTS700016` — "application not found in the directory"**: the client id
   is unknown in the tenant it was sent to. Check the entry's tenant id, client
-  id and cloud, and that admin consent was granted in that tenant (step 4).
+  id and cloud, and that admin consent was granted in that tenant (step 4). On
+  a junis-hosted tenant it means nobody has consented yet: see
+  [the consent link](#the-consent-link).
+- **`AADSTS65001` — consent missing** (also `AADSTS65004`, `AADSTS90094`): no
+  admin has consented to the app in that tenant yet. junis-hosted: an admin
+  consents once through [the consent link](#the-consent-link); the add-account
+  panel shows it, filled in. Self-hosted: grant admin consent (step 4).
+- **`AADSTS50105` — "Your account is not assigned to Entra PIM Manager in this
+  tenant"**: the app has **Assignment required** on, and the account is not
+  assigned, directly or through a group. An admin assigns it under Enterprise
+  applications → the app → **Users and groups**.
+- **`AADSTS7000112` or `AADSTS70001` — the app is switched off**: in the tenant,
+  check **Enabled for users to sign-in?** on the app under Enterprise
+  applications. On a junis-hosted tenant, if no admin of yours switched it off,
+  junis did, for all tenants, and announces it as a
+  [security advisory](../SECURITY.md#watch-for-advisories).
 - **"The sign-in ended up in a different tenant than the selected entry"**: the
   token Entra issued names another tenant than the entry. Check the entry's
   tenant id.

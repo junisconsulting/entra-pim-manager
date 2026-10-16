@@ -38,6 +38,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     private static readonly TimeSpan DeviceCodeTimeout = TimeSpan.FromMinutes(10);
 
     private readonly IAuthService _authService;
+    private readonly EntraPimManagerOptions _options;
     private readonly ILogger<AddTenantPanelViewModel> _logger;
 
     // Cancellation handle for an in-flight device-code sign-in. Held in a field
@@ -64,6 +65,14 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     private string? _errorMessage;
 
     /// <summary>
+    /// The admin-consent link shown under <see cref="ErrorMessage"/> when a junis-hosted
+    /// tenant has not consented yet, or <c>null</c>. Text to copy and hand to an admin —
+    /// nothing here opens a browser from the popup.
+    /// </summary>
+    [ObservableProperty]
+    private string? _consentUrl;
+
+    /// <summary>
     /// Whether the "Advanced" disclosure (which hosts the device-code escape
     /// hatch) is expanded. Collapsed by default — device code is a special case
     /// for tenants whose federated IdP does aggressive seamless SSO.
@@ -87,6 +96,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     /// Defaults to the first configured entry.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDeviceCodeAvailable))]
     private SignInTarget? _selectedTarget;
 
     public AddTenantPanelViewModel(
@@ -96,6 +106,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(options);
         _authService = authService;
+        _options = options.Value;
         _logger = logger;
 
         // One target per configured entry, in configuration order — the same
@@ -111,7 +122,11 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
             }
 
             var name = string.IsNullOrWhiteSpace(entry.Label) ? entry.TenantId : entry.Label;
-            targets.Add(new SignInTarget(cloud, tenantId.ToString(), $"{name} · {EntraCloudInfo.DisplayName(cloud)}"));
+            targets.Add(new SignInTarget(
+                cloud,
+                tenantId.ToString(),
+                $"{name} · {EntraCloudInfo.DisplayName(cloud)}",
+                _options.HostingFor(cloud, tenantId.ToString())));
         }
 
         SignInTargets = targets;
@@ -120,6 +135,13 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
 
     /// <summary>Raised when the panel finishes — payload is null on cancel/error.</summary>
     public event Action<SignedInAccount?>? Closed;
+
+    /// <summary>
+    /// Whether a target's registration is the one the app started with. Set by the shell from
+    /// Settings: after a client-id change, a sign-in before the restart would go through the
+    /// old registration. <c>null</c> treats every target as loaded.
+    /// </summary>
+    public Func<SignInTarget, bool>? IsTargetLoaded { get; set; }
 
     /// <summary>Options shown in the "Sign in with" ComboBox — one per configured App Registration.</summary>
     public IReadOnlyList<SignInTarget> SignInTargets { get; }
@@ -135,6 +157,12 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
 
     /// <summary>True while a device-code sign-in is showing its user code and polling.</summary>
     public bool IsDeviceCodeInProgress => DeviceCodeUserCode is not null;
+
+    /// <summary>
+    /// False for a junis-hosted target: that registration has public client flows off, so
+    /// the panel swaps the "Advanced" disclosure for a caption saying so.
+    /// </summary>
+    public bool IsDeviceCodeAvailable => SelectedTarget?.Hosting != AppRegistrationHosting.JunisHosted;
 
     /// <summary>
     /// Resets state and opens the slide-in. This is the single "Add account"
@@ -172,6 +200,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     private void Reset()
     {
         ErrorMessage = null;
+        ConsentUrl = null;
         IsConnecting = false;
         IsAdvancedExpanded = false;
         DeviceCodeUserCode = null;
@@ -181,6 +210,22 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
 
     partial void OnDeviceCodeUserCodeChanged(string? value)
         => OnPropertyChanged(nameof(IsDeviceCodeInProgress));
+
+    // The link names the tenant it was built for; another target needs its own attempt.
+    partial void OnSelectedTargetChanged(SignInTarget? value) => ConsentUrl = null;
+
+    /// <summary>
+    /// Shows a failed sign-in, with the admin-consent link when a junis-hosted tenant has
+    /// not consented — the one thing the user can hand on to an admin.
+    /// </summary>
+    private void ShowSignInError(Exception exception, SignInTarget target)
+    {
+        var error = PimErrorMapper.MapException(exception, target.Hosting, addingAccount: true);
+        ErrorMessage = error.Message;
+        ConsentUrl = error.ConsentMissing && target.Hosting == AppRegistrationHosting.JunisHosted
+            ? _options.JunisAdminConsentUrl(target.Cloud, target.TenantId)
+            : null;
+    }
 
     [RelayCommand]
     private void ToggleAdvanced() => IsAdvancedExpanded = !IsAdvancedExpanded;
@@ -198,16 +243,34 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
         Closed?.Invoke(null);
     }
 
-    [RelayCommand]
-    private async Task ConnectAsync()
+    /// <summary>The selected target, or <c>null</c> with the reason shown when sign-in cannot start.</summary>
+    private SignInTarget? ReadyTarget()
     {
         if (SelectedTarget is not { } target)
         {
             ErrorMessage = NoRegistrationMessage;
+            return null;
+        }
+
+        if (IsTargetLoaded?.Invoke(target) == false)
+        {
+            ErrorMessage = "Restart the app to sign in to this tenant.";
+            return null;
+        }
+
+        return target;
+    }
+
+    [RelayCommand]
+    private async Task ConnectAsync()
+    {
+        if (ReadyTarget() is not { } target)
+        {
             return;
         }
 
         ErrorMessage = null;
+        ConsentUrl = null;
         IsConnecting = true;
         try
         {
@@ -220,7 +283,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to add account (tenant {TenantId}, cloud {Cloud})", target.TenantId, target.Cloud);
-            ErrorMessage = PimErrorMapper.MapException(ex).Message;
+            ShowSignInError(ex, target);
         }
         finally
         {
@@ -231,13 +294,13 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     [RelayCommand]
     private async Task ConnectViaDeviceCodeAsync()
     {
-        if (SelectedTarget is not { } target)
+        if (ReadyTarget() is not { } target)
         {
-            ErrorMessage = NoRegistrationMessage;
             return;
         }
 
         ErrorMessage = null;
+        ConsentUrl = null;
         DeviceCodeUserCode = null;
         DeviceCodeVerificationUri = null;
 
@@ -281,7 +344,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
         catch (Exception ex)
         {
             _logger.LogError(ex, "Device-code sign-in failed for tenant {TenantId} (cloud {Cloud})", target.TenantId, target.Cloud);
-            ErrorMessage = PimErrorMapper.MapException(ex).Message;
+            ShowSignInError(ex, target);
         }
         finally
         {
@@ -306,8 +369,11 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
         _deviceCodeCts?.Cancel();
     }
 
-    /// <summary>ComboBox row: one App Registration to sign in with, pinned to its tenant.</summary>
-    public sealed record SignInTarget(EntraCloud Cloud, string TenantId, string DisplayName)
+    /// <summary>
+    /// ComboBox row: one App Registration to sign in with, pinned to its tenant, and whose
+    /// registration it is — as the app started, which is what the sign-in uses.
+    /// </summary>
+    public sealed record SignInTarget(EntraCloud Cloud, string TenantId, string DisplayName, AppRegistrationHosting Hosting)
     {
         public override string ToString() => DisplayName;
     }

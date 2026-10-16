@@ -1,7 +1,9 @@
 namespace EntraPimManager.Core.ErrorHandling;
 
+using System.Text.RegularExpressions;
 using EntraPimManager.Core.Arm;
 using EntraPimManager.Core.Auth;
+using EntraPimManager.Core.Configuration;
 using EntraPimManager.Core.Models;
 using Microsoft.Graph.Models.ODataErrors;
 using Microsoft.Identity.Client;
@@ -20,6 +22,13 @@ public static class PimErrorMapper
     private const string DurationMessage = "The requested duration exceeds the allowed maximum.";
     private const string RefreshMessage = "Eligibility no longer available. Please refresh the list.";
     private const string GenericActivationMessage = "Activation failed. See the log file for details.";
+    private const string JunisConsentMessage = "An admin of this tenant must consent to Entra PIM Manager once.";
+    private const string SelfHostedConsentMessage = "The App Registration lacks admin consent in this tenant. An admin must grant it in Entra.";
+    private const string DeviceCodeJunisHostedMessage = "Device-code sign-in needs a self-hosted App Registration for this tenant.";
+    private const string NotAssignedMessage = "Your account is not assigned to Entra PIM Manager in this tenant. An admin assigns it under Enterprise applications.";
+    private const string JunisDisabledMessage = "Entra PIM Manager is switched off for this tenant, either by an admin of this tenant or by junis for all tenants. Ask your admin; junis announces its own switch-offs as security advisories on GitHub.";
+    private const string SelfHostedDisabledMessage = "The App Registration is disabled in this tenant.";
+    private const string OfflineMessage = "No connection to Microsoft Entra. Please check your network connection.";
 
     /// <summary>Maps a Graph error to a user-facing error.</summary>
     public static UserFacingError Map(ODataError error)
@@ -41,7 +50,19 @@ public static class PimErrorMapper
     /// gracefully: a cancelled/timed-out operation and a missing network connection.
     /// Raw exception detail never reaches the UI — only the log.
     /// </summary>
-    public static UserFacingError MapException(Exception exception)
+    /// <param name="exception">The failure.</param>
+    /// <param name="hosting">
+    /// Whose App Registration the tenant uses. A junis-hosted tenant's admin cannot change
+    /// junis' app, so advice to fix the registration becomes advice to consent or ask.
+    /// </param>
+    /// <param name="addingAccount">
+    /// True for a sign-in from the add-account panel, where a cancelled prompt is a
+    /// cancelled sign-in rather than a role that was not activated.
+    /// </param>
+    public static UserFacingError MapException(
+        Exception exception,
+        AppRegistrationHosting hosting = AppRegistrationHosting.SelfHosted,
+        bool addingAccount = false)
     {
         ArgumentNullException.ThrowIfNull(exception);
 
@@ -53,16 +74,17 @@ public static class PimErrorMapper
             // Must precede the MsalServiceException arm: a WAM prompt the user
             // dismissed can surface as either MsalClientException or
             // MsalServiceException, both deriving from MsalException.
-            MsalException { ErrorCode: MsalError.AuthenticationCanceledError } =>
-                Error(ErrorSeverity.Info, "Verification was cancelled. The role was not activated."),
+            MsalException { ErrorCode: MsalError.AuthenticationCanceledError } => MapCancel(hosting, addingAccount),
 
-            MsalServiceException msal => MapMsal(msal),
+            // Every MsalException, not just the service kind: MSAL's UiRequired throttle
+            // repeats a service failure as a client exception carrying the same AADSTS text.
+            MsalException msal => MapMsal(msal, hosting),
 
             OperationCanceledException =>
                 Error(ErrorSeverity.Timeout, "The request timed out. Please try again."),
 
             _ when IsNetworkFailure(exception) =>
-                Error(ErrorSeverity.Offline, "No connection to Microsoft Entra. Please check your network connection."),
+                Error(ErrorSeverity.Offline, OfflineMessage),
 
             _ =>
                 Error(ErrorSeverity.Fatal, "An unexpected error occurred. See the log file for details."),
@@ -106,7 +128,13 @@ public static class PimErrorMapper
     /// with nothing to activate. Everything else stays generic; the detail is
     /// in the log.
     /// </summary>
-    public static string DescribeFetchFailure(Exception exception, AuthMethod? authMethod = null)
+    /// <param name="exception">The failure.</param>
+    /// <param name="authMethod">How the account signed in, when known.</param>
+    /// <param name="hosting">Whose App Registration the tenant uses.</param>
+    public static string DescribeFetchFailure(
+        Exception exception,
+        AuthMethod? authMethod = null,
+        AppRegistrationHosting hosting = AppRegistrationHosting.SelfHosted)
     {
         ArgumentNullException.ThrowIfNull(exception);
 
@@ -136,10 +164,23 @@ public static class PimErrorMapper
         // requests — every scope change reopens this window. The refresh token
         // stays valid and consent is checked at token issuance, so the account
         // recovers by itself once an admin consents; say so instead of "see the log".
-        if (exception is MsalUiRequiredException
-            && exception.Message.Contains("AADSTS65001", StringComparison.Ordinal))
+        if (IsConsentMissing(exception))
         {
-            return "This tenant has not consented to the app's current permissions. An admin must grant admin consent for the App Registration; the account then recovers on its own.";
+            return hosting == AppRegistrationHosting.JunisHosted
+                ? "An admin of this tenant must consent to Entra PIM Manager once; the account then recovers on its own."
+                : "This tenant has not consented to the app's current permissions. An admin must grant admin consent for the App Registration; the account then recovers on its own.";
+        }
+
+        // AADSTS50105 ("Assignment required" without an assignment) and a switched-off
+        // app both stay until an admin acts, so a refresh cannot fix them either.
+        if (exception is MsalException && HasAadsts(exception.Message, "50105"))
+        {
+            return NotAssignedMessage;
+        }
+
+        if (exception is MsalException && IsAppDisabled(exception.Message))
+        {
+            return hosting == AppRegistrationHosting.JunisHosted ? JunisDisabledMessage : SelfHostedDisabledMessage;
         }
 
         // AADSTS53000/53001: a Conditional Access policy demands a compliant or
@@ -301,11 +342,58 @@ public static class PimErrorMapper
     }
 
     /// <summary>
+    /// True when <paramref name="message"/> carries exactly one of the AADSTS
+    /// <paramref name="codes"/> (an alternation such as <c>"65001|65004"</c>). The lookahead
+    /// is the point: a plain substring test cannot tell AADSTS70001 from AADSTS700016 or
+    /// AADSTS7000112.
+    /// </summary>
+    private static bool HasAadsts(string message, string codes)
+        => Regex.IsMatch(message, $@"AADSTS(?:{codes})(?!\d)");
+
+    /// <summary>
+    /// Missing consent in any of the shapes Entra and MSAL report it: AADSTS65001 (no grant),
+    /// AADSTS65004 (consent declined), AADSTS90094 (admin consent required), or MSAL's own
+    /// classification. Matched on <see cref="MsalException"/>, because MSAL's UiRequired
+    /// throttle wraps a repeated failure in a different type.
+    /// </summary>
+    private static bool IsConsentMissing(Exception exception)
+        => exception is MsalUiRequiredException { Classification: UiRequiredExceptionClassification.ConsentRequired }
+            || (exception is MsalException
+                && HasAadsts(exception.Message, "65001|65004|90094"));
+
+    /// <summary>
+    /// AADSTS7000112 / AADSTS70001: the app is switched off — by junis for every tenant
+    /// (<c>isDisabled</c>) or by the tenant's own admin ("Enabled for users to sign-in?" = No).
+    /// The code does not say which.
+    /// </summary>
+    private static bool IsAppDisabled(string message)
+        => HasAadsts(message, "7000112|70001");
+
+    private static UserFacingError MapCancel(AppRegistrationHosting hosting, bool addingAccount)
+    {
+        if (!addingAccount)
+        {
+            return Error(ErrorSeverity.Info, "Verification was cancelled. The role was not activated.");
+        }
+
+        // Entra shows "admin approval required" inside the WAM window, and closing that window
+        // most likely arrives here as a cancel — so on a junis-hosted tenant the consent hint
+        // (and, in the panel, the link) goes along with it.
+        return hosting == AppRegistrationHosting.JunisHosted
+            ? new UserFacingError(
+                ErrorSeverity.Info,
+                "Sign-in was cancelled. If Entra asked for an admin's approval, an admin of this tenant must consent to Entra PIM Manager once.",
+                null,
+                ConsentMissing: true)
+            : Error(ErrorSeverity.Info, "Sign-in was cancelled.");
+    }
+
+    /// <summary>
     /// Maps an MSAL sign-in/token error (e.g. from the device-code or broker flow)
     /// into a user-facing message. Keyed on the Entra <c>AADSTS</c> code where a
     /// specific, actionable hint helps the admin fix their own configuration.
     /// </summary>
-    private static UserFacingError MapMsal(MsalServiceException msal)
+    private static UserFacingError MapMsal(MsalException msal, AppRegistrationHosting hosting)
     {
         // Raised by MsalAuthService before it can even build a PCA: no App
         // Registration is pinned to the tenant (typically an enrollment whose
@@ -327,15 +415,48 @@ public static class PimErrorMapper
                 "The sign-in ended up in a different tenant than the selected entry. Check the entry's tenant id in Settings → Tenants and try again.");
         }
 
+        // Raised by MsalAuthService before any token request: the junis-hosted
+        // registration has public client flows off, so device code cannot work there.
+        if (msal.ErrorCode == "device_code_junis_hosted")
+        {
+            return Error(ErrorSeverity.Fatal, DeviceCodeJunisHostedMessage);
+        }
+
+        if (IsConsentMissing(msal))
+        {
+            return new UserFacingError(
+                ErrorSeverity.Fatal,
+                hosting == AppRegistrationHosting.JunisHosted ? JunisConsentMessage : SelfHostedConsentMessage,
+                null,
+                ConsentMissing: true);
+        }
+
+        if (HasAadsts(msal.Message, "50105"))
+        {
+            return Error(ErrorSeverity.Fatal, NotAssignedMessage);
+        }
+
+        if (IsAppDisabled(msal.Message))
+        {
+            return Error(ErrorSeverity.Fatal, hosting == AppRegistrationHosting.JunisHosted ? JunisDisabledMessage : SelfHostedDisabledMessage);
+        }
+
         // AADSTS700016: the client id is unknown in the directory it was sent to.
         // Either a cloud mismatch — a Global client id cannot exist in the 21Vianet
         // directory (and vice versa) — or a single-tenant client id paired with
         // the wrong tenant id, or the tenant simply never consented to the app.
-        if (msal.Message.Contains("AADSTS700016", StringComparison.Ordinal))
+        // For a junis-hosted tenant only the last one is the customer's to fix.
+        if (HasAadsts(msal.Message, "700016"))
         {
-            return Error(
-                ErrorSeverity.Fatal,
-                "This app registration is unknown in the selected tenant. Check the entry's tenant id, client id and cloud in Settings → Tenants, and that admin consent was granted in that tenant.");
+            return hosting == AppRegistrationHosting.JunisHosted
+                ? new UserFacingError(
+                    ErrorSeverity.Fatal,
+                    "Entra does not know Entra PIM Manager in this tenant yet. " + JunisConsentMessage,
+                    null,
+                    ConsentMissing: true)
+                : Error(
+                    ErrorSeverity.Fatal,
+                    "This app registration is unknown in the selected tenant. Check the entry's tenant id, client id and cloud in Settings → Tenants, and that admin consent was granted in that tenant.");
         }
 
         // AADSTS7000218: the token endpoint demanded a client secret/assertion,
@@ -343,8 +464,16 @@ public static class PimErrorMapper
         // app is a PUBLIC client and cannot ship a secret — the registration is
         // missing "Allow public client flows". This is the federated-IdP /
         // device-code escape-hatch failure mode (see federated-idp-sso-wrong-account).
-        if (msal.ErrorCode == MsalError.InvalidClient
-            || msal.Message.Contains("AADSTS7000218", StringComparison.Ordinal))
+        // The junis registration has the flag off on purpose, and the customer cannot
+        // change it — only device code reaches AADSTS7000218 there, and that needs
+        // self-hosted. Any other invalid_client on junis' app stays generic.
+        var demandsSecret = HasAadsts(msal.Message, "7000218");
+        if (hosting == AppRegistrationHosting.JunisHosted && demandsSecret)
+        {
+            return Error(ErrorSeverity.Fatal, DeviceCodeJunisHostedMessage);
+        }
+
+        if (hosting == AppRegistrationHosting.SelfHosted && (demandsSecret || msal.ErrorCode == MsalError.InvalidClient))
         {
             return Error(
                 ErrorSeverity.Fatal,
@@ -353,10 +482,11 @@ public static class PimErrorMapper
 
         // AADSTS70016 is the normal "user hasn't entered the code yet" poll
         // response; MSAL handles it internally and it should never surface here.
-        // Any other service error: keep it generic, the detail is in the log.
-        return Error(
-            ErrorSeverity.Fatal,
-            "Sign-in failed. See the log file for details.");
+        // Any other error: keep it generic, the detail is in the log — unless the
+        // network is the cause, which the user can fix without the log.
+        return IsNetworkFailure(msal)
+            ? Error(ErrorSeverity.Offline, OfflineMessage)
+            : Error(ErrorSeverity.Fatal, "Sign-in failed. See the log file for details.");
     }
 
     private static UserFacingError Error(ErrorSeverity severity, string message, string? fieldHint = null) =>

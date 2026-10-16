@@ -169,13 +169,15 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     private IReadOnlyList<NetworkCheckGroupViewModel> _networkCheckGroups = [];
 
     /// <summary>
-    /// The "add a tenant" form at the bottom of the section. Both ids must parse as GUIDs
-    /// before <see cref="AddTenantCommand"/> enables; the label is optional. An existing
-    /// tenant is edited in its own card instead — see <see cref="TenantNodeViewModel"/>.
-    /// Cleared on every <see cref="Open"/> and after a successful add.
+    /// The "add a tenant" form at the bottom of the section. The tenant id must parse as a
+    /// GUID and the chosen way must yield a client id before <see cref="AddTenantCommand"/>
+    /// enables; the label is optional. An existing tenant is edited in its own card instead —
+    /// see <see cref="TenantNodeViewModel"/>. Cleared on every <see cref="Open"/> and after a
+    /// successful add.
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanAddRegistration))]
+    [NotifyPropertyChangedFor(nameof(IsNewTenantAlreadyConfigured))]
     [NotifyCanExecuteChangedFor(nameof(AddTenantCommand))]
     private string _newTenantId = string.Empty;
 
@@ -196,7 +198,20 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     private string _newTicketSystem = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAddRegistration))]
+    [NotifyPropertyChangedFor(nameof(IsNewTenantAlreadyConfigured))]
+    [NotifyPropertyChangedFor(nameof(IsNewTenantChina))]
+    [NotifyCanExecuteChangedFor(nameof(AddTenantCommand))]
     private CloudOption _newTenantCloud;
+
+    /// <summary>
+    /// The way chosen in the form: junis-hosted, or the tenant's own registration. Always
+    /// false while this build ships no junis client id.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanAddRegistration))]
+    [NotifyCanExecuteChangedFor(nameof(AddTenantCommand))]
+    private bool _newIsJunisHosted;
 
     public SettingsPanelViewModel(
         IUserSettingsService userSettings,
@@ -320,8 +335,26 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     public IReadOnlyList<CloudOption> CloudOptions { get; } = [.. Enum.GetValues<EntraCloud>()
         .Select(c => new CloudOption(c, EntraCloudInfo.DisplayName(c)))];
 
-    /// <summary>Save is allowed once both ids of the form parse as GUIDs.</summary>
-    public bool CanAddRegistration => Guid.TryParse(NewTenantId, out _) && Guid.TryParse(NewClientId, out _);
+    /// <summary>
+    /// Whether the form offers the way at all. Without a shipped junis client id there is
+    /// only self-hosted, and the form shows no junis wording.
+    /// </summary>
+    public bool IsHostingChoiceAvailable => _options.JunisHostedClientId is not null;
+
+    /// <summary>Entra China has no junis-hosted registration: the form disables that way.</summary>
+    public bool IsNewTenantChina => NewTenantCloud.Cloud == EntraCloud.China;
+
+    /// <summary>
+    /// True when the form names a tenant that already has an entry. Adding would overwrite
+    /// it silently; its card's gear is the place to change it.
+    /// </summary>
+    public bool IsNewTenantAlreadyConfigured => Guid.TryParse(NewTenantId, out _)
+        && _registrations.Any(r => SlotOf(r)?.Key == new TenantSlot(NewTenantCloud.Cloud, NewTenantId).Key);
+
+    /// <summary>Add is allowed for a new tenant id once the chosen way yields a client id.</summary>
+    public bool CanAddRegistration => Guid.TryParse(NewTenantId, out _)
+        && !IsNewTenantAlreadyConfigured
+        && NewClientIdResolved() is not null;
 
     /// <summary>
     /// True when at least one registration exists and every one of them has been proven
@@ -359,6 +392,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
                 foreach (var node in Nodes)
                 {
                     node.RemoveConfirmation.Refresh();
+                    node.SaveConfirmation.Refresh();
                 }
             }
         };
@@ -378,6 +412,20 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(AreAppRegistrationsVerified));
+    }
+
+    /// <summary>
+    /// True when a sign-in to the tenant goes through the registration Settings shows: an
+    /// entry the user has not removed, with the client id the startup configuration loaded.
+    /// False between a change and the restart that loads it — a sign-in then would use the old
+    /// registration and leave its tokens behind, the very ones a switch just removed.
+    /// </summary>
+    public bool IsRegistrationLoaded(EntraCloud cloud, string tenantId)
+    {
+        var key = new TenantSlot(cloud, tenantId).Key;
+        var registration = _registrations.FirstOrDefault(r => SlotOf(r)?.Key == key);
+        return registration is not null
+            && TenantSlot.NormaliseTenantId(_options.ClientIdFor(cloud, tenantId)) == TenantSlot.NormaliseTenantId(registration.ClientId);
     }
 
     /// <summary>Seeds the controls from the current settings + autostart state and slides the panel in.</summary>
@@ -473,17 +521,26 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         foreach (var slot in TenantSlot.Merge(accountSlots, registrationSlots))
         {
             var node = Nodes.FirstOrDefault(n => string.Equals(n.Key, slot.Key, StringComparison.Ordinal))
-                ?? new TenantNodeViewModel(slot, VerifiedClientIds, SaveNode, RemoveNodeAsync, AddAccountToNode, () => _accountsHost?.IsBusy ?? false);
+                ?? new TenantNodeViewModel(
+                    slot,
+                    _options,
+                    () => _userSettings.Current,
+                    SaveNodeAsync,
+                    RemoveNodeAsync,
+                    AddAccountToNode,
+                    () => _accountsHost?.IsBusy ?? false);
 
-            // Sign-in needs both: an entry the user has not removed, and one the startup
-            // configuration already knew about. A removal disables the button before the
-            // restart that enacts it; a fresh addition until the restart that loads it.
+            // Sign-in needs both: an entry the user has not removed, and the very client id
+            // the startup configuration loaded. A removal disables the button before the
+            // restart that enacts it; a fresh addition or a changed client id until the
+            // restart that loads it.
             var registration = _registrations.FirstOrDefault(r => SlotOf(r)?.Key == slot.Key);
+            var loaded = IsRegistrationLoaded(slot.Cloud, slot.TenantId);
             node.UpdateRegistration(
                 registration?.ClientId,
                 registration?.Label,
                 _userSettings.Current.TicketSystemFor(slot.TenantId),
-                registration is not null && _options.ClientIdFor(slot.Cloud, slot.TenantId) is not null);
+                loaded);
 
             var rows = accountRows
                 .Where(a => new TenantSlot(a.Account.Cloud, a.Account.TenantId).Key == slot.Key)
@@ -494,6 +551,11 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
         ObservableCollectionSync.Apply(Nodes, desired);
         OnPropertyChanged(nameof(AreAppRegistrationsVerified));
+
+        // The registrations may have changed under a tenant id already typed into the form.
+        OnPropertyChanged(nameof(IsNewTenantAlreadyConfigured));
+        OnPropertyChanged(nameof(CanAddRegistration));
+        AddTenantCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -506,14 +568,27 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     /// configuration — so it writes the file and raises the restart banner. The ticketing
     /// system is workflow, applies at once, and must not make the app ask for a restart
     /// it does not need.
+    /// <para/>
+    /// A changed client id with accounts signed in removes those accounts first, the way
+    /// "Remove tenant" does. Their tokens belong to the old registration, and only now,
+    /// while the startup configuration still resolves it, can they be purged from the
+    /// broker. The user adds the accounts again after the restart.
     /// </remarks>
-    private void SaveNode(TenantNodeViewModel node)
+    private async Task SaveNodeAsync(TenantNodeViewModel node)
     {
-        var clientId = node.ClientIdDraft.Trim();
+        var clientId = node.ResolvedClientIdDraft!; // CanSave gates the command
+
+        var removesAccounts = node.SaveRemovesAccounts;
+        if (removesAccounts
+            && (_accountsHost is null || !await _accountsHost.RemoveAccountsAsync([.. node.Accounts.Select(a => a.Account)])))
+        {
+            return;
+        }
+
         var label = string.IsNullOrWhiteSpace(node.LabelDraft) ? null : node.LabelDraft.Trim();
         var existing = _registrations.FirstOrDefault(r => SlotOf(r)?.Key == node.Key);
         var registrationChanged = existing is null
-            || !string.Equals(existing.ClientId, clientId, StringComparison.OrdinalIgnoreCase)
+            || TenantSlot.NormaliseTenantId(existing.ClientId) != TenantSlot.NormaliseTenantId(clientId)
             || !string.Equals(existing.Label, label, StringComparison.Ordinal);
 
         if (registrationChanged)
@@ -532,7 +607,13 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             }
             catch (Exception ex)
             {
+                // After a switch the accounts are already gone, so a log line alone would leave
+                // the user with an emptied card and the old registration, and no word why.
                 _logger.LogError(ex, "Failed to save the App Registration for cloud {Cloud}, tenant {TenantId}", node.Cloud, node.TenantId);
+                var detail = removesAccounts
+                    ? "Its accounts were removed, but its App Registration could not be saved to appsettings.local.json."
+                    : "Its App Registration could not be saved to appsettings.local.json.";
+                _toastService.ShowError("Save tenant", $"{detail} Check that the file is writable and valid JSON, then try again.");
                 return;
             }
 
@@ -640,7 +721,9 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     {
         var cloud = NewTenantCloud.Cloud;
         var tenantId = Guid.Parse(NewTenantId.Trim()).ToString();
-        var clientId = NewClientId.Trim();
+
+        // Not null: the command only enables once it resolves (CanAddRegistration).
+        var clientId = NewClientIdResolved()!;
         var label = string.IsNullOrWhiteSpace(NewLabel) ? null : NewLabel.Trim();
 
         try
@@ -655,17 +738,8 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             return;
         }
 
-        var slotKey = new TenantSlot(cloud, tenantId).Key;
-        var existing = _registrations.FirstOrDefault(r => SlotOf(r)?.Key == slotKey);
-        if (existing is null)
-        {
-            _registrations.Add(new TenantAppRegistration { TenantId = tenantId, ClientId = clientId, Cloud = cloud.ToString(), Label = label });
-        }
-        else
-        {
-            existing.ClientId = clientId;
-            existing.Label = label;
-        }
+        // Never an existing slot: CanAddRegistration refuses a tenant that is configured.
+        _registrations.Add(new TenantAppRegistration { TenantId = tenantId, ClientId = clientId, Cloud = cloud.ToString(), Label = label });
 
         // Not part of the registration file — see NewTicketSystem. Saved after the
         // registration write so a failed write never leaves a half-applied form.
@@ -870,6 +944,9 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
     partial void OnIsOpenChanged(bool value) => OnPropertyChanged(nameof(PanelOffsetX));
 
+    // China switches the form to self-hosted; back on Global, junis-hosted is preselected again.
+    partial void OnNewTenantCloudChanged(CloudOption value) => NewIsJunisHosted = IsJunisHostedPreselected(value.Cloud);
+
     partial void OnSelectedThemeChanged(ThemeOption value)
     {
         if (_suppressPersist)
@@ -1009,7 +1086,13 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         Closed?.Invoke();
     }
 
-    private string[] VerifiedClientIds() => _userSettings.Current.VerifiedClientIds ?? [];
+    private bool IsJunisHostedPreselected(EntraCloud cloud) => IsHostingChoiceAvailable && cloud == EntraCloud.Global;
+
+    /// <summary>The client id the form would add, or <c>null</c> when the chosen way yields none.</summary>
+    private string? NewClientIdResolved() => _options.ResolveClientId(
+        NewIsJunisHosted ? AppRegistrationHosting.JunisHosted : AppRegistrationHosting.SelfHosted,
+        NewTenantCloud.Cloud,
+        NewClientId);
 
     private void ClearForm()
     {
@@ -1018,6 +1101,9 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         NewLabel = string.Empty;
         NewTicketSystem = string.Empty;
         NewTenantCloud = CloudOptions[0];
+
+        // Set here too: the cloud handler does not run when the cloud was already Global.
+        NewIsJunisHosted = IsJunisHostedPreselected(NewTenantCloud.Cloud);
     }
 
     /// <summary>

@@ -31,6 +31,7 @@ public sealed partial class ArmedConfirmation : ObservableObject
 
     private readonly Func<Task> _confirmed;
     private readonly Func<bool> _canRun;
+    private readonly Func<bool>? _needsConfirmation;
     private DispatcherTimer? _timer;
     private long _lastPressMilliseconds;
 
@@ -41,12 +42,17 @@ public sealed partial class ArmedConfirmation : ObservableObject
     /// <summary>Creates the confirmation for one destructive action.</summary>
     /// <param name="confirmed">The action the second press runs.</param>
     /// <param name="canRun">Whether the button may be pressed at all right now.</param>
-    public ArmedConfirmation(Func<Task> confirmed, Func<bool> canRun)
+    /// <param name="needsConfirmation">
+    /// Whether this press is destructive at all. When it returns false, the first press runs
+    /// the action without arming. <c>null</c> means always.
+    /// </param>
+    public ArmedConfirmation(Func<Task> confirmed, Func<bool> canRun, Func<bool>? needsConfirmation = null)
     {
         ArgumentNullException.ThrowIfNull(confirmed);
         ArgumentNullException.ThrowIfNull(canRun);
         _confirmed = confirmed;
         _canRun = canRun;
+        _needsConfirmation = needsConfirmation;
         Command = new AsyncRelayCommand(PressAsync, canRun);
     }
 
@@ -87,6 +93,12 @@ public sealed partial class ArmedConfirmation : ObservableObject
             }
 
             Disarm();
+            await _confirmed();
+            return;
+        }
+
+        if (_needsConfirmation?.Invoke() == false)
+        {
             await _confirmed();
             return;
         }

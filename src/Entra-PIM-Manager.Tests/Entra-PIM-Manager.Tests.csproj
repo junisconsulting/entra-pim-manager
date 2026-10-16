@@ -30,4 +30,9 @@
     <EmbeddedResource Include="Fixtures\**\*.json" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The real shipped file, so a test can check what the build actually carries. -->
+    <None Include="..\Entra-PIM-Manager.App.Avalonia\appsettings.json" Link="Shipped\appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

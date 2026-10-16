@@ -297,6 +297,18 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         try
         {
             var clientId = RequireClientId(cloud, tenantId);
+
+            // The junis-hosted registration has public client flows off on purpose, so a
+            // device-code request against it can only fail at the token endpoint
+            // (AADSTS7000218). Refuse it before any request, with a code the mapper words.
+            // The UI hides the option for these tenants; this is the second line.
+            if (_options.HostingOf(cloud, clientId) == AppRegistrationHosting.JunisHosted)
+            {
+                throw new MsalServiceException(
+                    "device_code_junis_hosted",
+                    "Device-code sign-in is not available for a junis-hosted tenant.");
+            }
+
             var pca = await EnsureDeviceCodePcaAsync(clientId, cloud, ct).ConfigureAwait(false);
 
             var result = await pca.AcquireTokenWithDeviceCode(

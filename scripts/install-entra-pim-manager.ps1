@@ -12,14 +12,25 @@
     per-user. A run as SYSTEM writes into the SYSTEM profile and the user ends up with
     an unconfigured app.
 
-    Get the tenant and client id from scripts/create-app-registration.ps1, which an
-    admin runs once per tenant. Details: docs/unattended-deployment.md.
+    For a self-hosted App Registration, get the tenant and client id from
+    scripts/create-app-registration.ps1, which an admin runs once per tenant. Without
+    -ClientId the tenant is junis-hosted: nothing is created, an admin of the tenant
+    consents once. Details: docs/unattended-deployment.md.
 
 .PARAMETER TenantId
     Directory (tenant) id to configure. Required.
 
 .PARAMETER ClientId
-    Application (client) id of the App Registration. Required.
+    Application (client) id of the tenant's own App Registration (self-hosted). Optional:
+    without it, the tenant is junis-hosted, and the script reads the junis client id from
+    the installed app. junis-hosted exists for the Global cloud only, so -Cloud China
+    requires -ClientId. An installed version that does not offer junis-hosted yet stops
+    the script.
+
+    Re-running the script switches the tenant: without -ClientId to junis-hosted, with
+    -ClientId back to self-hosted. Remove the tenant's accounts in the app first - the
+    script cannot, and they would otherwise show as no longer valid while the old
+    registration's tokens stay with Windows.
 
 .PARAMETER SetupExe
     Path to Entra-PIM-Manager-win-Setup.exe. Omit to configure an existing install
@@ -47,8 +58,16 @@
 
 .EXAMPLE
     ./install-entra-pim-manager.ps1 -SetupExe .\Entra-PIM-Manager-win-Setup.exe `
+        -TenantId 00000000-0000-0000-0000-000000000001
+
+    junis-hosted: no -ClientId.
+
+.EXAMPLE
+    ./install-entra-pim-manager.ps1 -SetupExe .\Entra-PIM-Manager-win-Setup.exe `
         -TenantId 00000000-0000-0000-0000-000000000001 `
         -ClientId 00000000-0000-0000-0000-000000000002
+
+    self-hosted: the tenant's own App Registration.
 
 .EXAMPLE
     ./install-entra-pim-manager.ps1 -TenantId <guid> -ClientId <guid> `
@@ -77,8 +96,15 @@ if (-not ($TenantId -as [guid])) {
     throw "TenantId '$TenantId' is not a GUID. Pass -TenantId <guid>."
 }
 
-if (-not ($ClientId -as [guid])) {
-    throw "ClientId '$ClientId' is not a GUID. Pass -ClientId <guid>."
+# No -ClientId means junis-hosted, which exists for the Global cloud only. Its id is read
+# after the install, from the version that will sign in with it (step 3).
+if ($ClientId) {
+    if (-not ($ClientId -as [guid])) {
+        throw "ClientId '$ClientId' is not a GUID. Pass -ClientId <guid>."
+    }
+}
+elseif ($Cloud -eq "China") {
+    throw "Entra China needs your own App Registration. Pass -ClientId <guid>."
 }
 
 if ($Cloud -notin @("Global", "China")) {
@@ -96,7 +122,6 @@ if ($LogoPath -and ([IO.Path]::GetExtension($LogoPath) -ne ".png" -or -not (Test
 # the check in step 5 - an install Intune would report as failed and retry. The client id it
 # stores as given, so a braced one would reach sign-in with its braces.
 $TenantId = ([guid]$TenantId).ToString()
-$ClientId = ([guid]$ClientId).ToString()
 
 # 2. Install. Silent means no dialogs - and no app launch either, which is exactly why
 #    the configuration below is a second, separate call.
@@ -127,6 +152,19 @@ if (-not (Test-Path $exe)) {
 if (-not (Test-Path $exe)) {
     throw "Entra PIM Manager is not installed under $installRoot. Pass -SetupExe to install it."
 }
+
+#    junis-hosted: the junis client id ships in the app's own appsettings.json. Read it from
+#    current\, where the app and its configuration live - the stub folder has no copy. An
+#    older version has no id there, and the app ignores any value that is not a GUID.
+if (-not $ClientId) {
+    $ClientId = (Get-Content (Join-Path $installRoot "current\appsettings.json") -Raw -Encoding UTF8 | ConvertFrom-Json).EntraPimManager.JunisHostedClientId
+    if (-not ($ClientId -as [guid])) {
+        throw "This installation does not offer junis-hosted yet; pass -ClientId or install a newer version."
+    }
+}
+
+# Canonical, like the tenant id above: either way, given or read.
+$ClientId = ([guid]$ClientId).ToString()
 
 # 4. Configure. Start-Process -Wait is required: the app is a GUI executable, so a plain
 #    call returns before it has done anything and the exit code would be lost.

@@ -22,6 +22,14 @@ installed clients can never update to**.
    Write it before tagging, not after.
 3. **The version is not already released.** `gh release list` — tags are not reusable.
 4. **Run the `verify` skill** (build, tests, coverage gate).
+5. **A non-empty `JunisHostedClientId`** in `src/Entra-PIM-Manager.App.Avalonia/appsettings.json`
+   — and the commit that puts it on `main` — needs the junis-hosted gate first: the registration
+   exists and is operated as in `SECURITY.md` ("The junis-hosted App Registration"), that section is
+   published, the consent screen shows the verified publisher "junis GmbH", and checklist §1e has
+   passed in test tenants. The same commit removes the "available from the release that ships the
+   junis client id" notes from README.md, both user guides, `docs/app-registration-setup.md` and
+   `docs/unattended-deployment.md`, and publishes the id in SECURITY.md. Why:
+   `docs/adr/0002-junis-hosted-app-registration.md`.
 
 ## 2. Manual test gate — the part CI cannot do
 

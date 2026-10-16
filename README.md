@@ -93,14 +93,17 @@ scopes under a name, star it, and it waits next to your pinned roles tomorrow.
 
 ## Quick start
 
-1. **Set up the tenant — an admin, once.** Run `scripts/create-app-registration.ps1`, or follow
-   the [manual steps](docs/app-registration-setup.md). Either way you end up with a tenant id
-   and a client id.
+1. **Set up the tenant — an admin, once.** Either **junis-hosted** (Global cloud; available from the release that ships the junis client
+   id): consent once to
+   the App Registration junis publishes, [through one link](docs/app-registration-setup.md#junis-hosted-consent-only)
+   — you need only the tenant id. Or **self-hosted**: run `scripts/create-app-registration.ps1`, or
+   follow the [manual steps](docs/app-registration-setup.md), and you end up with a tenant id and a
+   client id.
 2. **Install.** Download `Entra-PIM-Manager-win-Setup.exe` from
    [Releases](../../releases/latest) and run it. No UAC prompt, nothing to choose.
-3. **Connect.** Click the shield next to the clock → **Set up your first tenant** → enter tenant
-   id and client id → **Add account** → **Sign in**, and pick your admin account in the Windows
-   account picker.
+3. **Connect.** Click the shield next to the clock → **Set up your first tenant** → enter the tenant
+   id and choose **junis-hosted**, or **self-hosted** with your client id → **Add account** →
+   **Sign in**, and pick your admin account in the Windows account picker.
 
 Your eligibilities appear, grouped per tenant. Click one, give a reason, **Activate**.
 
@@ -130,6 +133,10 @@ This is a privileged-access tool, so here is exactly what it does and does not d
 - **Delegated permissions only** — seven Microsoft Graph permissions plus Azure Service
   Management `user_impersonation`, all on behalf of the signed-in user. No client secret, no
   application permissions. [The list, and why each one is needed](docs/app-registration-setup.md#3-api-permissions-delegated).
+- **junis-hosted, run in the open.** If you use the App Registration junis publishes,
+  [SECURITY.md](SECURITY.md#the-junis-hosted-app-registration) says how junis operates and protects
+  it, how to check what you consent to, and how to switch it off. The app sends nothing to junis:
+  [PRIVACY.md](PRIVACY.md).
 - **Windows does the sign-in.** The WAM broker handles password, MFA, Windows Hello and
   Conditional Access; the app never sees your password.
 - **Clean logs.** No tokens, no justification text, and users appear by object id only.
