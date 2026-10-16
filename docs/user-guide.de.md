@@ -107,9 +107,10 @@ Sortierung, bleibt über Neustarts erhalten.
 zuklappen, und die App merkt sich, welche du zugelassen hast.
 
 Das **Suchfeld** durchsucht Rollenname, Rollentyp, Tenant *und* Azure-Scope gleichzeitig — der Name
-einer Subscription findet also die Rollen, die für sie gelten. **⟳** erzwingt eine Aktualisierung,
-nötig ist das aber selten: Die Liste hält sich selbst aktuell, auch bei Aktivierungen, Abläufen und
-Rollen, die anderswo beendet wurden. **⚙** öffnet die Einstellungen.
+einer Subscription findet also die Rollen, die für sie gelten. **⟳** neben ELIGIBILITIES erzwingt
+eine Aktualisierung, nötig ist das aber selten: Die Liste hält sich selbst aktuell, auch bei
+Aktivierungen, Abläufen und Rollen, die anderswo beendet wurden. **⚙** unten rechts öffnet die
+Einstellungen.
 
 Ganz unten steht die Version, die du benutzt. Sie ist ein Link: ein Klick öffnet genau dieses
 Release auf GitHub — „was hat sich eigentlich geändert" ist damit einen Klick entfernt statt eine
@@ -232,10 +233,10 @@ Bevor du ihn drückst:
 
 ## Einstellungen
 
-Das Zahnrad oben rechts.
+Das Zahnrad unten rechts.
 
-**APPEARANCE** — Theme: System, hell oder dunkel. **Logo** setzt das Logo deiner Organisation neben
-den App-Namen: **Choose…** nimmt ein PNG, **Remove** entfernt es wieder.
+**APPEARANCE** — Theme: System, hell oder dunkel. **Logo** setzt das Logo deiner Organisation oben
+rechts ins Fenster: **Choose…** nimmt ein PNG, **Remove** entfernt es wieder.
 
 **BEHAVIOR** — Mit Windows starten. Startmenü-Eintrag behalten. Standard-Aktivierungsdauer (der
 Startwert des Schiebereglers, keine Obergrenze — die kommt aus der Richtlinie deines Admins).

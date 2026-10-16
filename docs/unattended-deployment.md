@@ -101,13 +101,13 @@ fails with code `1` and leaves the configuration untouched.
 
 ### Your organization's logo
 
-`-LogoPath <file.png>` puts your logo at the top of the panel, right of the app name. The script
+`-LogoPath <file.png>` puts your logo at the top right of the panel. The script
 copies it to `%LocalAppData%\junis\Entra-PIM-Manager\logo.png`, and the app reads it at startup.
 
 - **PNG only**, ideally with a transparent background. The panel has a light and a dark theme, so
   pick a version that reads on both — a dark wordmark disappears on the dark one.
-- It is drawn 20 px tall and at most 116 px wide, so a logo wider than about 6:1 comes out smaller.
-  60 px of height keeps it sharp up to 300 % display scaling. Crop it tightly: a transparent margin
+- It is drawn 32 px tall and at most 140 px wide, so a logo wider than about 4.4:1 comes out
+  smaller. 96 px of height keeps it sharp up to 300 % display scaling. Crop it tightly: a transparent margin
   counts toward both limits, so the logo comes out smaller and no longer lines up with the edge.
 - A run without the parameter leaves an existing logo in place. Users can also choose or remove
   one themselves under **Settings → APPEARANCE → Logo**, which writes the same file.

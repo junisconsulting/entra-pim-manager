@@ -101,9 +101,9 @@ restarts.
 remembers which ones you left closed.
 
 The **search box** searches role name, role type, tenant *and* Azure scope in one go — typing a
-subscription name finds the roles that apply to it. The **⟳** button forces a refresh, though the
-list keeps itself current on its own: activations, expiries and roles ended elsewhere show up
-without you asking. **⚙** opens Settings.
+subscription name finds the roles that apply to it. The **⟳** next to ELIGIBILITIES forces a
+refresh, though the list keeps itself current on its own: activations, expiries and roles ended
+elsewhere show up without you asking. **⚙** at the bottom right opens Settings.
 
 At the very bottom sits the version you are running. It is a link: clicking it opens that release on
 GitHub, so "what actually changed" is one click from the app rather than a search.
@@ -220,10 +220,10 @@ Before you press it:
 
 ## Settings
 
-The gear icon, top right.
+The gear icon, bottom right.
 
-**APPEARANCE** — Theme: System, Light or Dark. **Logo** puts your organization's logo next to the
-app name: **Choose…** takes a PNG, **Remove** takes it away again.
+**APPEARANCE** — Theme: System, Light or Dark. **Logo** puts your organization's logo at the top
+right of the panel: **Choose…** takes a PNG, **Remove** takes it away again.
 
 **BEHAVIOR** — Start with Windows. Keep a Start-menu entry. Default activation duration (the
 slider's starting value, not a limit — the limit is your admin's policy).

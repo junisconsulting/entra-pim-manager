@@ -27,9 +27,9 @@ using Microsoft.Extensions.Options;
 /// </summary>
 public sealed partial class SettingsPanelViewModel : ObservableObject
 {
-    // The panel draws the logo 20 px tall; three times that keeps it sharp up to
+    // The panel draws the logo 32 px tall; three times that keeps it sharp up to
     // 300 % display scaling without holding a print-size image in memory.
-    private const int LogoDecodeHeight = 60;
+    private const int LogoDecodeHeight = 96;
 
     /// <summary>
     /// Outer guard for the whole network-check run; each probe already caps

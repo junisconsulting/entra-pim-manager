@@ -117,7 +117,7 @@ Your eligibilities appear, grouped per tenant. Click one, give a reason, **Activ
 One script per tenant, one Intune Win32 package for all of them — every release carries a
 tenant-neutral `.intunewin`. Install and configuration both run in the user's context, and the
 next logon starts the app already configured. Ship your organization's logo along, and it sits
-next to the app name. Arguments, exit codes and the exact Intune values:
+at the top right of the panel. Arguments, exit codes and the exact Intune values:
 [docs/unattended-deployment.md](docs/unattended-deployment.md).
 
 ## Security and footprint

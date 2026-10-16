@@ -49,7 +49,7 @@ public static class AppPaths
     public static string LocalConfigFile { get; } = Path.Combine(DataDirectory, "appsettings.local.json");
 
     /// <summary>
-    /// Optional organization logo, shown next to the app name. A rollout places it
+    /// Optional organization logo, shown at the top right of the panel. A rollout places it
     /// (install script <c>-LogoPath</c>) or the user picks one in Settings; no file, no logo.
     /// </summary>
     public static string LogoFile { get; } = Path.Combine(DataDirectory, "logo.png");

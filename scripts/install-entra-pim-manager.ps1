@@ -37,7 +37,7 @@
     with the registration; like the registration it takes effect at the next app start.
 
 .PARAMETER LogoPath
-    Optional PNG with your organization's logo, shown next to the app name. Copied into
+    Optional PNG with your organization's logo, shown at the top right of the panel. Copied into
     the per-user data folder as logo.png; takes effect at the next app start. PNG only.
 
 .PARAMETER NoStart
