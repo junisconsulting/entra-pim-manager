@@ -144,6 +144,10 @@ what is actually on screen. Do this as its own change with the app in front of y
 side effect of a feature — guessing at the wording is how the drift happened in the first place.
 Section 1b (sovereign cloud, added in 0.4.2) is current and should be kept as-is.
 
+**Status 2026-10-16 (0.13.0):** §4's tray-menu items now match `App.axaml`, and the new §4d covers
+the organization logo. Still stale: "Sign out" in §1, "Eligible Roles…" and "Active Assignments…"
+in §2, the `ConfigurationWindow` in §5 and the log path at the end.
+
 ---
 
 ## A device-code account gives no usable signal while its tenant consent is missing
@@ -401,3 +405,49 @@ the other enrollments, excluding the one being removed, instead of relying on it
 gone. A failed purge then leaves the enrollment listed, so the retry still knows its
 `AuthMethod`. It is MSAL code: follow the `msal-dotnet-desktop-wam` skill, and add Core tests for
 both orders of failure (store write vs. purge).
+
+---
+
+## "Uninstalling removes the tokens" is unverified for broker accounts
+
+**Evidence:** `docs/user-guide.md` ("What lands on your machine"), its German twin, and
+`README.md` ("Security and footprint") say that uninstalling removes everything, cached tokens
+included. For device-code accounts that holds: their refresh tokens live in
+`msal-devicecode-{client-id}.cache` under the data directory, which the uninstall deletes. For
+broker accounts, `MsalAuthService.EnsureDeviceCodePcaAsync` itself notes that WAM owns the refresh
+tokens. Those live in the Windows token broker, outside the app's directories, and nothing in the
+uninstall hook asks WAM to forget them. Found 2026-10-16 in the security review of the
+junis-hosted spec (switching a tenant's client id strands the broker tokens of the old
+registration the same way).
+
+**Why it matters:** a privileged-access tool should not promise a cleanup it cannot do. A security
+reviewer who reads "tokens included" and then finds the account under Windows' "Work or school
+accounts", or WAM still answering silently for that client id, stops trusting the rest of the
+footprint section.
+
+**What makes the fix safe:** observe it first. On Windows, enrol a broker account, uninstall, and
+check whether WAM still returns a token silently for that client id (a reinstall with the same
+registration that signs in without a prompt shows it). Then either reword both user guides
+(EN + DE, same commit) and the README to say what remains and how to remove it ("Settings →
+Accounts → Remove" before uninstalling, or Windows "Access work or school"), or purge the broker
+accounts from the uninstall hook, if WAM can be asked from there.
+
+---
+
+## `msal-dotnet-desktop-wam` skill still says the ARM path falls back to interactive
+
+**Evidence:** `.claude/skills/msal-dotnet-desktop-wam/SKILL.md`, section "A second resource next to
+Graph", says that without ARM consent "silent fails … and the broker path falls back to
+interactive". `ArmBearerTokenHandler` has since passed `silentOnly: true` for every background
+read (only a claims challenge after a click on Activate may prompt), so the hour-long backoff now
+guards against failed silent calls, not a prompt loop. The "cancelled acquisition" paragraph
+below it describes the field case from before that change. Found 2026-10-16 while mapping the
+error paths for the junis-hosted spec.
+
+**Why it matters:** the skill is the authority for MSAL code (CLAUDE.md). A reader who trusts it
+will expect a background ARM read to open WAM and may "fix" the silent-only flag back, which
+brings the stalled-refresh problem from 2026-09-04 back.
+
+**What makes the fix safe:** rewrite those two bullets from `ArmBearerTokenHandler` and
+`EligibilityAggregator.FetchAzureSafeAsync` as they are now, and keep the 2026-09-04 field case
+as the reason for `silentOnly`. It is a docs-only change; no code moves.
