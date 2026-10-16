@@ -15,7 +15,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/junisconsulting/entra-pim-manager" alt="MIT license" /></a>
 </p>
 
-![The Entra PIM Manager panel above the tray icon: active roles with countdowns, pinned and recent roles, eligibilities grouped per tenant](docs/images/hero.svg)
+![Illustration of the Entra PIM Manager panel above the tray icon: an organization's logo at the top right, active roles with countdowns, pinned and recent roles, eligibilities grouped per tenant](docs/images/hero.svg)
 
 PIM only protects you if people use it. When activating a role means a browser, the portal and
 seven steps — per tenant — admins stop activating and start asking for permanent roles. And a
