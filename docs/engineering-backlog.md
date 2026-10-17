@@ -73,9 +73,15 @@ in `IMECache` with "Access is denied". The install script exited 1 before Velopa
 and only PowerShell/Operational event 4100 named the cause. Per-rule path exclusions let it
 through; `docs/unattended-deployment.md` lists them. Velopack's own binaries are no way around
 this: vpk patches the stub and `Update.exe` per app, so their hashes are as new as the app's.
+Signing alone does not clear this rule either: Microsoft documents no exemption for signed files,
+and a Microsoft answer says "Simply signing … will not exempt it from the rule" (Q&A 4374723,
+2025-07-23). What signing adds for it is a durable allow: a Defender certificate Allow indicator,
+which needs a leaf certificate that lives longer than Artifact Signing's 72 hours.
 
-**What makes the fix safe:** a junis code-signing certificate (OV/EV) provisioned as a CI secret,
-`build.ps1 -SignParams` wired into the release workflow on `windows-latest`, and one release
+**What makes the fix safe:** a junis code-signing identity whose key never leaves an HSM — since
+June 2023 the CA/B Forum requires that, so a PFX as a CI secret is no longer possible (an OV
+certificate with its key in a cloud HSM, or Azure Artifact Signing; decision brief 2026-10-17),
+signing wired into the release workflow on `windows-latest`, and one release
 verified with `Get-AuthenticodeSignature` = `Valid` on Setup.exe, Update.exe, the stub and the app
 exe. Then app-control customers can replace per-version hash rules with a single publisher rule.
 Until that lands, the docs must say releases are unsigned (they do, as of 2026-08-14) — not imply
