@@ -68,7 +68,7 @@ junis creates the registration by hand along this checklist; there is no script.
 
 - The app object has **no owners**: the creator removes themselves right after creating it. Changes go through the **Cloud Application Administrator** role, activated with PIM.
 - Every principal that can modify the app holds that power only through a PIM-eligible role with phishing-resistant MFA, or not at all. That covers every built-in role with `microsoft.directory/applications/*` write actions — today Global Administrator, Privileged Role Administrator, Application Administrator, Cloud Application Administrator, Hybrid Identity Administrator, Partner Tier1 Support and Partner Tier2 Support — and every custom role with such actions.
-- Standing assignments: only the **two break-glass Global Administrator accounts, signed in with FIDO2**.
+- Standing assignments: only the **break-glass Global Administrator account, signed in with a passkey (FIDO2)**.
 - No service principal in the production tenant holds `Application.ReadWrite.All`, `AppRoleAssignment.ReadWrite.All` or `RoleManagement.ReadWrite.Directory`. Partner GDAP/DAP relationships into the tenant are reviewed.
 
 #### Alerts
