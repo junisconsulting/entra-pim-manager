@@ -60,26 +60,43 @@ public sealed class UserSettingsService : IUserSettingsService
     }
 
     /// <inheritdoc />
-    public async Task SaveAsync(UserSettings settings, CancellationToken ct = default)
+    public Task SaveAsync(UserSettings settings, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        return UpdateAsync(_ => settings, ct);
+    }
 
+    /// <inheritdoc />
+    public async Task UpdateAsync(Func<UserSettings, UserSettings> transform, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(transform);
+
+        UserSettings updated;
         await _ioLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            // The latest value, read under the lock: a save queued ahead of this one has
+            // already published, so its change is the base here instead of being reverted.
+            var current = _current;
+            updated = transform(current);
+            if (ReferenceEquals(updated, current))
+            {
+                return;
+            }
+
             // Published before the write, not after. Most callers save fire-and-forget and
             // then immediately compose their next change from Current — publishing late
             // hands them the previous value, and their write silently reverts this one.
             // If the file write then fails it is logged, and memory is ahead of disk for
             // one session; a stale read is the worse of the two.
-            _current = settings;
-            await WriteAsync(settings, ct).ConfigureAwait(false);
+            _current = updated;
+            await WriteAsync(updated, ct).ConfigureAwait(false);
             _logger.LogInformation(
                 "User settings saved (theme {Theme}, durationHours {Duration}, expiryWarn {ExpiryEnabled} @ {ExpiryMin}m)",
-                settings.Theme,
-                settings.DefaultDurationHours,
-                settings.ExpiryWarningEnabled,
-                settings.ExpiryWarningMinutes);
+                updated.Theme,
+                updated.DefaultDurationHours,
+                updated.ExpiryWarningEnabled,
+                updated.ExpiryWarningMinutes);
         }
         finally
         {
@@ -88,7 +105,7 @@ public sealed class UserSettingsService : IUserSettingsService
 
         // Fire Changed outside the lock so subscribers that re-enter the
         // service (defensive) can't deadlock against us.
-        Changed?.Invoke(settings);
+        Changed?.Invoke(updated);
     }
 
     private async Task<UserSettings> ReadAsync(CancellationToken ct)

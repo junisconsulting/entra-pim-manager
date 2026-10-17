@@ -55,6 +55,42 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task UpdateAsync_TwoQuickUpdates_KeepBothChanges()
+    {
+        // After a sign-in the shell writes the last-used account and the verified registration
+        // back to back. Built from Current outside the lock, the second write was composed from
+        // the snapshot before the first and dropped it (field test 2026-10-17).
+        var store = CreateStore();
+
+        // Holds the lock while it writes, so both updates below queue behind it.
+        var writing = store.SaveAsync(UserSettings.Default with { ExpiryWarningMinutes = 15 });
+        var first = store.UpdateAsync(s => s with { LastUsedAccountKey = "oid|tid|Global" });
+        var second = store.UpdateAsync(s => s with { VerifiedClientIds = ["8f3a1c2e-0000-4000-8000-000000000001"] });
+        await Task.WhenAll(writing, first, second);
+
+        var reloaded = CreateStore();
+        await reloaded.LoadAsync();
+        Assert.Equal(15, reloaded.Current.ExpiryWarningMinutes);
+        Assert.Equal("oid|tid|Global", reloaded.Current.LastUsedAccountKey);
+        Assert.Equal(["8f3a1c2e-0000-4000-8000-000000000001"], reloaded.Current.VerifiedClientIds!);
+        Assert.Equal("oid|tid|Global", store.Current.LastUsedAccountKey);
+        Assert.NotNull(store.Current.VerifiedClientIds);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_TransformThatChangesNothing_DoesNotWrite()
+    {
+        var store = CreateStore();
+        var fired = false;
+        store.Changed += _ => fired = true;
+
+        await store.UpdateAsync(s => s);
+
+        Assert.False(fired);
+        Assert.False(File.Exists(_filePath));
+    }
+
+    [Fact]
     public async Task LoadAsync_WithNoFile_LeavesDefaults()
     {
         var store = CreateStore();
@@ -121,7 +157,7 @@ public sealed class UserSettingsServiceTests : IDisposable
         var nestedPath = Path.Combine(_tempDir, "nested", "deeper", "settings.json");
         var store = new UserSettingsService(nestedPath, NullLogger<UserSettingsService>.Instance);
 
-        await store.SaveAsync(UserSettings.Default);
+        await store.SaveAsync(UserSettings.Default with { ExpiryWarningMinutes = 15 });
 
         Assert.True(File.Exists(nestedPath));
     }

@@ -33,7 +33,17 @@ public interface IUserSettingsService
 
     /// <summary>
     /// Persists the new settings atomically (temp-file + rename), updates
-    /// <see cref="Current"/>, and fires <see cref="Changed"/>.
+    /// <see cref="Current"/>, and fires <see cref="Changed"/>. Saving the very instance
+    /// that is already <see cref="Current"/> does nothing.
     /// </summary>
     Task SaveAsync(UserSettings settings, CancellationToken ct = default);
+
+    /// <summary>
+    /// Applies <paramref name="transform"/> to the latest settings under the write lock and
+    /// persists the result like <see cref="SaveAsync"/>. Two quick updates therefore never
+    /// start from the same snapshot, so neither can drop the other's change. A transform
+    /// that returns its input unchanged skips the write and <see cref="Changed"/>. The
+    /// transform may run on a thread-pool thread: it must not touch UI state.
+    /// </summary>
+    Task UpdateAsync(Func<UserSettings, UserSettings> transform, CancellationToken ct = default);
 }

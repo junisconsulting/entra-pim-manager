@@ -388,9 +388,9 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             // without removing its accounts has proven nothing through its new id.
             if (_userSettings.Current is { VerifiedClientIds: null, VerifiedJunisHostedRegistrations: null } && Accounts.Count > 0)
             {
-                MarkAppRegistrationVerified(Accounts
+                _ = MarkAppRegistrationVerifiedAsync([.. Accounts
                     .Select(a => a.Account)
-                    .Where(a => _options.HostingFor(a.Cloud, a.TenantId) == AppRegistrationHosting.SelfHosted));
+                    .Where(a => _options.HostingFor(a.Cloud, a.TenantId) == AppRegistrationHosting.SelfHosted)]);
             }
 
             // Restore last-used account if it's still enrolled. ReplaceAccounts
@@ -870,11 +870,10 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
 
         ExpandGroupFor(value);
 
+        // Compared inside the update, against the latest value: an earlier switch may
+        // still be queued, and Current would not show it yet.
         var key = EnrollmentKey(value);
-        if (_userSettings.Current.LastUsedAccountKey != key)
-        {
-            PersistShellSettings(s => s with { LastUsedAccountKey = key });
-        }
+        PersistShellSettings(s => s.LastUsedAccountKey == key ? s : s with { LastUsedAccountKey = key });
     }
 
     private async Task ActivateAsync(EligibilityItemViewModel item)
@@ -1511,7 +1510,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         // the broker redirect URI and admin consent in one go. Record it against
         // the registration of the tenant that was signed into; the other
         // registrations are separate and prove nothing here.
-        MarkAppRegistrationVerified([added]);
+        _ = MarkAppRegistrationVerifiedAsync([added]);
 
         await RefreshAsync();
 
@@ -1523,35 +1522,40 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     /// <summary>
     /// Stamps the app registrations <paramref name="accounts"/> resolve to as proven —
     /// a sign-in against them actually succeeded: per client id for a self-hosted
-    /// registration, per tenant for the junis-hosted one. Registrations already recorded
-    /// are skipped, so the common case doesn't rewrite the settings file. All accounts are
-    /// folded into a single write; two <see cref="PersistShellSettings"/> calls in a row
-    /// would both read the same pre-write snapshot and one would lose.
+    /// registration, per tenant for the junis-hosted one. All accounts are folded into a
+    /// single write.
     /// </summary>
-    private void MarkAppRegistrationVerified(IEnumerable<SignedInAccount> accounts)
+    private async Task MarkAppRegistrationVerifiedAsync(IReadOnlyList<SignedInAccount> accounts)
     {
-        var current = _userSettings.Current;
-        var updated = current;
-        foreach (var account in accounts)
+        await SafeUpdateAsync(settings =>
         {
-            if (_options.ClientIdFor(account.Cloud, account.TenantId) is { Length: > 0 } clientId)
+            foreach (var account in accounts)
             {
-                updated = updated.WithRegistrationVerified(
-                    account.Cloud,
-                    account.TenantId,
-                    clientId,
-                    _options.HostingOf(account.Cloud, clientId));
+                if (_options.ClientIdFor(account.Cloud, account.TenantId) is { Length: > 0 } clientId)
+                {
+                    settings = settings.WithRegistrationVerified(
+                        account.Cloud,
+                        account.TenantId,
+                        clientId,
+                        _options.HostingOf(account.Cloud, clientId));
+                }
             }
-        }
 
-        // WithRegistrationVerified hands back the same instance when nothing was new.
-        if (ReferenceEquals(updated, current))
+            return settings;
+        });
+
+        // After the update, not alongside it: right after a sign-in it queues behind the
+        // last-used account's write, and the cards read the settings again here. Notified
+        // earlier, they read the old value and stayed "Not verified yet" (field test 2026-10-17).
+        // Callers do not await this, so a failure is logged here or nowhere.
+        try
         {
-            return;
+            _settingsPanel.NotifyAppRegistrationVerificationChanged();
         }
-
-        PersistShellSettings(_ => updated);
-        _settingsPanel.NotifyAppRegistrationVerificationChanged();
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Refreshing the Verified state in Settings failed");
+        }
     }
 
     private bool IsSameEnrollment(SignedInAccount? left, SignedInAccount? right)
@@ -1812,8 +1816,8 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             return s with { AccountAliases = dict };
         });
 
-        // PersistShellSettings only publishes Current after the async write, so a
-        // refresh landing inside that window rebuilds rows with the previous alias
+        // PersistShellSettings publishes Current only once its update gets the write
+        // lock, so a refresh landing before that rebuilds rows with the previous alias
         // and self-heals on the next tick. The rows below are updated regardless.
         row.AccountAlias = alias;
 
@@ -2165,7 +2169,9 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             }
         }
 
-        PersistShellSettings(s => s with { PinnedEligibilities = [.. _pinnedKeys] });
+        // A snapshot, not the live set: under load the update runs later, off the UI thread.
+        List<string> pinned = [.. _pinnedKeys];
+        PersistShellSettings(s => s with { PinnedEligibilities = pinned });
         RebuildShortcutSections();
     }
 
@@ -2315,26 +2321,25 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             snapshot[EnrollmentKey(group.Account)] = expanded;
         }
 
+        var tenantId = group.Account.TenantId;
         PersistShellSettings(s =>
         {
             var dict = s.ExpandedTenants is null
                 ? new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
                 : new Dictionary<string, bool>(s.ExpandedTenants, StringComparer.OrdinalIgnoreCase);
-            dict[group.Account.TenantId] = expanded;
+            dict[tenantId] = expanded;
             return s with { ExpandedTenants = dict };
         });
     }
 
     /// <summary>
-    /// Applies <paramref name="transform"/> to <see cref="IUserSettingsService.Current"/>
-    /// and persists the result. Fire-and-forget — IO errors are logged but
-    /// don't propagate so a transient write failure can't crash the shell.
+    /// Applies <paramref name="transform"/> to the latest settings and persists the result
+    /// (<see cref="IUserSettingsService.UpdateAsync"/>). Fire-and-forget — IO errors are
+    /// logged but don't propagate so a transient write failure can't crash the shell. The
+    /// transform may run off the UI thread, so it captures values, never UI state.
     /// </summary>
     private void PersistShellSettings(Func<UserSettings, UserSettings> transform)
-    {
-        var updated = transform(_userSettings.Current);
-        _ = SafePersistAsync(updated);
-    }
+        => _ = SafeUpdateAsync(transform);
 
     /// <summary>Stars or unstars a saved scope set, logging rather than throwing on a failed write.</summary>
     private async Task SafeSetFavoritePinnedAsync(ScopeFavorite favorite)
@@ -2349,11 +2354,11 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         }
     }
 
-    private async Task SafePersistAsync(UserSettings settings)
+    private async Task SafeUpdateAsync(Func<UserSettings, UserSettings> transform)
     {
         try
         {
-            await _userSettings.SaveAsync(settings).ConfigureAwait(false);
+            await _userSettings.UpdateAsync(transform).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
