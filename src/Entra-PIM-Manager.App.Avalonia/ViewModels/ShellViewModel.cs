@@ -372,6 +372,10 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         try
         {
             var accounts = await _authService.GetAllAccountsAsync(ct);
+
+            // Read before ReplaceAccounts: it makes the first enrollment active, and
+            // that is saved as the last-used one at once, over the user's real choice.
+            var lastKey = _userSettings.Current.LastUsedAccountKey;
             ReplaceAccounts(accounts);
 
             // Installations that enrolled their accounts before VerifiedClientIds
@@ -392,7 +396,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             // Restore last-used account if it's still enrolled. ReplaceAccounts
             // already set ActiveAccount to the first enrollment as a fallback;
             // override it here so the user's actual most-recent choice wins.
-            if (_userSettings.Current.LastUsedAccountKey is { Length: > 0 } lastKey)
+            if (lastKey is { Length: > 0 })
             {
                 var match = Accounts
                     .FirstOrDefault(a => EnrollmentKey(a.Account) == lastKey)?.Account;
