@@ -557,4 +557,22 @@ public sealed class PimErrorMapperTests
 
         Assert.Equal(ErrorSeverity.Offline, PimErrorMapper.MapException(msal).Severity);
     }
+
+    [Fact]
+    public void DescribeFetchFailure_TenantNotOnboardedToPim_NamesTheUsualCause()
+    {
+        // What the eligibility reads of an unlicensed tenant answered (field test 2026-10-17).
+        var error = new ODataError { Error = new MainError { Code = "BadRequest", Message = "The tenant has not onboarded to PIM." } };
+
+        Assert.StartsWith("PIM is not set up in this tenant", PimErrorMapper.DescribeFetchFailure(error), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DescribeFetchFailure_AGroupNotOnboardedToPim_IsNotCalledAMissingLicence()
+    {
+        // Groups are onboarded implicitly; that state says nothing about the tenant's licence.
+        var error = new ODataError { Error = new MainError { Code = "BadRequest", Message = "The group has not onboarded to PIM." } };
+
+        Assert.DoesNotContain("license", PimErrorMapper.DescribeFetchFailure(error), StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -294,11 +294,17 @@ device, so remove the account and add it again with the normal sign-in.
 **Settings → Diagnostics → Network check**, hit **Copy report**, and send that to IT — it names the
 endpoint that is blocked instead of leaving them guessing.
 
+**A tenant shows "PIM is not available in this tenant" or "PIM is not set up in this tenant".** The
+tenant has no Microsoft Entra ID P2 or Governance license, which PIM needs. There is nothing to
+activate there until it has one.
+
 **Sign-in fails with a consent or permission message.** The App Registration has not been consented
 to in that tenant. An admin does it once; see
 [app-registration-setup.md](app-registration-setup.md). For a junis-hosted tenant the sign-in panel
 shows the link for it, under "Send this link to an admin of this tenant:" — select it, copy it and
-send it to an admin.
+send it to an admin. The link is the better way: an admin who consents in the sign-in window covers
+only their own account, and Azure resource roles stay unavailable. To repair that, an admin grants
+admin consent under Enterprise applications → Entra PIM Manager → Permissions.
 
 **Activation fails and mentions authentication context or Conditional Access.** The role demands a
 stronger sign-in than the session has. If you signed in with a device code, that is the cause —

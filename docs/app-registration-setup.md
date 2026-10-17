@@ -56,6 +56,14 @@ once the registration goes live. When a sign-in fails for missing consent, the
 app's add-account panel shows the same link with both filled in, under "Send
 this link to an admin of this tenant:".
 
+Consenting in the app's own sign-in window is not the same. In a field test it
+granted only the account that signed in, and only the Microsoft Graph
+permissions, not Azure Service Management: Azure resource roles stayed
+unavailable. If that happened, the app already exists in your tenant. An admin
+opens Enterprise applications → Entra PIM Manager → **Permissions** → **Grant
+admin consent for** your tenant, which grants all eight permissions for every
+user.
+
 ### Verify the link before you consent
 
 The consent lets the app activate PIM roles as any user of your tenant who

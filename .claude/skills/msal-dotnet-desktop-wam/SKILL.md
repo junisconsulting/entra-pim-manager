@@ -299,17 +299,23 @@ both from `EntraCloudInfo.ResourceManagerScopes`). Rules that follow from MSAL:
 - **One audience per token request.** Never put Graph and ARM scopes into the same `AcquireToken*`
   call. Keep separate scope arrays and separate `AcquireTokenSilent` calls; the same `IAccount` and
   the same DPAPI cache serve both — the refresh token is multi-resource.
-- **Consent once, at enrollment:** `AcquireTokenInteractive(graphScopes).WithExtraScopesToConsent(armScopes)`
-  shows one consent prompt for both resources without requesting a mixed token. The method exists
-  only on the interactive builder; `AcquireTokenWithDeviceCode` has no equivalent, so device-code
-  enrollments depend on tenant admin consent for the ARM permission.
+- **Consent at enrollment does not reliably cover ARM.** The app calls
+  `AcquireTokenInteractive(graphScopes).WithExtraScopesToConsent(armScopes)` so one prompt could
+  consent both resources without a mixed token. Field test 2026-10-17 (WAM broker, junis-hosted
+  tenant without any consent): the admin's consent in the WAM window became a **user consent**
+  for that account only, with the Graph scopes plus `openid`/`profile`/`offline_access`, and **no**
+  Azure Service Management. Treat tenant admin consent as the way ARM gets consented: the
+  adminconsent link, or Enterprise applications → Permissions → Grant admin consent.
+  `AcquireTokenWithDeviceCode` has no extra-scopes option at all.
 - **Already-enrolled accounts** get ARM tokens silently as soon as the tenant has consented
-  (consent is evaluated at token issuance). Without consent, silent fails with
-  `MsalUiRequiredException` / `AADSTS65001` and the broker path falls back to interactive — the
-  aggregator backs the ARM surface off for an hour after such a failure so the 60 s refresh does
-  not become a prompt loop.
+  (consent is evaluated at token issuance). Background ARM reads are **silent-only**
+  (`ArmBearerTokenHandler`: `silentOnly` unless a claims challenge follows a click on Activate), so
+  a missing consent never opens WAM. The silent call fails with `MsalUiRequiredException`, either
+  `AADSTS65001` or, through WAM, `failed_to_acquire_token_silently_from_broker` with the AADSTS
+  text hidden as pii (seen 2026-10-17). The aggregator backs the ARM surface off for an hour after
+  such a failure.
 - **A cancelled acquisition is not a network fault.** When a surface timeout cancels a token call
-  that went interactive, the failure surfaces as `TaskCanceledException` with an inner
+  that went interactive (today only the claims-challenge path can), the failure surfaces as `TaskCanceledException` with an inner
   `SocketException(995)` — indistinguishable from a slow endpoint unless you catch it at the token
   call. Field case 2026-09-04: a tenant without ARM consent reported "the request timed out" for
   hours. `ArmBearerTokenHandler` therefore wraps that cancellation in `ArmSignInPendingException`

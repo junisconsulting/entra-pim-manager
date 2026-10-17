@@ -434,20 +434,23 @@ accounts from the uninstall hook, if WAM can be asked from there.
 
 ---
 
-## `msal-dotnet-desktop-wam` skill still says the ARM path falls back to interactive
+## Two settings writers still compose outside the write lock
 
-**Evidence:** `.claude/skills/msal-dotnet-desktop-wam/SKILL.md`, section "A second resource next to
-Graph", says that without ARM consent "silent fails … and the broker path falls back to
-interactive". `ArmBearerTokenHandler` has since passed `silentOnly: true` for every background
-read (only a claims challenge after a click on Activate may prompt), so the hour-long backoff now
-guards against failed silent calls, not a prompt loop. The "cancelled acquisition" paragraph
-below it describes the field case from before that change. Found 2026-10-16 while mapping the
-error paths for the junis-hosted spec.
+**Evidence:** `UserSettingsService.SaveAsync` sets `Current` only once it has the IO lock. A caller
+that composes `Current with { … }` while another save is still writing builds on the stale
+snapshot, and its write reverts the queued change. Found 2026-10-17 in the junis-hosted field test:
+after a sign-in the tenant card stayed at "Not verified yet". Since then the shell's writes go
+through `UpdateAsync`, which applies the change to the latest value under the lock. Still on
+`SaveAsync` with a value composed from `Current`: `SettingsPanelViewModel` in `PersistAsync` and
+`SaveTicketSystem`, and `WhatsNewController.RememberAsync`. `Program.cs` also uses `SaveAsync`, but only before the app
+runs, so nothing can race it.
 
-**Why it matters:** the skill is the authority for MSAL code (CLAUDE.md). A reader who trusts it
-will expect a background ARM read to open WAM and may "fix" the silent-only flag back, which
-brings the stalled-refresh problem from 2026-09-04 back.
+**Why it matters:** if a Settings change or the What's-new version is saved in the same moment as
+a shell write, one of them can be dropped: the last-used account, an alias, a pin, a recent
+activation, an expanded tenant or a Verified mark. Nothing logs it.
 
-**What makes the fix safe:** rewrite those two bullets from `ArmBearerTokenHandler` and
-`EligibilityAggregator.FetchAzureSafeAsync` as they are now, and keep the 2026-09-04 field case
-as the reason for `silentOnly`. It is a docs-only change; no code moves.
+**What makes the fix safe:** move these callers to `UpdateAsync` with a transform that sets only
+their own fields. The Settings panel today writes its whole snapshot, so its transform must apply
+only the values it owns, or it reverts the shell's fields instead. Publishing before the lock was
+tried and rejected in review: a concurrent `LoadAsync` would overwrite the published value, a
+cancelled wait would leave `Current` ahead of the file, and `Changed` could arrive out of order.

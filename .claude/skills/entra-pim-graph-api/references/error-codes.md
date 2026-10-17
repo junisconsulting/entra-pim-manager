@@ -99,6 +99,11 @@ Use both `error.code` AND `error.innerError.code` — the outer is generic, the 
 **EN**: "PIM is not available in this tenant: it has no Microsoft Entra ID P2 or Governance license."
 **UI behaviour**: Surface per tenant on the list itself (`PimErrorMapper.DescribeFetchFailure`) — swallowing the read failure into an empty list makes the tenant look like it simply has no eligibilities, which users read as "the app is broken".
 
+### "The tenant has not onboarded to PIM." (code and status not recorded)
+**Cause**: Seen on 2026-10-17 in a tenant without a P2 or Governance licence. The eligibility reads answered with this message: `roleEligibilityScheduleInstances/filterByCurrentUser` and the group `eligibilityScheduleInstances/filterByCurrentUser`. The assignment reads in the same tenant answered with `AadPremiumLicenseRequired` (above). Only the message was logged, not the code or the HTTP status. The text names a state, not its cause, so the licence is the likely cause, not a proven one.
+**EN**: "PIM is not set up in this tenant, usually because it has no Microsoft Entra ID P2 or Governance license."
+**UI behaviour**: Shown per tenant, as for `AadPremiumLicenseRequired`. Match on "tenant has not onboarded to PIM": a group that has not onboarded yet is normal and says nothing about the licence.
+
 ### `InsufficientPermissions` / `Authorization_RequestDenied`
 **Cause**: Token doesn't have the required scope. E.g., trying activation with only `*.Read` scopes.
 **DE**: "Berechtigung fehlt. Bitte Administrator kontaktieren."

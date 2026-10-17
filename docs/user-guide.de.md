@@ -312,11 +312,18 @@ Microsoft-Endpunkt. **Settings → Diagnostics → Network check** ausführen, *
 und das an die IT schicken — darin steht, welcher Endpunkt blockiert ist, statt dass jemand raten
 muss.
 
+**Ein Tenant zeigt „PIM is not available in this tenant" oder „PIM is not set up in this tenant".**
+Dem Tenant fehlt die Lizenz Microsoft Entra ID P2 oder Governance, die PIM voraussetzt. Bis er eine
+hat, gibt es dort nichts zu aktivieren.
+
 **Die Anmeldung scheitert mit einer Consent- oder Berechtigungsmeldung.** Der App Registration wurde
 in diesem Tenant nicht zugestimmt. Ein Admin macht das einmalig, siehe
 [app-registration-setup.md](app-registration-setup.md). Bei einem junis-hosted Tenant zeigt das
 Anmelde-Panel den Link dafür, unter „Send this link to an admin of this tenant:" — markieren,
-kopieren und einem Admin schicken.
+kopieren und einem Admin schicken. Der Link ist der bessere Weg: Stimmt ein Admin im Anmeldefenster
+zu, gilt das nur für sein eigenes Konto, und die Azure-Ressourcenrollen bleiben unerreichbar. Das
+behebt ein Admin unter Enterprise applications → Entra PIM Manager → Permissions mit „Grant admin
+consent".
 
 **Die Aktivierung scheitert und nennt Authentication Context oder Conditional Access.** Die Rolle
 verlangt eine stärkere Anmeldung, als die Sitzung hat. Wenn du dich per Device Code angemeldet hast,

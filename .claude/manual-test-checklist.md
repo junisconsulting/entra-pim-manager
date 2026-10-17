@@ -262,9 +262,13 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
       „Sign-in was cancelled. If Entra asked for an admin's approval, …", darunter „Send
       this link to an admin of this tenant:" mit dem Link als markierbarem Text — kein
       Button, kein Browser. **Notieren:** was die App bekam (Fehlercode im Log).
-- [ ] **Consent über die App:** Privileged Role Administrator meldet sich in einem Tenant
-      ohne Consent an und hakt „Consent on behalf of your organization" an → Anmeldung
-      läuft durch, Eligibilities erscheinen.
+- [ ] **Consent über die App:** Ein Admin meldet sich in einem Tenant ohne Consent an und
+      stimmt im WAM-Fenster zu → Anmeldung läuft durch. **Notieren:** ob „Consent on behalf
+      of your organization" angeboten wurde. Feldtest 2026-10-17: Es entstand nur ein *User
+      consent* für das eigene Konto, nur mit den Graph-Rechten, ohne Azure Service
+      Management. Danach Enterprise applications → Entra PIM Manager → Permissions → „Grant
+      admin consent" → alle acht Rechte unter *Admin consent*, und die Azure-Ressourcenrollen
+      laden.
 - [ ] **Nicht zugewiesen:** „Assignment required" an der junis-Enterprise-App an, Konto
       nicht zugewiesen → „Your account is not assigned to Entra PIM Manager in this
       tenant. An admin assigns it under Enterprise applications."

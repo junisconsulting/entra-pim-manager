@@ -150,6 +150,15 @@ public static class PimErrorMapper
             return "PIM is not available in this tenant: it has no Microsoft Entra ID P2 or Governance license.";
         }
 
+        // The eligibility reads of an unlicensed tenant answered "The tenant has
+        // not onboarded to PIM." instead (field test 2026-10-17). That names the
+        // state, not its cause, so the caption names the usual cause as such.
+        if (exception is ODataError { Error.Message: { } onboarding }
+            && onboarding.Contains("tenant has not onboarded to PIM", StringComparison.OrdinalIgnoreCase))
+        {
+            return "PIM is not set up in this tenant, usually because it has no Microsoft Entra ID P2 or Governance license.";
+        }
+
         // MsalAuthService found no cached MSAL account for this enrollment. The
         // realistic cause is an App Registration change (the tenant's entry got
         // a different client id), which moves the enrollment to a different MSAL
