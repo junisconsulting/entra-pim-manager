@@ -251,12 +251,14 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 > Fallbacks ab.
 
 - [ ] **Consent-Link:** den Link aus `docs/app-registration-setup.md` („junis-hosted:
-      consent only") als Cloud Application Administrator öffnen und zustimmen.
-      **Notieren:** wo der Browser landet und ob die Zustimmung unter Enterprise
-      applications eingetragen ist. Eingetragen, aber Fehlerseite → Link bleibt, die Doku
-      nennt die Seite als erwartet. **Nicht** eingetragen → Link aus App und Doku nehmen
-      und auf die Zustimmung über die Anmeldung der App verweisen (Punkt „Consent über die
-      App"). Eine Web-Redirect-URI an der junis-App ist **keine** Lösung.
+      consent only") als Cloud Application Administrator öffnen und zustimmen. Der Browser
+      landet auf `https://junisconsulting.github.io/entra-pim-manager/consent/` mit
+      „✓ Admin consent granted" und der Tenant-ID; unter Enterprise applications → Entra PIM
+      Manager → Permissions → *Admin consent* stehen alle acht Rechte, Azure Resource
+      Manager → `user_impersonation` eingeschlossen. Ein zweiter Durchlauf mit **Cancel** →
+      „Admin consent was not granted" und „The consent was cancelled". Feldtest 2026-10-17
+      mit der Broker-Redirect-URI: Zustimmung eingetragen, der Browser lud danach endlos —
+      deshalb die Seite.
 - [ ] **Anmeldung ohne Consent:** Konto ohne Admin-Rolle in einem Tenant ohne Consent → WAM
       zeigt „admin approval required". Nach dem Schließen zeigt das Add-account-Panel
       „Sign-in was cancelled. If Entra asked for an admin's approval, …", darunter „Send

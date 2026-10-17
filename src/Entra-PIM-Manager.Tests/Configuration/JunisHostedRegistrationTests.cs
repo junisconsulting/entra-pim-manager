@@ -98,13 +98,15 @@ public sealed class JunisHostedRegistrationTests : IDisposable
         => Assert.Null(new EntraPimManagerOptions().ResolveClientId(AppRegistrationHosting.JunisHosted, EntraCloud.Global, null));
 
     [Fact]
-    public void JunisAdminConsentUrl_IsTheDocumentedLinkWithAnEncodedRedirectUri()
+    public void JunisAdminConsentUrl_IsTheDocumentedLinkReturningToTheConsentPage()
     {
+        // The redirect URI must match the one registered on the junis app character for
+        // character, or Entra refuses the link (AADSTS50011).
         var url = Junis().JunisAdminConsentUrl(EntraCloud.Global, TenantA.ToUpperInvariant());
 
         Assert.Equal(
             $"https://login.microsoftonline.com/{TenantA}/adminconsent?client_id={JunisAppId}"
-            + $"&redirect_uri=ms-appx-web%3A%2F%2Fmicrosoft.aad.brokerplugin%2F{JunisAppId}",
+            + "&redirect_uri=https%3A%2F%2Fjunisconsulting.github.io%2Fentra-pim-manager%2Fconsent%2F",
             url);
     }
 

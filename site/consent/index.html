@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Entra PIM Manager – Admin consent</title>
+  <script src="consent.js" defer></script>
+  <style>
+    :root { color-scheme: light dark; --fg: #1b1b1b; --muted: #5c5c5c; --bg: #f7f7f8; --card: #fff; --ok: #107c10; --fail: #c42b1c; }
+    @media (prefers-color-scheme: dark) {
+      :root { --fg: #f0f0f0; --muted: #b0b0b0; --bg: #1f1f1f; --card: #2b2b2b; --ok: #6ccb5f; --fail: #ff99a4; }
+    }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 "Segoe UI", system-ui, sans-serif; }
+    main { max-width: 40rem; margin: 3rem auto; padding: 2rem; background: var(--card); border-radius: 8px; }
+    h1 { margin: 0 0 1.5rem; font-size: 1rem; font-weight: 600; color: var(--muted); }
+    h2 { margin: 0 0 1rem; font-size: 1.5rem; }
+    #granted h2 { color: var(--ok); }
+    #failed h2 { color: var(--fail); }
+    code { font-family: Consolas, ui-monospace, monospace; word-break: break-all; }
+    footer { margin-top: 2rem; font-size: 0.875rem; color: var(--muted); }
+    a { color: inherit; }
+    @media (max-width: 40rem) { main { margin: 0; border-radius: 0; padding: 1.5rem 1rem; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Entra PIM Manager · junis GmbH</h1>
+
+    <section id="granted" hidden>
+      <h2>&#x2713; Admin consent granted</h2>
+      <p id="tenant-line" hidden>Tenant: <code id="tenant"></code></p>
+      <p>Every user in this tenant can now sign in to Entra PIM Manager. Nobody else is asked to
+        consent. You can close this tab.</p>
+      <p>To check: Microsoft Entra admin center → Enterprise applications → Entra PIM Manager →
+        Permissions. The <em>Admin consent</em> tab lists eight permissions, Azure Resource Manager
+        among them.</p>
+    </section>
+
+    <section id="failed" hidden>
+      <h2>&#x2717; Admin consent was not granted</h2>
+      <p id="cancelled" hidden>The consent was cancelled, or sent to an admin as a request for
+        approval. To grant it yourself, open the consent link again, signed in with Cloud
+        Application Administrator or higher, and select <em>Accept</em>.</p>
+      <div id="refused" hidden>
+        <p id="code-line" hidden>Microsoft Entra reported <code id="code"></code>.</p>
+        <p>Open the consent link again, signed in with Cloud Application Administrator,
+          Application Administrator, Privileged Role Administrator or Global Administrator.</p>
+      </div>
+    </section>
+
+    <section id="none" hidden>
+      <h2>Admin consent</h2>
+      <p>This page shows the result after an admin of a tenant grants consent to Entra PIM
+        Manager. The consent link is in the setup guide.</p>
+    </section>
+
+    <footer>
+      <a href="https://github.com/junisconsulting/entra-pim-manager/blob/main/docs/app-registration-setup.md#the-consent-link">Setup guide</a>
+      · <a href="https://github.com/junisconsulting/entra-pim-manager/blob/main/SECURITY.md#the-junis-hosted-app-registration">How junis operates the registration</a>
+    </footer>
+  </main>
+</body>
+</html>

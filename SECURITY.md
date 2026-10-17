@@ -58,7 +58,10 @@ junis creates the registration by hand along this checklist; there is no script.
 - "Allow public client flows" = **No**. Device-code sign-in with this client id therefore fails in every tenant (`AADSTS7000218`), which takes device-code phishing with a widely consented id off the table.
 - **No client secret, certificate or federated identity credential, ever.** The point above holds only while the app has no credential of any kind.
 - An app management policy assigned to this app blocks adding passwords and symmetric keys. Setting it up needs Security Administrator plus Cloud Application Administrator, and possibly a Workload ID licence, which is checked first. Adding a certificate or a federated credential stays alert-only (see [Alerts](#alerts)).
-- The only redirect URI is `ms-appx-web://microsoft.aad.brokerplugin/{client-id}`: no `localhost`, Web or SPA URI.
+- Two redirect URIs and no others:
+  - `ms-appx-web://microsoft.aad.brokerplugin/{client-id}` for the sign-in through WAM;
+  - `https://junisconsulting.github.io/entra-pim-manager/consent/`, platform **Web**: the page the admin-consent link returns to, so the admin sees whether the consent was granted. A code sent there is worthless only while the app has no credential of any kind, because redeeming it needs one — the same condition as the point on public client flows above. The page comes from `site/consent/` in this repository; see [Who can change it](#who-can-change-it) for its deployment. It shows its own text plus GUIDs and AADSTS numbers from the URL, never free text, so a crafted link cannot put foreign words on it.
+  - Never an SPA URI, and no Mobile and desktop URI besides the broker one (such as `localhost` or `…/oauth2/nativeclient`): those let a code be redeemed without a credential, outside WAM.
 - App instance property lock on **All properties**.
 - Implicit grant off. No "Expose an API", no app roles, no optional claims.
 - Sign-in audience `AzureADMultipleOrgs`.
@@ -70,6 +73,8 @@ junis creates the registration by hand along this checklist; there is no script.
 - Every principal that can modify the app holds that power only through a PIM-eligible role with phishing-resistant MFA, or not at all. That covers every built-in role with `microsoft.directory/applications/*` write actions — today Global Administrator, Privileged Role Administrator, Application Administrator, Cloud Application Administrator, Hybrid Identity Administrator, Partner Tier1 Support and Partner Tier2 Support — and every custom role with such actions.
 - Standing assignments: only the **break-glass Global Administrator account, signed in with a passkey (FIDO2)**.
 - No service principal in the production tenant holds `Application.ReadWrite.All`, `AppRoleAssignment.ReadWrite.All` or `RoleManagement.ReadWrite.Directory`. Partner GDAP/DAP relationships into the tenant are reviewed.
+- **The consent page** is deployed by `.github/workflows/pages.yml` only after a junis maintainer approves the deployment in the `github-pages` environment; its actions are pinned by commit. Write access to this repository is limited to junis maintainers with two-factor authentication.
+- The GitHub organization `junisconsulting` is never renamed or deleted while the page is a registered redirect URI. The URI is removed from the app first; otherwise someone else could claim the name and with it the page.
 
 #### Alerts
 

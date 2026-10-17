@@ -14,6 +14,13 @@ public sealed class EntraPimManagerOptions
     public const string SectionName = "EntraPimManager";
 
     /// <summary>
+    /// The page the junis-hosted admin-consent link returns to, published from <c>site/consent/</c>.
+    /// Registered on the junis registration as its only Web redirect URI, so it never changes:
+    /// released builds carry it.
+    /// </summary>
+    public const string JunisConsentPage = "https://junisconsulting.github.io/entra-pim-manager/consent/";
+
+    /// <summary>
     /// Every App Registration the app may sign in with, each pinned to one tenant.
     /// A multi-tenant registration serving several tenants simply appears once per
     /// tenant with the same client id. This list is also the whitelist: a tenant
@@ -133,8 +140,9 @@ public sealed class EntraPimManagerOptions
     /// The admin-consent link for the junis-hosted registration in <paramref name="tenantId"/>,
     /// or <c>null</c> outside the Global cloud, for a tenant id that is not a GUID, or when this
     /// build ships no junis client id. Same parameters as the link in
-    /// <c>docs/app-registration-setup.md</c>; the redirect URI is the broker one, because the
-    /// junis registration has no other (and gets none for this).
+    /// <c>docs/app-registration-setup.md</c>. The redirect URI is junis' consent page
+    /// (<see cref="JunisConsentPage"/>), which tells the admin whether the consent went through;
+    /// the broker URI left the browser loading forever (field test 2026-10-17).
     /// </summary>
     public string? JunisAdminConsentUrl(EntraCloud cloud, string? tenantId)
     {
@@ -143,7 +151,7 @@ public sealed class EntraPimManagerOptions
             return null;
         }
 
-        var redirectUri = Uri.EscapeDataString($"ms-appx-web://microsoft.aad.brokerplugin/{clientId}");
+        var redirectUri = Uri.EscapeDataString(JunisConsentPage);
         return $"{EntraCloudInfo.AuthorityBaseUrl(cloud)}/{tenant}/adminconsent?client_id={clientId}&redirect_uri={redirectUri}";
     }
 }

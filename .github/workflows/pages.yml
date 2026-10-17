@@ -1,0 +1,37 @@
+name: Pages
+
+# Publishes site/ to GitHub Pages: the page the junis-hosted registration's admin-consent link
+# redirects to. Its URL is a registered redirect URI and is built into every release, so the
+# path must never change (SECURITY.md, "The junis-hosted App Registration"). Every deployment
+# waits for a maintainer's approval in the github-pages environment, and the actions are pinned
+# by commit: a moved tag must not be able to change what admins land on.
+
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', '.github/workflows/pages.yml']
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Upload site
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+        with:
+          path: site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

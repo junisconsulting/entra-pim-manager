@@ -47,7 +47,7 @@ An admin of the tenant with **Cloud Application Administrator** or higher
 Administrator) opens this link once, signs in and accepts:
 
 ```text
-https://login.microsoftonline.com/{tenant-id}/adminconsent?client_id={junis-client-id}&redirect_uri=ms-appx-web%3A%2F%2Fmicrosoft.aad.brokerplugin%2F{junis-client-id}
+https://login.microsoftonline.com/{tenant-id}/adminconsent?client_id={junis-client-id}&redirect_uri=https%3A%2F%2Fjunisconsulting.github.io%2Fentra-pim-manager%2Fconsent%2F
 ```
 
 `{tenant-id}` is your tenant's id. `{junis-client-id}` is the junis client id,
@@ -55,6 +55,10 @@ published in [SECURITY.md](../SECURITY.md#the-junis-hosted-app-registration)
 once the registration goes live. When a sign-in fails for missing consent, the
 app's add-account panel shows the same link with both filled in, under "Send
 this link to an admin of this tenant:".
+
+After **Accept**, the browser lands on junis' consent page, which says that the
+consent was granted and for which tenant. After **Cancel** it says that it was
+not. An account without the role mostly ends on Entra's own error page instead.
 
 Consenting in the app's own sign-in window is not the same. In a field test it
 granted only the account that signed in, and only the Microsoft Graph
@@ -207,6 +211,11 @@ Replace `{external-tenant-id}` and `{pim-manager-client-id}`. The admin in that
 tenant follows the link, signs in, and confirms the permissions once. A
 single-tenant registration needs consent in its own tenant only — it cannot be
 used anywhere else.
+
+After **Accept** the browser keeps loading: it cannot open the `ms-appx-web://`
+redirect URI. The consent is recorded all the same (field test 2026-10-17);
+close the tab and check Enterprise applications → the app → **Permissions** →
+**Admin consent**.
 
 The host above is the **Global** authority. Consent for a tenant in another
 cloud runs against that cloud's own authority and its own client id — for
