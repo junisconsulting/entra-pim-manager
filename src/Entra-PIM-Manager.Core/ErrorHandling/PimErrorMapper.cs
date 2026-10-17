@@ -230,6 +230,34 @@ public static class PimErrorMapper
         return "Couldn't load eligibilities for this tenant. See the log file for details.";
     }
 
+    /// <summary>
+    /// <see cref="DescribeFetchFailure"/> for the Azure resource reads, which ask for their
+    /// token silently only (<see cref="ArmBearerTokenHandler"/>) and so meet one failure the
+    /// Graph reads never show this way.
+    /// </summary>
+    /// <param name="exception">The failure.</param>
+    /// <param name="authMethod">How the account signed in, when known.</param>
+    /// <param name="hosting">Whose App Registration the tenant uses.</param>
+    public static string DescribeAzureFetchFailure(
+        Exception exception,
+        AuthMethod? authMethod = null,
+        AppRegistrationHosting hosting = AppRegistrationHosting.SelfHosted)
+    {
+        // WAM refused the silent request and hides the AADSTS code ("Error Message: (pii)",
+        // field test 2026-10-17). Graph got its token, so Azure wants more: usually consent
+        // given in the sign-in window, which grants the Graph permissions but not the Azure
+        // one; otherwise Conditional Access on Azure management, such as Microsoft's
+        // "require MFA for Azure management" template. WAM reports both alike.
+        if (exception is MsalUiRequiredException { ErrorCode: MsalError.FailedToAcquireTokenSilentlyFromBroker })
+        {
+            return hosting == AppRegistrationHosting.JunisHosted
+                ? "The background sign-in for Azure was refused. Usually admin consent for Entra PIM Manager is missing in this tenant (consent in the sign-in window covers Microsoft Graph only); otherwise a Conditional Access policy for Azure management requires a stronger sign-in."
+                : "The background sign-in for Azure was refused. Usually the tenant has not consented to the App Registration's Azure permission (Azure Service Management); otherwise a Conditional Access policy for Azure management requires a stronger sign-in.";
+        }
+
+        return DescribeFetchFailure(exception, authMethod, hosting);
+    }
+
     private static UserFacingError Map(string code, int statusCode, string? message) => code switch
     {
         "RoleAssignmentExists" or "RoleAssignmentInstanceAlreadyExists" or "RoleAssignmentAlreadyExists" =>

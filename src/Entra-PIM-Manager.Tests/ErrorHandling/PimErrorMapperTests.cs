@@ -317,6 +317,48 @@ public sealed class PimErrorMapperTests
         Assert.Contains("recovers on its own", caption, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(AppRegistrationHosting.JunisHosted, "admin consent for Entra PIM Manager")]
+    [InlineData(AppRegistrationHosting.SelfHosted, "the App Registration's Azure permission")]
+    public void DescribeAzureFetchFailure_SilentTokenRefusedByWam_NamesConsentAndConditionalAccess(AppRegistrationHosting hosting, string consent)
+    {
+        // Field test 2026-10-17: consent from the WAM window covered Graph only, and the
+        // silent ARM request failed like this — the AADSTS code hidden as pii. An MFA policy
+        // on Azure management fails the same way, so the caption names both.
+        var wamError = new MsalUiRequiredException(
+            MsalError.FailedToAcquireTokenSilentlyFromBroker,
+            "WAM Error  \n Error Code: 3399614476 \n Error Message: (pii) \n Internal Error Code: 557973645 \n");
+
+        var caption = PimErrorMapper.DescribeAzureFetchFailure(wamError, AuthMethod.Broker, hosting);
+
+        Assert.Contains(consent, caption, StringComparison.Ordinal);
+        Assert.Contains("Conditional Access", caption, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DescribeFetchFailure_WamRefusalOnAGraphRead_DoesNotBlameTheAzurePermission()
+    {
+        // Graph reads fall back to a prompt, so WAM's refusal reaches one only in odd cases,
+        // and the Azure consent is not the cause there.
+        var wamError = new MsalUiRequiredException(MsalError.FailedToAcquireTokenSilentlyFromBroker, "WAM Error");
+
+        var caption = PimErrorMapper.DescribeFetchFailure(wamError, AuthMethod.Broker, AppRegistrationHosting.JunisHosted);
+
+        Assert.DoesNotContain("Azure", caption, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DescribeAzureFetchFailure_DeviceCodeRefreshTokenExpired_DoesNotBlameConsent()
+    {
+        // Device-code accounts renew silently without a prompt, so an expired refresh token
+        // is a UiRequired as well, but not from the broker. Consent is not the cause there.
+        var expired = new MsalUiRequiredException("invalid_grant", "AADSTS700082: The refresh token has expired due to inactivity.");
+
+        var caption = PimErrorMapper.DescribeAzureFetchFailure(expired, AuthMethod.DeviceCode);
+
+        Assert.DoesNotContain("consent", caption, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void DescribeFetchFailure_ArmRejected_NamesResourceManager()
     {

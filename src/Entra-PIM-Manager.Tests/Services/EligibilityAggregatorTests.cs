@@ -319,6 +319,23 @@ public sealed class EligibilityAggregatorTests
     }
 
     [Fact]
+    public async Task GetAggregatedEligibilitiesAsync_WamRefusesTheSilentArmToken_NamesConsentAndConditionalAccess()
+    {
+        // Field test 2026-10-17: WAM hides the AADSTS code, so only the Azure-specific
+        // caption says what to look at.
+        var account = MakeAccount("oid-a", "tenant-a");
+        var azure = new Mock<IPimAzureResourceService>();
+        azure
+            .Setup(s => s.GetEligibleAzureRolesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new MsalUiRequiredException(MsalError.FailedToAcquireTokenSilentlyFromBroker, "WAM Error: (pii)"));
+        var aggregator = BuildAggregator(account, azure.Object);
+
+        var result = await aggregator.GetAggregatedEligibilitiesAsync(new[] { account });
+
+        Assert.Contains("Conditional Access", result[account].LoadError, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task GetAggregatedEligibilitiesAsync_JunisHostedTenantWithoutConsent_AsksForTheAdminsConsent()
     {
         // The customer cannot "grant consent for the App Registration" of junis' app; the

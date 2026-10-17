@@ -299,14 +299,14 @@ both from `EntraCloudInfo.ResourceManagerScopes`). Rules that follow from MSAL:
 - **One audience per token request.** Never put Graph and ARM scopes into the same `AcquireToken*`
   call. Keep separate scope arrays and separate `AcquireTokenSilent` calls; the same `IAccount` and
   the same DPAPI cache serve both — the refresh token is multi-resource.
-- **Consent at enrollment does not reliably cover ARM.** The app calls
-  `AcquireTokenInteractive(graphScopes).WithExtraScopesToConsent(armScopes)` so one prompt could
-  consent both resources without a mixed token. Field test 2026-10-17 (WAM broker, junis-hosted
-  tenant without any consent): the admin's consent in the WAM window became a **user consent**
-  for that account only, with the Graph scopes plus `openid`/`profile`/`offline_access`, and **no**
-  Azure Service Management. Treat tenant admin consent as the way ARM gets consented: the
+- **Consent at enrollment never covers ARM under WAM.** `WithExtraScopesToConsent` works in the
+  browser flow only: `Microsoft.Identity.Client.Broker` 4.66.0 never reads it (the DLL references
+  `get_Scope` and `get_LoginHint`, not `get_ExtraScopesToConsent`), so the WAM window only sees the
+  Graph scopes. Field test 2026-10-17 (junis-hosted tenant without any consent) matched: the
+  admin's consent in the WAM window became a **user consent** for that account only, with the
+  Graph scopes plus `openid`/`profile`/`offline_access`, and **no** Azure Service Management. The
+  app therefore does not call it. ARM gets consented through tenant admin consent: the
   adminconsent link, or Enterprise applications → Permissions → Grant admin consent.
-  `AcquireTokenWithDeviceCode` has no extra-scopes option at all.
 - **Already-enrolled accounts** get ARM tokens silently as soon as the tenant has consented
   (consent is evaluated at token issuance). Background ARM reads are **silent-only**
   (`ArmBearerTokenHandler`: `silentOnly` unless a claims challenge follows a click on Activate), so

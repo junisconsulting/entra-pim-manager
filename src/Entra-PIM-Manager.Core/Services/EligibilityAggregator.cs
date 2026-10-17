@@ -269,7 +269,7 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
 
             var reason = "Azure resource roles unavailable: " + (ex is OperationCanceledException
                 ? "the request timed out."
-                : PimErrorMapper.DescribeFetchFailure(ex, account.AuthMethod, _options.HostingFor(account.Cloud, account.TenantId)));
+                : PimErrorMapper.DescribeAzureFetchFailure(ex, account.AuthMethod, _options.HostingFor(account.Cloud, account.TenantId)));
 
             // Only a failed sign-in earns the hour. Anything cancelled — a slow read on
             // a large estate, a token call that didn't finish — may well succeed on the

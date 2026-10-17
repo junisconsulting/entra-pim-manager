@@ -422,9 +422,15 @@ field of the add-account panel is gone.
   tenant group: the registration lacks the Azure Service Management →
   `user_impersonation` permission, or the tenant has not consented to it yet
   (steps 3 and 4). Directory roles and groups keep working; the Azure rows appear
-  on their own once consent is granted (a broker account may show one WAM
-  consent prompt first, a device-code account picks it up within the hour or
-  after a restart).
+  on their own once consent is granted, within the hour or after a restart.
+- **"Azure resource roles unavailable: The background sign-in for Azure was
+  refused…"** on a tenant group: the Azure token is requested silently, and
+  Windows does not say why it was refused. Usually the Azure permission has no
+  consent, most often because the consent was given in the app's sign-in
+  window, which covers only the Microsoft Graph permissions: grant admin consent
+  ([the consent link](#the-consent-link), or step 4). Otherwise a Conditional
+  Access policy on Azure management (Windows Azure Service Management API), such
+  as "require MFA", wants more than the Windows sign-in session carries.
 - **An Azure role assigned to a group does not appear, while other Azure roles
   do**: Azure resolves the caller's group memberships from its own cache, so a
   membership that changed minutes ago is not visible to the eligibility query

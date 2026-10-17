@@ -259,12 +259,11 @@ public sealed class MsalAuthService : IAuthService, IDisposable
             // tenant app accepts. The IAccount.HomeAccountId still reflects the
             // chosen identity's HOME tenant; AuthenticationResult.TenantId carries
             // the target.
-            // One consent prompt covers Graph and Azure Resource Manager: the
-            // ARM scope is consented here but never requested in the same
-            // token — a token carries one audience. (The device-code builder
-            // has no equivalent; those enrollments rely on tenant admin consent.)
+            // The Azure permission is not consented here: the WAM plugin never
+            // passes WithExtraScopesToConsent on, and asking for it in a second
+            // prompt would open a window per sign-in. It comes with the tenant's
+            // admin consent, which covers every permission the registration lists.
             var result = await pca.AcquireTokenInteractive(_options.Scopes)
-                .WithExtraScopesToConsent(EntraCloudInfo.ResourceManagerScopes(cloud))
                 .WithPrompt(Prompt.SelectAccount)
                 .WithTenantId(tenantId)
                 .WithParentActivityOrWindow(_windowTracker.GetCurrentWindowHandle())
