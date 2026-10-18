@@ -358,5 +358,8 @@ und zwei Registry-Einträge unter `HKCU`: der Deinstallationseintrag, den Window
 installierten Apps anzeigt, und der Autostart-Wert unter
 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, falls du den Autostart angelassen hast.
 
-Eine Deinstallation entfernt all das, inklusive Tokens und Autostart-Eintrag. **Ein Update entfernt
-nichts davon** — Einstellungen, Konten und Favoriten bleiben.
+Eine Deinstallation entfernt all das, inklusive Tokens und Autostart-Eintrag, und meldet die Konten
+der App beim Token-Broker von Windows ab, der ihre Anmeldungen außerhalb dieses Ordners hält. Ein
+Konto, das du Windows selbst hinzugefügt hast, unter Einstellungen → Konten → Auf Arbeits- oder
+Schulkonto zugreifen, bleibt dort. **Ein Update entfernt nichts davon** — Einstellungen, Konten und
+Favoriten bleiben.

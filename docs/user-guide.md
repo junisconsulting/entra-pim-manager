@@ -338,5 +338,7 @@ its Start-menu entry if you kept it, and two registry entries under `HKCU`: the 
 Windows lists under installed apps, and the autostart value under
 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` if you left autostart on.
 
-Uninstalling removes all of it, including the tokens and the autostart entry. **Updating removes
-none of it** — settings, accounts and favourites survive.
+Uninstalling removes all of it, including the tokens and the autostart entry, and signs the app's
+accounts out of Windows' token broker, which keeps their sign-ins outside this folder. An account
+you added to Windows itself, under Settings → Accounts → Access work or school, stays there.
+**Updating removes none of it** — settings, accounts and favourites survive.

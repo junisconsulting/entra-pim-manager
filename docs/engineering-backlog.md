@@ -406,54 +406,14 @@ device-code enrollment the refresh token then stays in `msal-devicecode-{client-
 nothing left that points at it; "Remove tenant" goes on to remove the registration as if it were
 clean.
 
-The uninstall hook reuses `RemoveAccountAsync`, so a store write that fails there skips that
-account's WAM sign-out as well.
+The uninstall hook reuses `RemoveAccountAsync` to sign broker accounts out of WAM
+(`UninstallSignOut`, observed working on Windows 2026-10-18), and it follows `accounts.json`, not
+what WAM holds. So a WAM sign-in left without a row stays signed in after an uninstall: one whose
+removal failed this way, or a broker enrollment that the same oid and tenant later replaced by a
+device-code one. A store write that fails during the uninstall skips that account's sign-out too.
 
 **What makes the fix safe:** purge first, then remove the store entry; compute `stillInUse` over
 the other enrollments, excluding the one being removed, instead of relying on it already being
 gone. A failed purge then leaves the enrollment listed, so the retry still knows its
 `AuthMethod`. It is MSAL code: follow the `msal-dotnet-desktop-wam` skill, and add Core tests for
 both orders of failure (store write vs. purge).
-
----
-
-## "Uninstalling removes the tokens" is unverified for broker accounts
-
-**Evidence:** `docs/user-guide.md` ("What lands on your machine"), its German twin, and
-`README.md` ("Security and footprint") say that uninstalling removes everything, cached tokens
-included. For device-code accounts that holds: their refresh tokens live in
-`msal-devicecode-{client-id}.cache` under the data directory, which the uninstall deletes. For
-broker accounts, `MsalAuthService.EnsureDeviceCodePcaAsync` itself notes that WAM owns the refresh
-tokens. Those live in the Windows token broker, outside the app's directories, and nothing in the
-uninstall hook asks WAM to forget them. Found 2026-10-16 in the security review of the
-junis-hosted spec (switching a tenant's client id strands the broker tokens of the old
-registration the same way).
-
-**Why it matters:** a privileged-access tool should not promise a cleanup it cannot do. A security
-reviewer who reads "tokens included" and then finds the account under Windows' "Work or school
-accounts", or WAM still answering silently for that client id, stops trusting the rest of the
-footprint section.
-
-**What makes the fix safe:** observe it first. On Windows, enrol a broker account, uninstall, and
-check whether WAM still returns a token silently for that client id (a reinstall with the same
-registration that signs in without a prompt shows it). Then either reword both user guides
-(EN + DE, same commit) and the README to say what remains and how to remove it ("Settings →
-Accounts → Remove" before uninstalling, or Windows "Access work or school"), or purge the broker
-accounts from the uninstall hook, if WAM can be asked from there.
-
-**Status 2026-10-18:** the uninstall hook now does the purge: `Program.SignOutBrokerAccounts` runs
-`UninstallSignOut` (the same `RemoveAccountAsync` as Settings → Accounts → Remove; the WAM plugin
-implements it with `SignOutSilentlyAsync`) before the data directory is deleted, and stops after
-20 seconds. Update.exe gives the hook 60 (Velopack 1.2.0 `uninstall.rs`), the library's XML doc
-says 30. Still open:
-
-- Observing it on Windows (checklist §5). The app always shows the WAM account picker, so "a
-  reinstall signs in without a prompt" is not the test; the account vanishing from Windows
-  Settings → Accounts → Email & accounts → "Accounts used by other apps" and from the picker's
-  list is. Only then do README and both user guides say that uninstalling signs the accounts out.
-- The sign-out follows `accounts.json`, not what WAM holds. A WAM sign-in without a row stays: one
-  whose earlier removal failed after the store write (next entry), or a broker enrollment that
-  the same oid and tenant later replaced by a device-code one. Covering those means enumerating
-  each broker client's accounts instead.
-
-Close this entry once the observation is in and the docs say it.

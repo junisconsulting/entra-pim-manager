@@ -142,7 +142,8 @@ This is a privileged-access tool, so here is exactly what it does and does not d
 - **Clean logs.** No tokens, no justification text, and users appear by object id only.
 - **A per-user footprint.** Everything lives under `%LocalAppData%`, and registry entries stay in
   `HKCU` — the uninstall entry and the optional autostart value. No admin rights, no service, no
-  scheduled task. Uninstalling removes all of it, cached tokens included.
+  scheduled task. Uninstalling removes all of it, cached tokens included, and signs the app's
+  accounts out of Windows' token broker.
 
 ### Recommended: a fresh sign-in for every activation
 

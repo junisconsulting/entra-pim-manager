@@ -97,6 +97,14 @@ public async Task ClearCacheAsync()
 
 `RemoveAsync` clears the cache entries for that account, triggering re-auth on next call.
 
+With the WAM broker it also signs the account out of the app in Windows: in
+`Microsoft.Identity.Client.Broker` 4.66.0, `RuntimeBroker.RemoveAccountAsync` calls
+`SignOutSilentlyAsync`, without a window. Observed 2026-10-18 through Entra PIM Manager's uninstall
+hook (`UninstallSignOut`): the account disappeared from Windows Settings → Accounts → Email &
+accounts → "Accounts used by other apps". An account added to Windows itself ("Access work or
+school") is not touched. Deleting the cache file alone does **not** do this — WAM keeps broker
+refresh tokens outside it.
+
 For a "fully forget me" UI button:
 1. Call `ClearCacheAsync` above
 2. Optionally delete the cache file: `File.Delete(Path.Combine(cacheDir, "msal.cache"))`
