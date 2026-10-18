@@ -219,6 +219,18 @@ public partial class App : Application
     }
 
     /// <summary>
+    /// Adds the files the options come from, in override order: the shipped
+    /// <c>appsettings.json</c>, a local override next to it, and the per-user configuration.
+    /// One list for the app and the uninstall hook (<see cref="Program"/>), so the hook resolves
+    /// the same App Registration a token was issued through.
+    /// </summary>
+    internal static IConfigurationBuilder AddConfigurationFiles(IConfigurationBuilder configuration)
+        => configuration
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+            .AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: false)
+            .AddJsonFile(AppPaths.LocalConfigFile, optional: true, reloadOnChange: false);
+
+    /// <summary>
     /// Maps the persisted preference onto the Serilog level switch. Takes
     /// effect immediately for all sinks — called at startup and on every
     /// settings save.
@@ -316,10 +328,7 @@ public partial class App : Application
         // files are added — ConfigurationManager reads them right there.
         MigrateLegacyRegistrations();
 
-        builder.Configuration
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
-            .AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: false)
-            .AddJsonFile(AppPaths.LocalConfigFile, optional: true, reloadOnChange: false);
+        AddConfigurationFiles(builder.Configuration);
 
         builder.Logging.ClearProviders();
         builder.Services.AddSerilog();

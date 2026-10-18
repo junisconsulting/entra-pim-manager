@@ -633,6 +633,15 @@ Aktivierung und beantragt sofort neu.
       noch der `HKCU\…\Run`-Wert `Entra PIM Manager`. Ist `%LocalAppData%\junis`
       danach leer, ist auch er weg; liegt dort fremdes zweites Verzeichnis, bleibt
       **es erhalten**.
+- [ ] **Deinstallation meldet Broker-Konten bei WAM ab — ab 0.14.0/1.0.0.** Vorher ein
+      Konto über die normale Anmeldung hinzufügen (bei Nachfrage „Nur bei dieser App
+      anmelden"). **Notieren:** Steht es danach unter Windows-Einstellungen → Konten →
+      E-Mail & Konten → „Von anderen Apps verwendete Konten", und bietet die
+      WAM-Kontoauswahl es bei einem zweiten „Add account" als bekanntes Konto an?
+      Nach der Deinstallation ist es an **beiden** Stellen weg, und eine Neuinstallation
+      verlangt für dieses Konto wieder die Anmeldung. Ein Konto, das Windows selbst
+      unter „Auf Arbeits- oder Schulkonto zugreifen" kennt, bleibt dort — das ist
+      erwartet.
 - [ ] Deinstallation **während die App läuft** → sie schlägt nicht fehl. Ein
       gehaltenes Logfile darf höchstens Reste hinterlassen, nie einen Fehlerdialog
       (der Hook schluckt seine Fehler; Velopack würde sonst mit `-1` abbrechen).

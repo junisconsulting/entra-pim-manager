@@ -4,11 +4,15 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using EntraPimManager.AppAvalonia.Services;
+using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Configuration;
 using EntraPimManager.Core.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Velopack;
 
 /// <summary>
@@ -36,6 +40,11 @@ public static class Program
     // they evaluate. Documented in docs/unattended-deployment.md; keep them in sync.
     private const int ExitInvalidArguments = 1;
     private const int ExitConfigurationNotWritable = 2;
+
+    // Update.exe gives the uninstall hook 60 seconds (Velopack 1.2.0,
+    // src/bins/src/commands/uninstall.rs); the library's XML doc still says 30. The broker
+    // sign-out stops after 20, so the data directory is deleted within either limit.
+    private static readonly TimeSpan UninstallSignOutBudget = TimeSpan.FromSeconds(20);
 
     // Held for the whole process lifetime (static so it isn't garbage-collected,
     // which would release the mutex). The OS releases it when the process exits.
@@ -224,8 +233,9 @@ public static class Program
 
     /// <summary>
     /// Removes everything the app wrote outside its install directory, so an uninstall
-    /// leaves no trace: the per-user data directory — which holds the MSAL token cache,
-    /// the enrolled accounts and the tenant registrations — and the autostart entry.
+    /// leaves no trace: the broker accounts' sign-ins in Windows' token broker, the per-user
+    /// data directory — which holds the MSAL token cache, the enrolled accounts and the
+    /// tenant registrations — and the autostart entry.
     /// </summary>
     /// <remarks>
     /// Only reached through <c>--veloapp-uninstall</c>. An update runs the separate
@@ -248,6 +258,10 @@ public static class Program
             // about to disappear anyway.
         }
 
+        // Before the data directory goes: the sign-out reads the enrolled accounts and the
+        // registrations from it.
+        SignOutBrokerAccounts();
+
         try
         {
             if (Directory.Exists(AppPaths.DataDirectory))
@@ -264,6 +278,47 @@ public static class Program
         {
             // A second instance still running holds the rolling log file open, and the
             // vendor folder throws here whenever it is not empty. Both are expected.
+        }
+    }
+
+    /// <summary>
+    /// Signs every broker account out of the app in Windows' token broker
+    /// (<see cref="UninstallSignOut"/>). WAM keeps those refresh tokens outside the data
+    /// directory, so deleting the directory alone leaves the accounts signed in to the app.
+    /// </summary>
+    /// <remarks>
+    /// The registrations come from the same files as in the app
+    /// (<see cref="App.AddConfigurationFiles"/>); the pre-0.7.0 migration the app also runs is
+    /// skipped, as a configuration that old has not been started since. It runs on a thread-pool
+    /// thread, because Main is STA without a message pump, and stops after
+    /// <see cref="UninstallSignOutBudget"/>: a broker that does not answer must not cost the
+    /// deletion that follows. The blocking wait is Main-time code: Velopack calls the hook
+    /// synchronously, before any UI exists.
+    /// </remarks>
+    private static void SignOutBrokerAccounts()
+    {
+        using var budget = new CancellationTokenSource(UninstallSignOutBudget);
+        try
+        {
+            Task.Run(async () =>
+            {
+                var options = App.AddConfigurationFiles(new ConfigurationBuilder())
+                    .Build()
+                    .GetSection(EntraPimManagerOptions.SectionName)
+                    .Get<EntraPimManagerOptions>()!;
+                using var auth = new MsalAuthService(
+                    Options.Create(options),
+                    new NoPromptWindowTracker(),
+                    new TokenCacheFactory(NullLogger<TokenCacheFactory>.Instance),
+                    new AccountStore(AppPaths.AccountsFile, NullLogger<AccountStore>.Instance),
+                    NullLogger<MsalAuthService>.Instance);
+                await UninstallSignOut.SignOutBrokerAccountsAsync(auth, budget.Token).ConfigureAwait(false);
+            }).Wait(UninstallSignOutBudget);
+        }
+        catch
+        {
+            // Best effort like every uninstall step: a broken configuration file or a broker
+            // error must not keep the data directory from being deleted.
         }
     }
 
@@ -312,5 +367,15 @@ public static class Program
             // Non-fatal: without the marker the app simply keeps the defaults
             // (autostart on, Start menu entry kept) and skips the setup dialog.
         }
+    }
+
+    /// <summary>
+    /// The window tracker for the uninstall hook, which has no window and must never prompt:
+    /// asking for a parent window there means an interactive WAM call slipped in.
+    /// </summary>
+    private sealed class NoPromptWindowTracker : IWindowTracker
+    {
+        public nint GetCurrentWindowHandle()
+            => throw new InvalidOperationException("The uninstall hook signs accounts out silently and never opens a WAM prompt.");
     }
 }

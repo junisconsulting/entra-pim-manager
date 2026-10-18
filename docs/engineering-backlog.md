@@ -406,6 +406,9 @@ device-code enrollment the refresh token then stays in `msal-devicecode-{client-
 nothing left that points at it; "Remove tenant" goes on to remove the registration as if it were
 clean.
 
+The uninstall hook reuses `RemoveAccountAsync`, so a store write that fails there skips that
+account's WAM sign-out as well.
+
 **What makes the fix safe:** purge first, then remove the store entry; compute `stillInUse` over
 the other enrollments, excluding the one being removed, instead of relying on it already being
 gone. A failed purge then leaves the enrollment listed, so the retry still knows its
@@ -437,3 +440,20 @@ registration that signs in without a prompt shows it). Then either reword both u
 (EN + DE, same commit) and the README to say what remains and how to remove it ("Settings →
 Accounts → Remove" before uninstalling, or Windows "Access work or school"), or purge the broker
 accounts from the uninstall hook, if WAM can be asked from there.
+
+**Status 2026-10-18:** the uninstall hook now does the purge: `Program.SignOutBrokerAccounts` runs
+`UninstallSignOut` (the same `RemoveAccountAsync` as Settings → Accounts → Remove; the WAM plugin
+implements it with `SignOutSilentlyAsync`) before the data directory is deleted, and stops after
+20 seconds. Update.exe gives the hook 60 (Velopack 1.2.0 `uninstall.rs`), the library's XML doc
+says 30. Still open:
+
+- Observing it on Windows (checklist §5). The app always shows the WAM account picker, so "a
+  reinstall signs in without a prompt" is not the test; the account vanishing from Windows
+  Settings → Accounts → Email & accounts → "Accounts used by other apps" and from the picker's
+  list is. Only then do README and both user guides say that uninstalling signs the accounts out.
+- The sign-out follows `accounts.json`, not what WAM holds. A WAM sign-in without a row stays: one
+  whose earlier removal failed after the store write (next entry), or a broker enrollment that
+  the same oid and tenant later replaced by a device-code one. Covering those means enumerating
+  each broker client's accounts instead.
+
+Close this entry once the observation is in and the docs say it.
