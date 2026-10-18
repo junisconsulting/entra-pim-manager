@@ -437,26 +437,3 @@ registration that signs in without a prompt shows it). Then either reword both u
 (EN + DE, same commit) and the README to say what remains and how to remove it ("Settings →
 Accounts → Remove" before uninstalling, or Windows "Access work or school"), or purge the broker
 accounts from the uninstall hook, if WAM can be asked from there.
-
----
-
-## Two settings writers still compose outside the write lock
-
-**Evidence:** `UserSettingsService.SaveAsync` sets `Current` only once it has the IO lock. A caller
-that composes `Current with { … }` while another save is still writing builds on the stale
-snapshot, and its write reverts the queued change. Found 2026-10-17 in the junis-hosted field test:
-after a sign-in the tenant card stayed at "Not verified yet". Since then the shell's writes go
-through `UpdateAsync`, which applies the change to the latest value under the lock. Still on
-`SaveAsync` with a value composed from `Current`: `SettingsPanelViewModel` in `PersistAsync` and
-`SaveTicketSystem`, and `WhatsNewController.RememberAsync`. `Program.cs` also uses `SaveAsync`, but only before the app
-runs, so nothing can race it.
-
-**Why it matters:** if a Settings change or the What's-new version is saved in the same moment as
-a shell write, one of them can be dropped: the last-used account, an alias, a pin, a recent
-activation, an expanded tenant or a Verified mark. Nothing logs it.
-
-**What makes the fix safe:** move these callers to `UpdateAsync` with a transform that sets only
-their own fields. The Settings panel today writes its whole snapshot, so its transform must apply
-only the values it owns, or it reverts the shell's fields instead. Publishing before the lock was
-tried and rejected in review: a concurrent `LoadAsync` would overwrite the published value, a
-cancelled wait would leave `Current` ahead of the file, and `Changed` could arrive out of order.

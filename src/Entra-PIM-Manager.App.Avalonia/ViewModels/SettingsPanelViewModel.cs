@@ -102,7 +102,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     /// Bound to the "Start menu entry" toggle. Like <see cref="StartWithWindows"/>
     /// the artifact itself (the shortcut file) is the source of truth, not the
     /// persisted settings — so toggling create/removes it directly and never calls
-    /// <c>SaveAsync</c>. The row is hidden when <see cref="CanManageStartMenuShortcut"/>
+    /// <c>UpdateAsync</c>. The row is hidden when <see cref="CanManageStartMenuShortcut"/>
     /// is false (dev / portable, where there is no install to anchor a shortcut to).
     /// </summary>
     [ObservableProperty]
@@ -642,7 +642,9 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
                 node.TenantId);
         }
 
-        SaveTicketSystem(
+        // Awaited: SyncTenantNodes reads the ticket system back from the settings, and before the
+        // update has run it would cache the old one on the card.
+        await SaveTicketSystemAsync(
             node.TenantId,
             string.IsNullOrWhiteSpace(node.TicketSystemDraft) ? null : node.TicketSystemDraft.Trim());
 
@@ -699,10 +701,9 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
                 node.TenantId);
         }
 
-        if (_userSettings.Current.TicketSystemFor(node.TenantId) is not null)
-        {
-            SaveTicketSystem(node.TenantId, null);
-        }
+        // Unconditionally: a ticket-system save still queued behind the store's lock would land
+        // after a check of Current and outlive the tenant. Nothing to clear writes nothing.
+        await SaveTicketSystemAsync(node.TenantId, null);
 
         SyncTenantNodes();
     }
@@ -717,7 +718,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     /// removal and an addition, not an edit.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanAddRegistration))]
-    private void AddTenant()
+    private async Task AddTenantAsync()
     {
         var cloud = NewTenantCloud.Cloud;
         var tenantId = Guid.Parse(NewTenantId.Trim()).ToString();
@@ -742,8 +743,9 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         _registrations.Add(new TenantAppRegistration { TenantId = tenantId, ClientId = clientId, Cloud = cloud.ToString(), Label = label });
 
         // Not part of the registration file — see NewTicketSystem. Saved after the
-        // registration write so a failed write never leaves a half-applied form.
-        SaveTicketSystem(tenantId, string.IsNullOrWhiteSpace(NewTicketSystem) ? null : NewTicketSystem.Trim());
+        // registration write so a failed write never leaves a half-applied form, and
+        // awaited before SyncTenantNodes, which reads it back.
+        var ticketSystem = string.IsNullOrWhiteSpace(NewTicketSystem) ? null : NewTicketSystem.Trim();
 
         ClearForm();
         ShowRestartPrompt = true;
@@ -751,6 +753,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             "App Registration saved for cloud {Cloud}, tenant {TenantId}; awaiting restart.",
             cloud,
             tenantId);
+        await SaveTicketSystemAsync(tenantId, ticketSystem);
         SyncTenantNodes();
     }
 
@@ -986,7 +989,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         }
 
         // Autostart isn't part of the persisted UserSettings record (registry is
-        // the source of truth) — no SaveAsync call needed here.
+        // the source of truth) — no UpdateAsync call needed here.
     }
 
     partial void OnCreateStartMenuShortcutChanged(bool value)
@@ -1006,7 +1009,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         }
 
         // Like autostart, the shortcut file itself is the source of truth — it is
-        // not mirrored into the persisted UserSettings record, so no SaveAsync here.
+        // not mirrored into the persisted UserSettings record, so no UpdateAsync here.
     }
 
     partial void OnSelectedDurationChanged(DurationOption value)
@@ -1110,23 +1113,8 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     /// Stores (or clears, when blank) the tenant's ticketing system. Keyed by tenant
     /// id alone — a tenant lives in exactly one cloud, so the cloud adds nothing.
     /// </summary>
-    private void SaveTicketSystem(string tenantId, string? ticketSystem)
-    {
-        var updated = _userSettings.Current;
-        var systems = updated.TicketSystems is null
-            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            : new Dictionary<string, string>(updated.TicketSystems, StringComparer.OrdinalIgnoreCase);
-        if (ticketSystem is null)
-        {
-            systems.Remove(tenantId);
-        }
-        else
-        {
-            systems[tenantId] = ticketSystem;
-        }
-
-        _ = SaveSettingsAsync(updated with { TicketSystems = systems });
-    }
+    private Task SaveTicketSystemAsync(string tenantId, string? ticketSystem)
+        => SaveSettingsAsync(current => current.WithTicketSystem(tenantId, ticketSystem));
 
     private void SchedulePersist()
     {
@@ -1138,28 +1126,34 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
 
     private async Task PersistAsync()
     {
-        // `with` instead of `new`: the record now carries shell-layout fields
-        // (LastUsedAccountKey, ExpandedTenants) that the Settings panel does
-        // NOT own. A fresh `new UserSettings(...)` would silently wipe them.
-        var settings = _userSettings.Current with
-        {
-            Theme = SelectedTheme.Value,
-            DefaultDurationHours = SelectedDuration.Hours,
-            ExpiryWarningEnabled = ExpiryWarningEnabled,
-            ExpiryWarningMinutes = SelectedExpiryThreshold.Minutes,
-            SettingsAccountsExpanded = _persistedTenantsExpanded,
-            AutomaticUpdatesEnabled = AutomaticUpdatesEnabled,
-            LogLevel = SelectedLogLevel.Value,
-        };
+        // The panel's own fields only, read now on the UI thread. The transform applies them to
+        // the latest settings under the store's lock, so a shell write queued ahead of this one
+        // (last-used account, pins, Verified marks) is kept instead of reverted.
+        var theme = SelectedTheme.Value;
+        var durationHours = SelectedDuration.Hours;
+        var expiryWarningEnabled = ExpiryWarningEnabled;
+        var expiryWarningMinutes = SelectedExpiryThreshold.Minutes;
+        var tenantsExpanded = _persistedTenantsExpanded;
+        var automaticUpdatesEnabled = AutomaticUpdatesEnabled;
+        var logLevel = SelectedLogLevel.Value;
 
-        await SaveSettingsAsync(settings).ConfigureAwait(false);
+        await SaveSettingsAsync(current => current with
+        {
+            Theme = theme,
+            DefaultDurationHours = durationHours,
+            ExpiryWarningEnabled = expiryWarningEnabled,
+            ExpiryWarningMinutes = expiryWarningMinutes,
+            SettingsAccountsExpanded = tenantsExpanded,
+            AutomaticUpdatesEnabled = automaticUpdatesEnabled,
+            LogLevel = logLevel,
+        }).ConfigureAwait(false);
     }
 
-    private async Task SaveSettingsAsync(UserSettings settings)
+    private async Task SaveSettingsAsync(Func<UserSettings, UserSettings> transform)
     {
         try
         {
-            await _userSettings.SaveAsync(settings).ConfigureAwait(false);
+            await _userSettings.UpdateAsync(transform).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

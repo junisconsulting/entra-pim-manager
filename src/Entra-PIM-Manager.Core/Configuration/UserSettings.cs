@@ -152,6 +152,38 @@ public sealed record UserSettings(
     }
 
     /// <summary>
+    /// These settings with <paramref name="ticketSystem"/> as the tenant's ticketing system, or
+    /// without one when it is <c>null</c> — or the same instance when nothing changes, so saving
+    /// an unchanged form does not rewrite the settings file.
+    /// </summary>
+    public UserSettings WithTicketSystem(string tenantId, string? ticketSystem)
+    {
+        if (TicketSystemFor(tenantId) == ticketSystem)
+        {
+            return this;
+        }
+
+        // Case-insensitive like TicketSystemFor, and copied entry by entry: a hand-edited file
+        // can hold one tenant twice in different casing, which a copy constructor rejects.
+        var systems = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in TicketSystems ?? [])
+        {
+            systems[entry.Key] = entry.Value;
+        }
+
+        if (ticketSystem is null)
+        {
+            systems.Remove(tenantId);
+        }
+        else
+        {
+            systems[tenantId] = ticketSystem;
+        }
+
+        return this with { TicketSystems = systems };
+    }
+
+    /// <summary>
     /// True once a sign-in through <paramref name="clientId"/> succeeded for this tenant: per
     /// client id for a self-hosted registration, per (cloud, tenant, client id) for the
     /// junis-hosted one, whose single client id is consented tenant by tenant.

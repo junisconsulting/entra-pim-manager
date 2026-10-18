@@ -60,13 +60,6 @@ public sealed class UserSettingsService : IUserSettingsService
     }
 
     /// <inheritdoc />
-    public Task SaveAsync(UserSettings settings, CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(settings);
-        return UpdateAsync(_ => settings, ct);
-    }
-
-    /// <inheritdoc />
     public async Task UpdateAsync(Func<UserSettings, UserSettings> transform, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(transform);

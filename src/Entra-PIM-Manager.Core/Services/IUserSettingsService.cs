@@ -5,14 +5,14 @@ using EntraPimManager.Core.Configuration;
 /// <summary>
 /// Reads and writes <see cref="UserSettings"/> to a JSON file in
 /// <c>%LocalAppData%</c>. The cached <see cref="Current"/> is loaded once at
-/// app startup and refreshed on every <see cref="SaveAsync"/>; subscribers get
+/// app startup and refreshed on every <see cref="UpdateAsync"/>; subscribers get
 /// a <see cref="Changed"/> notification so live UI (theme, expiry threshold,
 /// activation defaults) can react without restarting.
 /// </summary>
 public interface IUserSettingsService
 {
     /// <summary>
-    /// Raised after <see cref="SaveAsync"/> finishes writing — fires
+    /// Raised after <see cref="UpdateAsync"/> finishes writing — fires
     /// synchronously on the caller's thread. Subscribers that touch UI must
     /// marshal to the dispatcher themselves.
     /// </summary>
@@ -32,18 +32,13 @@ public interface IUserSettingsService
     Task LoadAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Persists the new settings atomically (temp-file + rename), updates
-    /// <see cref="Current"/>, and fires <see cref="Changed"/>. Saving the very instance
-    /// that is already <see cref="Current"/> does nothing.
-    /// </summary>
-    Task SaveAsync(UserSettings settings, CancellationToken ct = default);
-
-    /// <summary>
-    /// Applies <paramref name="transform"/> to the latest settings under the write lock and
-    /// persists the result like <see cref="SaveAsync"/>. Two quick updates therefore never
-    /// start from the same snapshot, so neither can drop the other's change. A transform
-    /// that returns its input unchanged skips the write and <see cref="Changed"/>. The
-    /// transform may run on a thread-pool thread: it must not touch UI state.
+    /// Applies <paramref name="transform"/> to the latest settings under the write lock,
+    /// persists the result atomically (temp-file + rename), updates <see cref="Current"/> and
+    /// fires <see cref="Changed"/>. Two quick updates therefore never start from the same
+    /// snapshot, so neither can drop the other's change — the reason there is no method that
+    /// saves a whole value composed from <see cref="Current"/>. A transform that returns its
+    /// input unchanged skips the write and <see cref="Changed"/>. The transform may run on a
+    /// thread-pool thread: it must not touch UI state.
     /// </summary>
     Task UpdateAsync(Func<UserSettings, UserSettings> transform, CancellationToken ct = default);
 }

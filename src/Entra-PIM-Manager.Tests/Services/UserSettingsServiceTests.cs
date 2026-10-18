@@ -39,7 +39,7 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAsync_PublishesCurrentBeforeTheWriteFinishes()
+    public async Task UpdateAsync_PublishesCurrentBeforeTheWriteFinishes()
     {
         // Most callers save fire-and-forget and compose their next change from Current
         // moments later. If Current only caught up after the file write, that next
@@ -47,7 +47,7 @@ public sealed class UserSettingsServiceTests : IDisposable
         var store = CreateStore();
         var saved = UserSettings.Default with { ExpiryWarningMinutes = 15 };
 
-        var pending = store.SaveAsync(saved);
+        var pending = store.UpdateAsync(_ => saved);
         var seenWhileWriting = store.Current.ExpiryWarningMinutes;
         await pending;
 
@@ -63,7 +63,7 @@ public sealed class UserSettingsServiceTests : IDisposable
         var store = CreateStore();
 
         // Holds the lock while it writes, so both updates below queue behind it.
-        var writing = store.SaveAsync(UserSettings.Default with { ExpiryWarningMinutes = 15 });
+        var writing = store.UpdateAsync(_ => UserSettings.Default with { ExpiryWarningMinutes = 15 });
         var first = store.UpdateAsync(s => s with { LastUsedAccountKey = "oid|tid|Global" });
         var second = store.UpdateAsync(s => s with { VerifiedClientIds = ["8f3a1c2e-0000-4000-8000-000000000001"] });
         await Task.WhenAll(writing, first, second);
@@ -113,12 +113,12 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAsync_PersistsAcrossInstances()
+    public async Task UpdateAsync_PersistsAcrossInstances()
     {
         var customised = new UserSettings(ThemePreference.Light, 4.0, false, 15);
 
         var first = CreateStore();
-        await first.SaveAsync(customised);
+        await first.UpdateAsync(_ => customised);
 
         var second = CreateStore();
         await second.LoadAsync();
@@ -127,56 +127,56 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAsync_FiresChangedEvent()
+    public async Task UpdateAsync_FiresChangedEvent()
     {
         var store = CreateStore();
         UserSettings? received = null;
         store.Changed += s => received = s;
 
         var newSettings = new UserSettings(ThemePreference.Dark, 2.0, true, 10);
-        await store.SaveAsync(newSettings);
+        await store.UpdateAsync(_ => newSettings);
 
         Assert.NotNull(received);
         Assert.Equal(newSettings, received);
     }
 
     [Fact]
-    public async Task SaveAsync_UpdatesCurrentInPlace()
+    public async Task UpdateAsync_UpdatesCurrentInPlace()
     {
         var store = CreateStore();
         var newSettings = new UserSettings(ThemePreference.Dark, 8.0, true, 5);
 
-        await store.SaveAsync(newSettings);
+        await store.UpdateAsync(_ => newSettings);
 
         Assert.Equal(newSettings, store.Current);
     }
 
     [Fact]
-    public async Task SaveAsync_CreatesParentDirectoryIfMissing()
+    public async Task UpdateAsync_CreatesParentDirectoryIfMissing()
     {
         var nestedPath = Path.Combine(_tempDir, "nested", "deeper", "settings.json");
         var store = new UserSettingsService(nestedPath, NullLogger<UserSettingsService>.Instance);
 
-        await store.SaveAsync(UserSettings.Default with { ExpiryWarningMinutes = 15 });
+        await store.UpdateAsync(_ => UserSettings.Default with { ExpiryWarningMinutes = 15 });
 
         Assert.True(File.Exists(nestedPath));
     }
 
     [Fact]
-    public async Task SaveAsync_DoesNotLeaveTempFileBehind()
+    public async Task UpdateAsync_DoesNotLeaveTempFileBehind()
     {
         var store = CreateStore();
 
-        await store.SaveAsync(new UserSettings(ThemePreference.Light, 1.0, true, 5));
+        await store.UpdateAsync(_ => new UserSettings(ThemePreference.Light, 1.0, true, 5));
 
         Assert.False(File.Exists(_filePath + ".tmp"));
     }
 
     [Fact]
-    public async Task SaveAsync_ThemePreferenceRoundTripsAsString()
+    public async Task UpdateAsync_ThemePreferenceRoundTripsAsString()
     {
         var store = CreateStore();
-        await store.SaveAsync(new UserSettings(ThemePreference.Light, 1.0, true, 5));
+        await store.UpdateAsync(_ => new UserSettings(ThemePreference.Light, 1.0, true, 5));
 
         var raw = await File.ReadAllTextAsync(_filePath);
 
@@ -263,12 +263,12 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAsync_PersistsAutomaticUpdatesEnabled()
+    public async Task UpdateAsync_PersistsAutomaticUpdatesEnabled()
     {
         var disabled = UserSettings.Default with { AutomaticUpdatesEnabled = false };
 
         var first = CreateStore();
-        await first.SaveAsync(disabled);
+        await first.UpdateAsync(_ => disabled);
 
         var second = CreateStore();
         await second.LoadAsync();
@@ -323,7 +323,7 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAsync_PersistsVerifiedClientIdsForEveryCloud()
+    public async Task UpdateAsync_PersistsVerifiedClientIdsForEveryCloud()
     {
         string[] ids =
         [
@@ -333,7 +333,7 @@ public sealed class UserSettingsServiceTests : IDisposable
         var verified = UserSettings.Default with { VerifiedClientIds = ids };
 
         var first = CreateStore();
-        await first.SaveAsync(verified);
+        await first.UpdateAsync(_ => verified);
 
         var second = CreateStore();
         await second.LoadAsync();
@@ -342,12 +342,12 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAsync_PersistsSettingsAccountsExpanded()
+    public async Task UpdateAsync_PersistsSettingsAccountsExpanded()
     {
         var collapsed = UserSettings.Default with { SettingsAccountsExpanded = false };
 
         var first = CreateStore();
-        await first.SaveAsync(collapsed);
+        await first.UpdateAsync(_ => collapsed);
 
         var second = CreateStore();
         await second.LoadAsync();
@@ -356,7 +356,7 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAsync_PersistsLastUsedAccountKeyAndExpandedTenants()
+    public async Task UpdateAsync_PersistsLastUsedAccountKeyAndExpandedTenants()
     {
         var customised = new UserSettings(
             Theme: ThemePreference.Light,
@@ -371,7 +371,7 @@ public sealed class UserSettingsServiceTests : IDisposable
             });
 
         var first = CreateStore();
-        await first.SaveAsync(customised);
+        await first.UpdateAsync(_ => customised);
 
         var second = CreateStore();
         await second.LoadAsync();
@@ -405,12 +405,12 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAsync_PersistsLogLevel()
+    public async Task UpdateAsync_PersistsLogLevel()
     {
         var verbose = UserSettings.Default with { LogLevel = LogLevelPreference.Debug };
 
         var first = CreateStore();
-        await first.SaveAsync(verbose);
+        await first.UpdateAsync(_ => verbose);
 
         var second = CreateStore();
         await second.LoadAsync();
@@ -419,7 +419,7 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAsync_PersistsAccountAliasesPerEnrollment()
+    public async Task UpdateAsync_PersistsAccountAliasesPerEnrollment()
     {
         // Asserted key by key: UserSettings is a record, so its Dictionary member
         // compares by reference and whole-record equality would never hold across
@@ -434,7 +434,7 @@ public sealed class UserSettingsServiceTests : IDisposable
         };
 
         var first = CreateStore();
-        await first.SaveAsync(aliased);
+        await first.UpdateAsync(_ => aliased);
 
         var second = CreateStore();
         await second.LoadAsync();
@@ -445,7 +445,7 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAsync_PersistsPinnedAndRecentEligibilities()
+    public async Task UpdateAsync_PersistsPinnedAndRecentEligibilities()
     {
         var shortcuts = UserSettings.Default with
         {
@@ -454,7 +454,7 @@ public sealed class UserSettingsServiceTests : IDisposable
         };
 
         var first = CreateStore();
-        await first.SaveAsync(shortcuts);
+        await first.UpdateAsync(_ => shortcuts);
 
         var second = CreateStore();
         await second.LoadAsync();
@@ -466,7 +466,7 @@ public sealed class UserSettingsServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAsync_PersistsTicketSystemsPerTenant()
+    public async Task UpdateAsync_PersistsTicketSystemsPerTenant()
     {
         var configured = UserSettings.Default with
         {
@@ -478,7 +478,7 @@ public sealed class UserSettingsServiceTests : IDisposable
         };
 
         var first = CreateStore();
-        await first.SaveAsync(configured);
+        await first.UpdateAsync(_ => configured);
 
         var second = CreateStore();
         await second.LoadAsync();
@@ -503,6 +503,57 @@ public sealed class UserSettingsServiceTests : IDisposable
         // A GUID's casing differs between the Settings form, MSAL and a hand-edited
         // file; the deserialized dictionary is case-sensitive, so the lookup must not be.
         Assert.Equal("ServiceNow", configured.TicketSystemFor("TENANT-1"));
+    }
+
+    [Fact]
+    public void WithTicketSystem_SetsReplacesAndClearsCaseInsensitively()
+    {
+        // The key as the deserializer leaves it (case-sensitive) and in a different casing
+        // than the one the Settings form passes.
+        var configured = UserSettings.Default with
+        {
+            TicketSystems = new Dictionary<string, string> { ["TENANT-1"] = "ServiceNow", ["tenant-2"] = "Jira" },
+        };
+
+        var replaced = configured.WithTicketSystem("tenant-1", "Remedy");
+        Assert.Equal("Remedy", replaced.TicketSystemFor("tenant-1"));
+        Assert.Equal(2, replaced.TicketSystems!.Count);
+
+        var cleared = replaced.WithTicketSystem("Tenant-1", null);
+        Assert.Null(cleared.TicketSystemFor("tenant-1"));
+        Assert.Equal("Jira", cleared.TicketSystemFor("tenant-2"));
+
+        Assert.Equal("Jira", UserSettings.Default.WithTicketSystem("tenant-2", "Jira").TicketSystemFor("TENANT-2"));
+    }
+
+    [Fact]
+    public void WithTicketSystem_NothingToChange_ReturnsTheSameInstance()
+    {
+        // UpdateAsync skips the write only for the same instance: saving an unchanged card,
+        // or removing a tenant that has no ticket system, must not rewrite settings.json.
+        var configured = UserSettings.Default with
+        {
+            TicketSystems = new Dictionary<string, string> { ["tenant-1"] = "ServiceNow" },
+        };
+
+        Assert.Same(configured, configured.WithTicketSystem("TENANT-1", "ServiceNow"));
+        Assert.Same(configured, configured.WithTicketSystem("tenant-2", null));
+        Assert.Same(UserSettings.Default, UserSettings.Default.WithTicketSystem("tenant-1", null));
+    }
+
+    [Fact]
+    public void WithTicketSystem_HandEditedDuplicateKeys_DoesNotThrow()
+    {
+        // A hand-edited settings.json can carry one tenant in two casings; a case-insensitive
+        // copy constructor would throw on that and lose the save.
+        var duplicated = UserSettings.Default with
+        {
+            TicketSystems = new Dictionary<string, string> { ["tenant-1"] = "ServiceNow", ["TENANT-1"] = "Jira" },
+        };
+
+        var cleared = duplicated.WithTicketSystem("tenant-1", null);
+
+        Assert.Null(cleared.TicketSystemFor("tenant-1"));
     }
 
     [Fact]

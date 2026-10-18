@@ -219,16 +219,7 @@ public static class Program
         var settings = new UserSettingsService(AppPaths.SettingsFile, NullLogger<UserSettingsService>.Instance);
         settings.LoadAsync().GetAwaiter().GetResult();
 
-        var current = settings.Current;
-
-        // Case-insensitive to match UserSettings.TicketSystemFor, which has to cope with
-        // whatever casing MSAL reports for the tenant on the account.
-        var systems = current.TicketSystems is null
-            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            : new Dictionary<string, string>(current.TicketSystems, StringComparer.OrdinalIgnoreCase);
-        systems[tenantId] = ticketSystem;
-
-        settings.SaveAsync(current with { TicketSystems = systems }).GetAwaiter().GetResult();
+        settings.UpdateAsync(current => current.WithTicketSystem(tenantId, ticketSystem)).GetAwaiter().GetResult();
     }
 
     /// <summary>

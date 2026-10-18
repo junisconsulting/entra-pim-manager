@@ -134,7 +134,7 @@ public sealed class WhatsNewController
         try
         {
             await _userSettings
-                .SaveAsync(_userSettings.Current with { LastSeenVersion = version })
+                .UpdateAsync(current => current with { LastSeenVersion = version })
                 .ConfigureAwait(false);
         }
         catch (Exception ex)
