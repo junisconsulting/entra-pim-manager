@@ -46,7 +46,7 @@ Next to a tenant's own App Registration (self-hosted), the app offers one that j
 | Application (client) id | published here when the registration goes live |
 | Publisher | junis GmbH, verified, publisher domain `junis.de` |
 | Sign-in audience | organizational accounts in any tenant (`AzureADMultipleOrgs`), no personal Microsoft accounts |
-| Permissions | the seven Microsoft Graph delegated permissions plus Azure Service Management `user_impersonation` — the same [list](docs/app-registration-setup.md#3-api-permissions-delegated) as self-hosted |
+| Permissions | the seven Microsoft Graph delegated permissions plus Azure Service Management `user_impersonation`, [listed with their ids](#its-permissions) — the same as self-hosted |
 
 ### How junis creates and operates it
 
@@ -66,6 +66,23 @@ junis creates the registration by hand along this checklist; there is no script.
 - Implicit grant off. No "Expose an API", no app roles, no optional claims.
 - Sign-in audience `AzureADMultipleOrgs`.
 - Publisher verification with publisher domain `junis.de`, a logo, [PRIVACY.md](PRIVACY.md) as the privacy statement and the MIT [LICENSE](LICENSE) as the terms.
+
+#### Its permissions
+
+Delegated only, no application permission: the app acts as the signed-in user and can do no more than that user may. These eight are the registration's `requiredResourceAccess` and what an admin consent grants; a consent screen, manifest or grant with anything else is not this app.
+
+| API (app id) | Permission | Permission id | Used for |
+| --- | --- | --- | --- |
+| Microsoft Graph (`00000003-0000-0000-c000-000000000000`) | `User.Read` | `e1fe6dd8-ba31-4d61-89e7-88639da4683d` | Profile of the signed-in user |
+| Microsoft Graph | `RoleEligibilitySchedule.Read.Directory` | `eb0788c2-6d4e-4658-8c9e-c0fb8053f03d` | Read eligible directory roles |
+| Microsoft Graph | `RoleAssignmentSchedule.ReadWrite.Directory` | `8c026be3-8e26-4774-9372-8d5d6f21daff` | Activate and deactivate directory roles |
+| Microsoft Graph | `RoleManagementPolicy.Read.Directory` | `3de2cdbe-0ff5-47d5-bdee-7f45b4749ead` | Read PIM policies for directory roles |
+| Microsoft Graph | `RoleManagementPolicy.Read.AzureADGroup` | `7e26fdff-9cb1-4e56-bede-211fe0e420e8` | Read PIM policies for groups |
+| Microsoft Graph | `PrivilegedAccess.ReadWrite.AzureADGroup` | `32531c59-1f32-461f-b8df-6f8a3b89f73b` | Activate and deactivate PIM for Groups |
+| Microsoft Graph | `Group.Read.All` | `5f8c59db-677d-491f-a6b8-5f174b11ec1d` | Resolve group names |
+| Azure Service Management (`797f4846-ba00-4fd7-ba43-dac1f8f63013`) | `user_impersonation` | `41094075-9dad-400e-a0bd-54e686782033` | List, activate and deactivate Azure resource roles |
+
+A sign-in also asks for `openid`, `profile` and `offline_access`, which MSAL adds to every sign-in request; they are not configured on the registration, and a consent screen may show them as one or two extra lines.
 
 #### Who can change it
 
