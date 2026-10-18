@@ -79,9 +79,9 @@ and a Microsoft answer says "Simply signing … will not exempt it from the rule
 which needs a leaf certificate that lives longer than Artifact Signing's 72 hours.
 
 **What makes the fix safe:** a junis code-signing identity whose key never leaves an HSM — since
-June 2023 the CA/B Forum requires that, so a PFX as a CI secret is no longer possible (an OV
-certificate with its key in a cloud HSM, or Azure Artifact Signing; decision brief 2026-10-17),
-signing wired into the release workflow on `windows-latest`, and one release
+June 2023 the CA/B Forum requires that, so a PFX as a CI secret is no longer possible. Chosen:
+Azure Artifact Signing ([ADR 0003](adr/0003-code-signing.md)), once junis GmbH has passed its
+identity validation. Then signing wired into the release workflow on `windows-latest`, and one release
 verified with `Get-AuthenticodeSignature` = `Valid` on Setup.exe, Update.exe, the stub and the app
 exe. Then app-control customers can replace per-version hash rules with a single publisher rule.
 Until that lands, the docs must say releases are unsigned (they do, as of 2026-08-14) — not imply
