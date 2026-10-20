@@ -244,14 +244,15 @@ public static class PimErrorMapper
         AppRegistrationHosting hosting = AppRegistrationHosting.SelfHosted)
     {
         // WAM refused the silent request and hides the AADSTS code ("Error Message: (pii)",
-        // field test 2026-10-17). Graph got its token, so Azure wants more: usually consent
-        // given in the sign-in window, which grants the Graph permissions but not the Azure
-        // one; otherwise Conditional Access on Azure management, such as Microsoft's
-        // "require MFA for Azure management" template. WAM reports both alike.
+        // field test 2026-10-17). Graph got its token, so Azure wants more: usually a consent
+        // that covers Graph but not Azure — given in a sign-in window that asked for the
+        // explicit Graph scopes (self-hosted, or junis-hosted before it asked for .default);
+        // otherwise Conditional Access on Azure management, such as Microsoft's "require MFA
+        // for Azure management" template. WAM reports both alike.
         if (exception is MsalUiRequiredException { ErrorCode: MsalError.FailedToAcquireTokenSilentlyFromBroker })
         {
             return hosting == AppRegistrationHosting.JunisHosted
-                ? "The background sign-in for Azure was refused. Usually admin consent for Entra PIM Manager is missing in this tenant (consent in the sign-in window covers Microsoft Graph only); otherwise a Conditional Access policy for Azure management requires a stronger sign-in."
+                ? "The background sign-in for Azure was refused. Usually this tenant's admin consent for Entra PIM Manager does not cover Azure yet; an admin grants it under Enterprise applications → Entra PIM Manager → Permissions → Grant admin consent. Otherwise a Conditional Access policy for Azure management requires a stronger sign-in."
                 : "The background sign-in for Azure was refused. Usually the tenant has not consented to the App Registration's Azure permission (Azure Service Management); otherwise a Conditional Access policy for Azure management requires a stronger sign-in.";
         }
 

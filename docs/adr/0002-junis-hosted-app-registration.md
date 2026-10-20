@@ -59,8 +59,16 @@ with a customer's own registration.
   versions read it unchanged, which also covers a downgrade, and the Core logic stays as it is. If
   junis ever had to replace the registration, a release would have to rewrite the old id in every
   entry.
-- A customer user cannot consent alone. The sign-in requests the Graph scopes, and all of them
-  except `User.Read` need admin consent. Azure Service Management `user_impersonation` would not
+- A customer user cannot consent alone. The sign-in requests Microsoft Graph's permissions, and
+  all of them except `User.Read` need admin consent. Azure Service Management `user_impersonation` would not
   need it on its own. An admin consents once per tenant.
+- The sign-in asks for Microsoft Graph's `.default` (field tests 2026-10-17 and -20). On a tenant's
+  first consent the WAM window then lists all eight permissions, so an admin who ticks "Consent on
+  behalf of your organization" grants Azure as well, without the consent link. With the explicit
+  Graph scopes the window listed Graph only. A tenant that has already granted Graph gets no prompt
+  and needs the link for Azure. Self-hosted keeps the explicit scopes, because a customer's
+  registration may declare more than the app needs. The price: `.default` does not notice a
+  partial grant, so such a sign-in succeeds and the gap shows on the first refresh
+  (docs/engineering-backlog.md).
 - Switching a tenant to self-hosted changes only the client side. The tenant-wide consent to the
   junis app stays until the tenant disables sign-in for it under Enterprise applications.

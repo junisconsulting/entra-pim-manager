@@ -320,10 +320,12 @@ hat, gibt es dort nichts zu aktivieren.
 in diesem Tenant nicht zugestimmt. Ein Admin macht das einmalig, siehe
 [app-registration-setup.md](app-registration-setup.md). Bei einem junis-hosted Tenant zeigt das
 Anmelde-Panel den Link dafür, unter „Send this link to an admin of this tenant:" — markieren,
-kopieren und einem Admin schicken. Der Link ist der bessere Weg: Stimmt ein Admin im Anmeldefenster
-zu, gilt das nur für sein eigenes Konto, und die Azure-Ressourcenrollen bleiben unerreichbar. Das
-behebt ein Admin unter Enterprise applications → Entra PIM Manager → Permissions mit „Grant admin
-consent".
+kopieren und einem Admin schicken. Bei einem junis-hosted Tenant kann ein Admin auch im
+Anmeldefenster der App zustimmen: vor
+**Accept** den Haken bei **Consent on behalf of your organization** setzen, sonst gilt die
+Zustimmung nur für sein eigenes Konto. Bleiben die Azure-Ressourcenrollen danach unerreichbar,
+erteilt ein Admin die Zustimmung unter Enterprise applications → Entra PIM Manager → Permissions mit
+„Grant admin consent".
 
 **Die Aktivierung scheitert und nennt Authentication Context oder Conditional Access.** Die Rolle
 verlangt eine stärkere Anmeldung, als die Sitzung hat. Wenn du dich per Device Code angemeldet hast,

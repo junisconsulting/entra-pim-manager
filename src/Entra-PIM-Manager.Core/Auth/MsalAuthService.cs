@@ -252,18 +252,19 @@ public sealed class MsalAuthService : IAuthService, IDisposable
             var clientId = RequireClientId(cloud, tenantId);
             var pca = await EnsurePcaAsync(clientId, cloud, ct).ConfigureAwait(false);
 
-            // Explicit sign-in always surfaces the WAM account picker (no
-            // .WithAccount, no OperatingSystemAccount, Prompt.SelectAccount).
-            // See memory: auth-no-sso-always-picker. The request goes to the
+            // Explicit sign-in always surfaces the WAM account picker: no
+            // .WithAccount and no OperatingSystemAccount (the WAM plugin ignores
+            // Prompt). See memory: auth-no-sso-always-picker. The request goes to the
             // entry's tenant — what a single-tenant app requires and a multi-
             // tenant app accepts. The IAccount.HomeAccountId still reflects the
             // chosen identity's HOME tenant; AuthenticationResult.TenantId carries
             // the target.
-            // The Azure permission is not consented here: the WAM plugin never
-            // passes WithExtraScopesToConsent on, and asking for it in a second
-            // prompt would open a window per sign-in. It comes with the tenant's
-            // admin consent, which covers every permission the registration lists.
-            var result = await pca.AcquireTokenInteractive(_options.Scopes)
+            // Junis-hosted asks for Graph's .default, so a first consent here lists
+            // the Azure permission too (EnrollmentScopes). Self-hosted asks for the
+            // explicit Graph scopes, and its Azure permission comes with the
+            // tenant's admin consent. WithExtraScopesToConsent is no alternative:
+            // the WAM plugin never passes it on.
+            var result = await pca.AcquireTokenInteractive(_options.EnrollmentScopes(cloud, clientId))
                 .WithPrompt(Prompt.SelectAccount)
                 .WithTenantId(tenantId)
                 .WithParentActivityOrWindow(_windowTracker.GetCurrentWindowHandle())

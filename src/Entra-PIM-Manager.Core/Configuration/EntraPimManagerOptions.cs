@@ -124,6 +124,23 @@ public sealed class EntraPimManagerOptions
         => HostingOf(cloud, ClientIdFor(cloud, tenantId));
 
     /// <summary>
+    /// The scopes the interactive sign-in asks for. Junis-hosted asks for Microsoft Graph's
+    /// <c>.default</c>: on a tenant's first consent Entra then lists every permission the
+    /// registration declares, Azure Service Management included, so one admin consent in the
+    /// sign-in window covers Azure as well (field test 2026-10-20). The token stays Graph-only.
+    /// Self-hosted keeps the explicit list: a customer's registration may declare more than the
+    /// app needs, and <c>.default</c> would consent to it and put all of it into every token.
+    /// </summary>
+    /// <remarks>
+    /// Only a first consent prompts. A tenant that has already granted Graph sees no prompt, so
+    /// its Azure permission still comes from the consent link.
+    /// </remarks>
+    public string[] EnrollmentScopes(EntraCloud cloud, string? clientId)
+        => HostingOf(cloud, clientId) == AppRegistrationHosting.JunisHosted
+            ? ["https://graph.microsoft.com/.default"]
+            : Scopes;
+
+    /// <summary>
     /// The client id a new or edited entry gets when the user chose <paramref name="hosting"/>
     /// in <paramref name="cloud"/> and typed <paramref name="typedClientId"/>, or <c>null</c>
     /// when that combination is not valid. Junis-hosted ignores the typed value and needs the

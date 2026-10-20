@@ -39,6 +39,21 @@ public sealed class JunisHostedRegistrationTests : IDisposable
         => Assert.Equal(expected, Junis().HostingOf(cloud, clientId));
 
     [Fact]
+    public void EnrollmentScopes_JunisHostedAsksForGraphDefault_SelfHostedForTheExplicitList()
+    {
+        // .default makes a first consent list the Azure permission too (field test 2026-10-20).
+        // Self-hosted must never get it: a customer's registration may declare more than the
+        // app needs, and every granted Graph scope would land in every token.
+        var options = Junis();
+        options.Scopes = ["User.Read", "Group.Read.All"];
+
+        Assert.Equal(["https://graph.microsoft.com/.default"], options.EnrollmentScopes(EntraCloud.Global, JunisAppId));
+        Assert.Equal(options.Scopes, options.EnrollmentScopes(EntraCloud.Global, OwnAppId));
+        Assert.Equal(options.Scopes, options.EnrollmentScopes(EntraCloud.China, JunisAppId));
+        Assert.Equal(options.Scopes, new EntraPimManagerOptions { Scopes = options.Scopes }.EnrollmentScopes(EntraCloud.Global, JunisAppId));
+    }
+
+    [Fact]
     public void HostingOf_WithoutAShippedJunisId_IsAlwaysSelfHosted()
     {
         // An empty JunisHostedClientId is how a build ships without the feature.

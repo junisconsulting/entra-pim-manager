@@ -302,9 +302,11 @@ activate there until it has one.
 to in that tenant. An admin does it once; see
 [app-registration-setup.md](app-registration-setup.md). For a junis-hosted tenant the sign-in panel
 shows the link for it, under "Send this link to an admin of this tenant:" — select it, copy it and
-send it to an admin. The link is the better way: an admin who consents in the sign-in window covers
-only their own account, and Azure resource roles stay unavailable. To repair that, an admin grants
-admin consent under Enterprise applications → Entra PIM Manager → Permissions.
+send it to an admin. For a junis-hosted tenant an admin can also consent in the app's own sign-in
+window: tick **Consent on behalf of your organization** before **Accept**, or the consent covers
+only that admin's account. If
+Azure resource roles stay unavailable afterwards, an admin grants admin consent under Enterprise
+applications → Entra PIM Manager → Permissions.
 
 **Activation fails and mentions authentication context or Conditional Access.** The role demands a
 stronger sign-in than the session has. If you signed in with a device code, that is the cause —

@@ -264,13 +264,14 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
       „Sign-in was cancelled. If Entra asked for an admin's approval, …", darunter „Send
       this link to an admin of this tenant:" mit dem Link als markierbarem Text — kein
       Button, kein Browser. **Notieren:** was die App bekam (Fehlercode im Log).
-- [ ] **Consent über die App:** Ein Admin meldet sich in einem Tenant ohne Consent an und
-      stimmt im WAM-Fenster zu → Anmeldung läuft durch. **Notieren:** ob „Consent on behalf
-      of your organization" angeboten wurde. Feldtest 2026-10-17: Es entstand nur ein *User
-      consent* für das eigene Konto, nur mit den Graph-Rechten, ohne Azure Service
-      Management. Danach Enterprise applications → Entra PIM Manager → Permissions → „Grant
-      admin consent" → alle acht Rechte unter *Admin consent*, und die Azure-Ressourcenrollen
-      laden.
+- [ ] **Consent über die App:** Ein Admin (Global Administrator oder Privileged Role
+      Administrator) meldet sich in einem Tenant ohne Consent an. Das WAM-Fenster listet die
+      Graph-Rechte **und** „Access Azure Resource Manager as you". Haken bei „Consent on
+      behalf of your organization" setzen, Accept → unter Enterprise applications → Entra
+      PIM Manager → Permissions → *Admin consent* stehen alle acht Rechte, und die
+      Azure-Ressourcenrollen laden ohne Consent-Link. **Notieren:** ob der Haken angeboten
+      wurde und vorab gesetzt war (Feldtest 2026-10-20: angeboten, nicht gesetzt). Ohne Haken
+      entsteht nur ein *User consent* für das eigene Konto, wie im Feldtest 2026-10-17.
 - [ ] **Nicht zugewiesen:** „Assignment required" an der junis-Enterprise-App an, Konto
       nicht zugewiesen → „Your account is not assigned to Entra PIM Manager in this
       tenant. An admin assigns it under Enterprise applications."
@@ -296,6 +297,8 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
       enthält → startet und meldet an.
 - [ ] **Gast:** Gastkonto in einem zweiten Tenant, der zugestimmt hat → dessen
       Eligibilities erscheinen.
+- [ ] **Aktivierung über junis-hosted:** in einem Tenant mit Lizenz je eine Verzeichnisrolle,
+      eine PIM-Gruppe und eine Azure-Rolle aktivieren und wieder deaktivieren.
 - [ ] **Verified:** zwei junis-hosted-Tenants, einer mit, einer ohne Consent → nur der mit
       Consent zeigt „Verified".
 - [ ] **Add-Formular:** bereits konfigurierten Tenant erneut hinzufügen → abgelehnt mit

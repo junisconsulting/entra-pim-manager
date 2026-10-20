@@ -428,3 +428,24 @@ the other enrollments, excluding the one being removed, instead of relying on it
 gone. A failed purge then leaves the enrollment listed, so the retry still knows its
 `AuthMethod`. It is MSAL code: follow the `msal-dotnet-desktop-wam` skill, and add Core tests for
 both orders of failure (store write vs. purge).
+
+---
+
+## A junis-hosted sign-in does not notice a partial Graph grant
+
+**Evidence:** since 2026-10-20 the junis-hosted sign-in asks for Microsoft Graph's `.default`
+(`EntraPimManagerOptions.EnrollmentScopes`), so a tenant's first consent covers Azure as well.
+Entra shows no consent prompt for `.default` once any grant exists. If an admin has removed one of
+the seven Graph permissions from the tenant's grant, the sign-in still succeeds with fewer scopes
+and the tenant is marked Verified. Found in the code review of that change.
+
+**Why it matters:** the gap surfaces only on the next refresh, when the silent request for the
+explicit scopes fails and the Graph fallback opens a WAM prompt that ends in "Need admin
+approval". With the explicit scopes the sign-in itself failed, and the add-account panel showed
+the consent link.
+
+**What makes the fix safe:** after the `.default` sign-in, compare `AuthenticationResult.Scopes`
+with `Scopes` and treat a missing one as missing consent. First observe on Windows in which form
+WAM returns the scopes (`User.Read` or `https://graph.microsoft.com/User.Read`): a comparison that
+gets the format wrong fails every junis-hosted sign-in.
+

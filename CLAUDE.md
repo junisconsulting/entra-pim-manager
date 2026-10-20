@@ -134,8 +134,9 @@ This is a privileged-access tool; these are not style preferences.
 - **Delegated permissions only**, least privilege. The Graph scopes in that `appsettings.json` plus
   the ARM scope derived per cloud in `EntraCloudInfo.ResourceManagerScopes` (Azure Service
   Management → `user_impersonation`) are the whole surface — adding one is a decision, not a
-  detail, and needs admin consent in every tenant. Graph and ARM scopes are never mixed in one
-  token request.
+  detail, and needs admin consent in every tenant. Junis-hosted sign-in asks for Graph's `.default`,
+  so there the junis registration's permissions are the surface and must equal SECURITY.md's list.
+  Graph and ARM scopes are never mixed in one token request.
 - **A new scope gets a token request of its own**, silent in the background like ARM's, so missing
   consent never opens WAM and never breaks sign-in. Until an admin consents, its feature stays
   visible but disabled, with a hint naming the missing admin consent. No mechanism for this exists

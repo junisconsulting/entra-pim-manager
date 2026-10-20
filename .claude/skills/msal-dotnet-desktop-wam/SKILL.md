@@ -156,14 +156,13 @@ around token acquisition is held across `AcquireTokenInteractive`, so a dialog n
 every *other* account's renewal until the caller's timeout — with several enrollments the whole
 refresh dies before the last one is tried. Give the method a `silentOnly` flag and set it wherever a
 timer, not a click, started the call: `catch (MsalUiRequiredException) when (!silentOnly)`. The
-caller then reports "this tenant has not consented" instead of opening a prompt that, for an
-admin-consent-only scope such as Azure Service Management `user_impersonation`, could not have
-succeeded anyway. A claims challenge is the exception — that one follows a click, and the step-up
+caller then reports "this tenant has not consented" instead of opening a consent prompt in the
+middle of a refresh. A claims challenge is the exception — that one follows a click, and the step-up
 prompt is the whole point.
 
 Why each piece matters:
 
-- **`Prompt.SelectAccount`** — forces WAM to show the account picker. Without this, WAM defaults to whatever single candidate it knows about, and the picker collapses to the auth-method screen with no way back to account selection.
+- **No account on the explicit sign-in** — that is what makes WAM show the account picker. `Prompt.SelectAccount` is set as well, but the 4.66.0 WAM plugin never reads `Prompt` (the Broker DLL has no `get_Prompt` reference); do not rely on it to force a picker, and do not expect `Prompt.Consent` to reach WAM either.
 - **No `OperatingSystemAccount` fallback** — that sentinel tells WAM "use the Windows session account." For Entra PIM Manager that is by definition the *wrong* identity.
 - **`WithAccount(account)` on the silent-retry interactive call** — pins to the account the user originally chose. Without this, WAM might switch accounts mid-session on a claims challenge.
 - **`WithParentActivityOrWindow(...)`** — without this, the auth prompt can pop hidden behind your window or off-screen. For a tray app where no window is focused, see the section below.
@@ -299,14 +298,21 @@ both from `EntraCloudInfo.ResourceManagerScopes`). Rules that follow from MSAL:
 - **One audience per token request.** Never put Graph and ARM scopes into the same `AcquireToken*`
   call. Keep separate scope arrays and separate `AcquireTokenSilent` calls; the same `IAccount` and
   the same DPAPI cache serve both — the refresh token is multi-resource.
-- **Consent at enrollment never covers ARM under WAM.** `WithExtraScopesToConsent` works in the
-  browser flow only: `Microsoft.Identity.Client.Broker` 4.66.0 never reads it (the DLL references
-  `get_Scope` and `get_LoginHint`, not `get_ExtraScopesToConsent`), so the WAM window only sees the
-  Graph scopes. Field test 2026-10-17 (junis-hosted tenant without any consent) matched: the
-  admin's consent in the WAM window became a **user consent** for that account only, with the
-  Graph scopes plus `openid`/`profile`/`offline_access`, and **no** Azure Service Management. The
-  app therefore does not call it. ARM gets consented through tenant admin consent: the
-  adminconsent link, or Enterprise applications → Permissions → Grant admin consent.
+- **Consent at enrollment covers ARM only with `.default`.** `WithExtraScopesToConsent` works in
+  the browser flow only: `Microsoft.Identity.Client.Broker` 4.66.0 never reads it (the DLL
+  references `get_Scope` and `get_LoginHint`, not `get_ExtraScopesToConsent`), so with the
+  explicit Graph scopes the WAM window lists Graph only (field test 2026-10-17: no Azure Service
+  Management). Asking for `https://graph.microsoft.com/.default` instead makes a tenant's **first**
+  consent list every permission the registration declares, Azure Service Management included, and
+  the token stays Graph-only (field test 2026-10-20, through WAM). The admin must tick **Consent on
+  behalf of your organization** — not pre-ticked in that test; without it the grant covers only
+  their own account. A tenant that already granted Graph gets no prompt with `.default`, so its ARM
+  permission still comes from the adminconsent link or Enterprise applications → Permissions →
+  Grant admin consent. The app asks for `.default` for junis-hosted only
+  (`EntraPimManagerOptions.EnrollmentScopes`): a self-hosted registration may declare more than the
+  app needs, and every granted Graph scope would land in every token. `.default` also hides a
+  partial grant: the sign-in succeeds with fewer scopes, and the gap surfaces on the next silent
+  request for the explicit ones.
 - **Already-enrolled accounts** get ARM tokens silently as soon as the tenant has consented
   (consent is evaluated at token issuance). Background ARM reads are **silent-only**
   (`ArmBearerTokenHandler`: `silentOnly` unless a claims challenge follows a click on Activate), so

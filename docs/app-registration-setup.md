@@ -60,13 +60,14 @@ After **Accept**, the browser lands on junis' consent page, which says that the
 consent was granted and for which tenant. After **Cancel** it says that it was
 not. An account without the role mostly ends on Entra's own error page instead.
 
-Consenting in the app's own sign-in window is not the same. In a field test it
-granted only the account that signed in, and only the Microsoft Graph
-permissions, not Azure Service Management: Azure resource roles stayed
-unavailable. If that happened, the app already exists in your tenant. An admin
-opens Enterprise applications → Entra PIM Manager → **Permissions** → **Grant
-admin consent for** your tenant, which grants all eight permissions for every
-user.
+An admin can also consent in the app's own sign-in window, the first time the
+tenant meets the app: the window lists all eight permissions. Tick **Consent on
+behalf of your organization** before **Accept**; without it the consent covers
+only the admin's own account, and nobody else in the tenant can sign in. If the
+tenant had already consented to the Microsoft Graph permissions alone, the window
+does not ask again and Azure resource roles stay unavailable. Then an admin opens
+Enterprise applications → Entra PIM Manager → **Permissions** → **Grant admin
+consent for** your tenant, which grants all eight permissions for every user.
 
 ### Verify the link before you consent
 
@@ -434,10 +435,10 @@ field of the add-account panel is gone.
   on their own once consent is granted, within the hour or after a restart.
 - **"Azure resource roles unavailable: The background sign-in for Azure was
   refused…"** on a tenant group: the Azure token is requested silently, and
-  Windows does not say why it was refused. Usually the Azure permission has no
-  consent, most often because the consent was given in the app's sign-in
-  window, which covers only the Microsoft Graph permissions: grant admin consent
-  ([the consent link](#the-consent-link), or step 4). Otherwise a Conditional
+  Windows does not say why it was refused. Usually the tenant's consent covers
+  the Microsoft Graph permissions but not Azure, for example one given in the
+  sign-in window of a self-hosted registration, which asks for Graph only: grant
+  admin consent ([the consent link](#the-consent-link), or step 4). Otherwise a Conditional
   Access policy on Azure management (Windows Azure Service Management API), such
   as "require MFA", wants more than the Windows sign-in session carries.
 - **An Azure role assigned to a group does not appear, while other Azure roles

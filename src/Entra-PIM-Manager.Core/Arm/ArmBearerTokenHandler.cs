@@ -52,8 +52,8 @@ public sealed class ArmBearerTokenHandler : DelegatingHandler
 
         // No WAM prompt for a background read. Every refresh touches this handler for
         // every enrollment, the interactive fallback runs under MSAL's process-wide
-        // lock, and in a tenant that has not consented to the Azure permission the
-        // prompt cannot succeed anyway — it would only stall the other accounts until
+        // lock, and in a tenant that has not consented to the Azure permission it would
+        // be a consent prompt nobody asked for — it would stall the other accounts until
         // their timeout. A claims challenge is the exception: that one follows a click
         // on Activate, and the step-up prompt is the point.
         var silentOnly = claims is null;
