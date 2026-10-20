@@ -15,8 +15,8 @@ public enum UpdateCheckOutcome
     UpToDate,
 
     /// <summary>
-    /// A newer release exists but is younger than the reputation window an
-    /// unsigned build needs; see <see cref="UpdateService"/>. It becomes
+    /// A newer release exists but is younger than the reputation window a
+    /// fresh release needs; see <see cref="UpdateService"/>. It becomes
     /// offerable on its own once old enough.
     /// </summary>
     Deferred,

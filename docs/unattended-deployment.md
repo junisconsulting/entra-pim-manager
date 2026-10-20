@@ -206,7 +206,7 @@ Two consequences to plan for:
   existing install without asking — a downgrade included — and stops a running tray app first.
   With `-NoStart` it comes back at the next logon.
 
-The scripts are not signed. Where a GPO enforces the `AllSigned` execution policy, it overrides
+The app is signed, the scripts are not. Where a GPO enforces the `AllSigned` execution policy, it overrides
 `-ExecutionPolicy Bypass` and the install fails. Use the two raw commands from step 2 instead, in one
 install command — not yet tested in Intune:
 
@@ -240,9 +240,14 @@ registrations nobody configured.
 
 ## Before you roll this out
 
-Releases are **not code-signed** yet. In managed environments SmartScreen and Defender ASR rules
-can block a freshly published unsigned installer until it builds reputation. See the entry in
-[engineering-backlog.md](engineering-backlog.md) before planning a wide rollout.
+From 1.0.0 on, releases are signed by junis GmbH ([ADR 0003](adr/0003-code-signing.md)). Microsoft
+documents that the Defender ASR rule "Use advanced protection against ransomware" does not block
+validly signed files. The rule "Block executable files from running unless they meet a prevalence,
+age, or trusted list criterion" has no such exemption, so a freshly published release can still be
+blocked there until it builds reputation. The signing certificate changes every few days, so a
+Defender certificate indicator does not last either: use the path exclusions below. For App
+Control, test a publisher rule against a signed release (`New-CIPolicy -Level Publisher`) before
+relying on it.
 
 **How a block shows up in Intune.** The install fails with exit code 1 (`0x80070001`), and no
 `Entra-PIM-Manager` key appears under `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall`.

@@ -35,7 +35,7 @@ Out of scope:
 - Vulnerabilities in upstream dependencies (Microsoft Graph SDK, MSAL, Avalonia, Velopack) — please report those directly to the upstream maintainers
 - Issues that require the attacker to already hold administrative access to the user's machine
 - Social-engineering attacks against end users (e.g. tricking a user into entering justification text into a fake dialog)
-- SmartScreen / Defender warnings about unsigned builds — these are expected for the open-source release until a code-signing certificate is in place
+- SmartScreen warnings about a brand-new release that has not built reputation yet — releases are signed (see [How releases are signed](#how-releases-are-signed)), but SmartScreen and some Defender rules still judge a new file by its reputation
 
 ## The junis-hosted App Registration
 
@@ -118,6 +118,15 @@ junis has no other way to reach you. If your tenant uses the junis-hosted regist
 ### Switch it off in your tenant
 
 Enterprise applications → Entra PIM Manager → Properties → **Enabled for users to sign-in?** = **No**. That stops the app for every user of your tenant, whatever junis does. Deleting the enterprise application also removes the consent, but the app then shows its users a consent link, and any admin who follows it restores access — so disable it rather than delete it. See also [leaving junis-hosted for good](docs/app-registration-setup.md#leaving-junis-hosted) and the recommended [hardening and detection](docs/app-registration-setup.md#recommended-hardening-and-detection) for either way.
+
+## How releases are signed
+
+From 1.0.0 on, every release is signed by **junis GmbH** through Azure Artifact Signing ([ADR 0003](docs/adr/0003-code-signing.md)).
+
+- Only `.github/workflows/release.yml` signs, in the GitHub environment `release`, which admits `v*` tags and `main` only. It signs in to Azure over OIDC as a dedicated managed identity whose one role is *Artifact Signing Certificate Profile Signer* on the profile; no secret exists. The junis-hosted App Registration has no part in it.
+- A release with any unsigned or invalid file fails before it is published: Setup.exe, Update.exe, the launcher stub and the app must be signed by junis GmbH with a timestamp.
+- To check a file: `Get-AuthenticodeSignature` shows `Valid` and a signer `CN=junis GmbH, O=junis GmbH, …`. The certificate lives 72 hours and the issuing Microsoft CA rotates, so do not pin a thumbprint or an issuer.
+- The install and uninstall scripts are not signed.
 
 ## Acknowledgements
 

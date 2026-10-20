@@ -108,10 +108,10 @@ scopes under a name, star it, and it waits next to your pinned roles tomorrow.
 Your eligibilities appear, grouped per tenant. Click one, give a reason, **Activate**.
 
 > [!NOTE]
-> **Releases are not code-signed yet.** Windows may warn about an unknown publisher, and
-> app-control tools can block the installer. The app offers an update only once it is 72 hours
-> old, so security tools have had time to classify it. Status:
-> [engineering backlog](docs/engineering-backlog.md#releases-are-not-code-signed--no-signing-exists-anywhere-in-the-pipeline).
+> **Releases are code-signed by junis GmbH** from 1.0.0 on. SmartScreen may still warn about a
+> brand-new release until it has built reputation, now naming junis GmbH as the publisher. The app
+> offers an update only once it is 72 hours old, so security tools have had time to classify it.
+> Background: [ADR 0003](docs/adr/0003-code-signing.md).
 
 ## Rolling out to a team
 

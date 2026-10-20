@@ -289,10 +289,10 @@ auch bei ausgeschaltetem automatischem Update — der Schalter regelt, ob du ung
 wirst, nicht ob du fragen darfst.
 
 Eine Antwort überrascht regelmäßig: *eine neuere Version existiert, wird aber noch nicht angeboten.*
-Releases werden ihre ersten 72 Stunden absichtlich zurückgehalten. Die Pakete sind nicht signiert,
-und Sicherheitssoftware blockiert Programme, die sie noch nicht eingestuft hat — eine frischere
-Version würde sich installieren und dann nicht starten. Sie wird von allein verfügbar, du musst
-nichts tun.
+Releases werden ihre ersten 72 Stunden absichtlich zurückgehalten. Sicherheitssoftware kann
+Programme blockieren, die sie noch nicht eingestuft hat, auch signierte — eine frischere Version
+würde sich installieren und dann nicht starten. Sie wird von allein verfügbar, du musst nichts
+tun.
 
 ## Wenn etwas nicht funktioniert
 

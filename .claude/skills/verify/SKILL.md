@@ -118,8 +118,9 @@ Traps, all verified (see also `packaging/velopack/README.md`):
   typical on customer VMs). Symptom, seen in the field 2026-08: Setup extracts everything, then
   fails launching the app with `Access is denied (0x80070005)` — "Install Partially Succeeded" —
   or the installed app silently never starts (`CreateProcess` denied before any code runs, so no
-  app log exists). **CI releases are currently unsigned too** (no signing anywhere in the
-  pipeline — see `docs/engineering-backlog.md`, "Releases are not code-signed"). The blocking is
+  app log exists). Releases are signed from 1.0.0 (Azure Artifact Signing in the release
+  workflow); for a signed build to test on such a machine, run the release workflow as a dry run
+  with `keep_setup` (release skill, "Signing"). The blocking is
   often **reputation-based**, not a static whitelist. Field-confirmed 2026-08-14 via Defender
   events: the ASR rule "Use advanced protection against ransomware"
   (`C1DB55AB-C21A-4637-BB3F-A12568109D35`, block mode) denied the freshly released exe as

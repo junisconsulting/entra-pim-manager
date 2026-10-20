@@ -15,12 +15,12 @@ using Velopack.Sources;
 public sealed class UpdateService : IUpdateService
 {
     /// <summary>
-    /// Do not offer a release until it is this old. Our releases are unsigned
-    /// (see the engineering backlog, "Releases are not code-signed"), and
-    /// reputation-based controls in managed environments — field-confirmed:
-    /// the Defender ASR "advanced protection against ransomware" rule — block
-    /// a fresh hash for roughly a day until the cloud has seen it. Offering a
-    /// fresh release there stages a binary that cannot launch.
+    /// Do not offer a release until it is this old. Reputation-based controls
+    /// in managed environments block a fresh file until the cloud has seen it —
+    /// field-confirmed for the unsigned releases up to 0.13.0, and signing does
+    /// not exempt a file from the Defender ASR "prevalence, age, or trusted list"
+    /// rule (docs/adr/0003-code-signing.md). Offering a fresh release there
+    /// stages a binary that cannot launch.
     /// </summary>
     private static readonly TimeSpan MinimumReleaseAge = TimeSpan.FromHours(72);
 
@@ -177,7 +177,7 @@ public sealed class UpdateService : IUpdateService
             if (age < MinimumReleaseAge)
             {
                 _logger.LogInformation(
-                    "Update {Version} is {AgeHours:F0}h old — deferred until {MinimumHours}h (reputation window for unsigned releases)",
+                    "Update {Version} is {AgeHours:F0}h old — deferred until {MinimumHours}h (reputation window for fresh releases)",
                     version,
                     age.TotalHours,
                     MinimumReleaseAge.TotalHours);

@@ -274,9 +274,9 @@ works whether or not automatic updates are on — that switch governs being inte
 allowed to ask.
 
 One answer surprises people: *a newer version exists but is not offered yet.* Releases are held back
-for their first 72 hours, on purpose. The builds are not code-signed, and security software blocks
-binaries it has not classified yet — a fresher release would install and then refuse to start. It
-becomes available on its own; there is nothing to do.
+for their first 72 hours, on purpose. Security software can block a program it has not classified
+yet, a signed one included — a fresher release would install and then refuse to start. It becomes
+available on its own; there is nothing to do.
 
 ## When something does not work
 
