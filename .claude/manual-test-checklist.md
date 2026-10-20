@@ -293,8 +293,6 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
         aktivieren. Der Audit-Alarm an junis security muss dabei auslösen.
   - [ ] In einem Test-Tenant an der junis-Enterprise-App „Enabled for users to sign-in?" =
         No → **Notieren:** Fehlercode; derselbe Hinweis. Zurückstellen.
-- [ ] **Downgrade:** 0.13.0 mit einer Konfiguration starten, die einen junis-hosted-Eintrag
-      enthält → startet und meldet an.
 - [ ] **Gast:** Gastkonto in einem zweiten Tenant, der zugestimmt hat → dessen
       Eligibilities erscheinen.
 - [ ] **Aktivierung über junis-hosted:** in einem Tenant mit Lizenz je eine Verzeichnisrolle,
