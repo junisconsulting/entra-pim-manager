@@ -136,7 +136,7 @@ The repo uses immutable OIDC subjects, so the identity's federated credential su
 `repo:junisconsulting@159626871/entra-pim-manager@1254988551:environment:release`. Before a release
 after any change on the Azure or GitHub side, run the workflow by hand on `main`: a dry run builds,
 signs and verifies, and publishes nothing. With `keep_setup` it keeps the signed Setup.exe
-(`0.0.0-dryrun.N`) for one day; test it in Windows Sandbox, not over a real install, and delete the
+(`0.0.1-dryrun.N`) for one day; test it in Windows Sandbox, not over a real install, and delete the
 artifact once downloaded (`gh api -X DELETE repos/junisconsulting/entra-pim-manager/actions/artifacts/<id>`).
 
 - **`azure/login` fails with `AADSTS700213` / `AADSTS70021`** — no federated credential matches

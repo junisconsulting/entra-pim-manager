@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       keep_setup:
-        description: Keep the signed Setup.exe for one day (version 0.0.0-dryrun.N, for a sandbox)
+        description: Keep the signed Setup.exe for one day (version 0.0.1-dryrun.N, for a sandbox)
         type: boolean
         default: false
 
@@ -48,8 +48,9 @@ jobs:
         shell: pwsh
         run: |
           if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
-              # Never published; the suffix keeps it apart from every real version.
-              $version = '0.0.0-dryrun.${{ github.run_number }}'
+              # Never published; the suffix keeps it apart from every real version. vpk rejects
+              # anything below 0.0.1 (compared with the same suffix), so not 0.0.0.
+              $version = '0.0.1-dryrun.${{ github.run_number }}'
           }
           else {
               $version = '${{ github.ref_name }}'.TrimStart('v')
