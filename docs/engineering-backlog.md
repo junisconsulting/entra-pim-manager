@@ -52,6 +52,13 @@ not a virtualizing rewrite of the list.
 refuses a release with an unsigned file; no release has shipped signed yet. Close this entry with
 the first signed release, once the field check below has run.
 
+Dry run 2026-10-20 (run 39420881704): vpk signed 39 files plus Setup.exe and skipped 247 already
+signed; the installed Update.exe, stub and app were `Valid`, signed `CN=junis GmbH, O=junis GmbH,
+L=Duesseldorf, S=North Rhine-Westphalia, C=DE` (issuer Microsoft ID Verified CS AOC CA 03, a 72-hour
+certificate) with a Microsoft timestamp. A Setup.exe taken from a browser-downloaded ZIP still got
+SmartScreen's "unrecognised app", now naming junis GmbH as publisher: the reputation is new, as
+ADR 0003 expects. A copy without the Mark of the Web is not checked at all.
+
 **Evidence (until 0.13.0):** the release workflow had no signing step, and
 `packaging/velopack/build.ps1` only *warned* "Building UNSIGNED". Every
 published release to date (0.4.x, 0.5.0) ships unsigned binaries — confirmed in the field
