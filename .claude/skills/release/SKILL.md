@@ -129,6 +129,23 @@ Then confirm the release body matches `packaging/release-notes/{version}.md`.
   the whole repo including the Avalonia app; `verify` on Linux covers the same ground, so this
   usually means the tag points at a commit older than your fix.
 
+**Signing** ([ADR 0003](../../../docs/adr/0003-code-signing.md)). The job runs in the GitHub
+environment `release` (admits `v*` tags and `main`): secrets `AZURE_CLIENT_ID` (the managed identity)
+and `AZURE_TENANT_ID` (junis), variables `SIGNING_ENDPOINT`, `SIGNING_ACCOUNT`, `SIGNING_PROFILE`.
+The repo uses immutable OIDC subjects, so the identity's federated credential subject is
+`repo:junisconsulting@159626871/entra-pim-manager@1254988551:environment:release`. Before a release
+after any change on the Azure or GitHub side, run the workflow by hand on `main`: a dry run builds,
+signs and verifies, and publishes and keeps nothing.
+
+- **`azure/login` fails with `AADSTS700213` / `AADSTS70021`** — no federated credential matches
+  the token: compare the subject above, including the IDs, with the credential.
+- **`No token for Artifact Signing.`** — the login worked, but the token request failed; read the
+  `az` error above it.
+- **Signing fails with 403 / `SignerSign()`** — the identity lacks *Artifact Signing Certificate
+  Profile Signer* on the profile, or `SIGNING_ENDPOINT` does not match the account's region.
+- **`Verify signatures` fails** — vpk packed something unsigned; the step lists the files. Never
+  bypass the step: a release is signed or it does not ship.
+
 ## 7. Building a package locally (optional)
 
 On Windows:
@@ -146,12 +163,10 @@ Two traps:
 - **`-p:Version=` is not optional.** The repo carries no `<Version>` property, so without the flag
   the assembly silently gets `1.0.0` — the app footer and Explorer's Details tab then disagree with
   the release. `--packVersion` must match it.
-- **Nothing is signed yet — local builds *and* CI releases.** `build.ps1` accepts `-SignParams`,
-  but the release workflow never passes it and no certificate secret exists; every published
-  release ships unsigned (field-confirmed 2026-08-14). Consequence: app-control environments
-  (AppLocker/WDAC/EDR) block installs and updates unless the customer whitelists each version's
-  hashes. The fix — cert as CI secret + `-SignParams` in the workflow — is tracked in
-  `docs/engineering-backlog.md`, "Releases are not code-signed".
+- **Local builds are unsigned; only the release workflow signs** (Artifact Signing, see "Signing"
+  in section 6). Every release up to 0.13.0 shipped unsigned (field-confirmed 2026-08-14), and
+  app-control environments (AppLocker/WDAC/EDR) block such builds unless the customer allows each
+  version's hashes. A local Setup.exe stays in that category.
 
 ## Out of scope
 

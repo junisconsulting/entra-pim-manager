@@ -123,16 +123,12 @@ hier läuft.
 
 ## Code-Signing
 
-Aktuell werden **unsignierte** Pakete gebaut. Sobald ein Code-Signing-Zertifikat
-für junis GmbH verfügbar ist, wird signiert über:
-
-```powershell
-pwsh ./packaging/velopack/build.ps1 -Version 0.1.0 -SignParams "/a /f cert.pfx /p <pwd> /fd sha256 /tr <timestamp-url>"
-```
-
-`-SignParams` wird an `vpk pack --signParams` durchgereicht. **Release-Artefakte
-müssen signiert sein**, bevor sie in einen Release-Branch promotet werden — die
-Build-Pipeline sollte unsignierte Artefakte an dieser Stelle blockieren.
+Releases signiert `.github/workflows/release.yml` über Azure Artifact Signing
+(`docs/adr/0003-code-signing.md`): Der Workflow schreibt die `metadata.json` und
+übergibt sie mit `-AzureTrustedSignFile`, das an `vpk pack --azureTrustedSignFile`
+durchgereicht wird. Danach bricht der Schritt „Verify signatures" das Release ab,
+sobald eine Datei nicht gültig signiert ist. Lokale Builds bleiben **unsigniert**;
+`-SignParams` (an `vpk pack --signParams`) gibt es nur für ein eigenes Zertifikat.
 
 ## Auto-Update
 

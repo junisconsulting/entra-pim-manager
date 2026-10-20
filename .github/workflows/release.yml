@@ -1,43 +1,60 @@
 name: Release
 
 # Publishing a release is a deliberate act: push a version tag and this builds
-# the Velopack package and creates the GitHub release from it.
+# the Velopack package, signs it and creates the GitHub release from it.
 #
 #   git tag v0.4.1 && git push origin v0.4.1
+#
+# Run by hand on main (Actions → Release → Run workflow), it is a dry run: it builds,
+# signs and verifies like a release, and publishes and keeps nothing.
 #
 # The release body is packaging/release-notes/{version}.md — the same file the
 # installer and the in-app update prompt show, so all three can never drift.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
+  id-token: write   # OIDC sign-in of the signing identity, docs/adr/0003-code-signing.md
 
 jobs:
   release:
     runs-on: windows-latest
 
+    # Holds the signing identity's ids and admits only v* tags and main. Every step in
+    # this job can request the OIDC token that signs as junis GmbH, so its actions are
+    # pinned by commit.
+    environment: release
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Setup .NET 8
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           dotnet-version: '8.0.x'
 
-      - name: Derive version from tag
+      - name: Derive version
         id: version
         shell: pwsh
         run: |
-          $version = '${{ github.ref_name }}'.TrimStart('v')
-          if ($version -notmatch '^\d+\.\d+\.\d+$') {
-              throw "Tag '${{ github.ref_name }}' is not vMAJOR.MINOR.PATCH."
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+              # Never published; the suffix keeps it apart from every real version.
+              $version = '0.0.0-dryrun.${{ github.run_number }}'
+          }
+          else {
+              $version = '${{ github.ref_name }}'.TrimStart('v')
+              if ($version -notmatch '^\d+\.\d+\.\d+$') {
+                  throw "Tag '${{ github.ref_name }}' is not vMAJOR.MINOR.PATCH."
+              }
           }
           "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Require release notes
+        if: github.event_name == 'push'
         shell: pwsh
         run: |
           # Fail before building rather than shipping a release with an empty body.
@@ -50,6 +67,7 @@ jobs:
           dotnet test -c Release --no-build
 
       - name: Fetch previous releases
+        if: github.event_name == 'push'
         continue-on-error: true
         shell: pwsh
         run: |
@@ -70,11 +88,70 @@ jobs:
               --channel win `
               --outputDir packaging/velopack/releases
 
-      - name: Pack with Velopack
+      - name: Sign in to Azure as the signing identity
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Pack with Velopack (signed)
         shell: pwsh
-        run: ./packaging/velopack/build.ps1 -Version ${{ steps.version.outputs.version }}
+        env:
+          SIGNING_ENDPOINT: ${{ vars.SIGNING_ENDPOINT }}
+          SIGNING_ACCOUNT: ${{ vars.SIGNING_ACCOUNT }}
+          SIGNING_PROFILE: ${{ vars.SIGNING_PROFILE }}
+        run: |
+          # GitHub's OIDC assertion expires after five minutes, before build.ps1's publish is
+          # done; fetching the signing token now leaves it in the Azure CLI's cache.
+          az account get-access-token --scope https://codesigning.azure.net/.default --output none
+          if ($LASTEXITCODE -ne 0) { throw 'No token for Artifact Signing.' }
+
+          # The signing library walks a chain of credentials; only the Azure CLI session from
+          # the sign-in above is meant to sign. The names are case-sensitive.
+          $metadata = Join-Path $env:RUNNER_TEMP 'artifact-signing.json'
+          @{
+              Endpoint               = $env:SIGNING_ENDPOINT
+              CodeSigningAccountName = $env:SIGNING_ACCOUNT
+              CertificateProfileName = $env:SIGNING_PROFILE
+              ExcludeCredentials     = @(
+                  'EnvironmentCredential', 'WorkloadIdentityCredential', 'ManagedIdentityCredential',
+                  'SharedTokenCacheCredential', 'VisualStudioCredential', 'VisualStudioCodeCredential',
+                  'AzurePowerShellCredential', 'AzureDeveloperCliCredential', 'InteractiveBrowserCredential')
+          } | ConvertTo-Json | Set-Content $metadata -Encoding utf8
+
+          ./packaging/velopack/build.ps1 -Version ${{ steps.version.outputs.version }} -AzureTrustedSignFile $metadata
+
+      - name: Verify signatures
+        shell: pwsh
+        run: |
+          # The gate: vpk can produce unsigned output without failing. Every PE file must be
+          # validly signed; ours (Setup.exe, Update.exe, the stub, the app) by junis GmbH and
+          # timestamped, so the signature outlives the 72-hour certificate.
+          $releases = 'packaging/velopack/releases'
+          $tree = Join-Path $env:RUNNER_TEMP 'portable'
+          Expand-Archive "$releases/Entra-PIM-Manager-win-Portable.zip" $tree -Force
+          $setup = Get-Item "$releases/Entra-PIM-Manager-win-Setup.exe"
+
+          $files = @($setup) + @(Get-ChildItem $tree -Recurse -File -Include *.exe, *.dll)
+          $invalid = @($files | Get-AuthenticodeSignature | Where-Object Status -ne 'Valid')
+          if ($invalid) {
+              $invalid | Format-Table Path, Status -AutoSize | Out-String -Width 300 | Write-Host
+              throw "$($invalid.Count) of $($files.Count) files are unsigned or invalid."
+          }
+
+          $ours = @($setup) + @(Get-ChildItem $tree -Recurse -File |
+              Where-Object Name -in 'Update.exe', 'Entra PIM Manager.exe', 'Entra-PIM-Manager.exe')
+          if ($ours.Count -ne 4) { throw "Expected Setup.exe, Update.exe, the stub and the app; found $($ours.Name -join ', ')." }
+          foreach ($signature in $ours | Get-AuthenticodeSignature) {
+              if ($signature.SignerCertificate.Subject -notmatch '\bO=junis GmbH\b' -or -not $signature.TimeStamperCertificate) {
+                  throw "$($signature.Path) is not signed by junis GmbH with a timestamp: $($signature.SignerCertificate.Subject)"
+              }
+          }
+          Write-Host "$($files.Count) files validly signed; ours by $(($ours[0] | Get-AuthenticodeSignature).SignerCertificate.Subject)"
 
       - name: Pack for Intune
+        if: github.event_name == 'push'
         shell: pwsh
         run: |
           # The same Setup.exe plus the endpoint scripts, as a Win32 app admins upload into
@@ -84,6 +161,7 @@ jobs:
               -OutputDir packaging/velopack/releases
 
       - name: Create GitHub release
+        if: github.event_name == 'push'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

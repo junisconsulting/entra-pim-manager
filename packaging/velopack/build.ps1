@@ -15,15 +15,19 @@
 
 .PARAMETER SignParams
     signtool parameters for code signing. Leave empty for an unsigned (dev) build.
-    Release artifacts MUST be signed with the junis GmbH code-signing certificate
-    before they are promoted to a release.
+
+.PARAMETER AzureTrustedSignFile
+    Path to the Azure Artifact Signing metadata.json. Releases are signed this way
+    (docs/adr/0003-code-signing.md); .github/workflows/release.yml writes the file.
+    Leave empty for an unsigned (dev) build.
 
 .EXAMPLE
     ./build.ps1 -Version 0.1.0
 #>
 param(
     [string]$Version = "0.1.0",
-    [string]$SignParams = ""
+    [string]$SignParams = "",
+    [string]$AzureTrustedSignFile = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -111,10 +115,14 @@ else {
     Write-Warning "No release notes found at $releaseNotesPath — building without."
 }
 
+# Both given is a mistake; vpk rejects the combination itself.
+if ($AzureTrustedSignFile) {
+    $vpkArgs += @("--azureTrustedSignFile", $AzureTrustedSignFile)
+}
 if ($SignParams) {
     $vpkArgs += @("--signParams", $SignParams)
 }
-else {
+if (-not $AzureTrustedSignFile -and -not $SignParams) {
     Write-Warning "Building UNSIGNED. Release artifacts must be signed with a code-signing certificate before promotion."
 }
 

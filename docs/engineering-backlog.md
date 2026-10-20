@@ -48,8 +48,12 @@ not a virtualizing rewrite of the list.
 
 ## Releases are not code-signed — no signing exists anywhere in the pipeline
 
-**Evidence:** `.github/workflows/release.yml` contains no signing step, no certificate secret and
-never passes `-SignParams`; `packaging/velopack/build.ps1` only *warns* "Building UNSIGNED". Every
+**Status 2026-10-20:** `.github/workflows/release.yml` now signs through Azure Artifact Signing and
+refuses a release with an unsigned file; no release has shipped signed yet. Close this entry with
+the first signed release, once the field check below has run.
+
+**Evidence (until 0.13.0):** the release workflow had no signing step, and
+`packaging/velopack/build.ps1` only *warned* "Building UNSIGNED". Every
 published release to date (0.4.x, 0.5.0) ships unsigned binaries — confirmed in the field
 2026-08-14: `Get-AuthenticodeSignature` on the installed 0.5.0 stub and app exe returns
 `NotSigned`.
