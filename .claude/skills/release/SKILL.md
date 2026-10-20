@@ -135,7 +135,9 @@ and `AZURE_TENANT_ID` (junis), variables `SIGNING_ENDPOINT`, `SIGNING_ACCOUNT`, 
 The repo uses immutable OIDC subjects, so the identity's federated credential subject is
 `repo:junisconsulting@159626871/entra-pim-manager@1254988551:environment:release`. Before a release
 after any change on the Azure or GitHub side, run the workflow by hand on `main`: a dry run builds,
-signs and verifies, and publishes and keeps nothing.
+signs and verifies, and publishes nothing. With `keep_setup` it keeps the signed Setup.exe
+(`0.0.0-dryrun.N`) for one day; test it in Windows Sandbox, not over a real install, and delete the
+artifact once downloaded (`gh api -X DELETE repos/junisconsulting/entra-pim-manager/actions/artifacts/<id>`).
 
 - **`azure/login` fails with `AADSTS700213` / `AADSTS70021`** — no federated credential matches
   the token: compare the subject above, including the IDs, with the credential.
