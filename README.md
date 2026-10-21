@@ -62,8 +62,8 @@ before a role runs out you get a notification, with **↻ Extend time** right on
 ### Every tenant, every kind of PIM, one list
 
 - **Directory roles, PIM for Groups and Azure resource roles** side by side, grouped per tenant.
-- **Several admin accounts in several tenants** — a customer's own App Registration, a
-  multi-tenant one, or a mix. Global and Entra China (21Vianet) work side by side.
+- **Several admin accounts in several tenants** — junis-hosted, a customer's own App
+  Registration, or a mix. Global and Entra China (21Vianet) work side by side.
 - **Search across everything** — role, type, tenant and Azure scope: a subscription name finds
   its roles.
 - **Short aliases** ("EADM") instead of long UPNs, and tenants in the order you drag them.
@@ -114,9 +114,9 @@ Your eligibilities appear, grouped per tenant. Click one, give a reason, **Activ
 
 ## Rolling out to a team
 
-![An admin script creates the App Registration once per tenant, one Intune package serves every tenant, each endpoint installs per user and already configured](docs/images/rollout.svg)
+![Once per tenant an admin either accepts the junis-hosted consent link or creates a self-hosted App Registration with a script; one Intune package serves every tenant, each endpoint installs per user and already configured](docs/images/rollout.svg)
 
-One script per tenant, one Intune Win32 package for all of them — every release carries a
+One consent or one script per tenant, one Intune Win32 package for all of them — every release carries a
 tenant-neutral `.intunewin`. Install and configuration both run in the user's context, and the
 next logon starts the app already configured. Ship your organization's logo along, and it sits
 at the top right of the panel. Arguments, exit codes and the exact Intune values:

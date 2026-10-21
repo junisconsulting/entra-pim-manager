@@ -131,7 +131,7 @@
 
     <!-- Footer -->
     <path d="M556 574.5 H916" stroke="#E4E4E7"/>
-    <text x="572" y="593" font-size="11" fill="#6D28D9" text-decoration="underline">v0.13.0</text>
+    <text x="572" y="593" font-size="11" fill="#6D28D9" text-decoration="underline">v1.0.0</text>
     <text x="616" y="593" font-size="11" fill="#767676">· junis GmbH</text>
     <circle cx="694" cy="589" r="5" fill="none" stroke="#767676" stroke-width="1.4"/>
     <g fill="none" stroke="#555555" stroke-width="1.7">
