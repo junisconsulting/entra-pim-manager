@@ -10,8 +10,7 @@ that step with a command line.
 
 ## 1. Create the App Registration (admin, once per tenant)
 
-**junis-hosted (Global cloud only, available from the release that ships the junis client id):
-skip this step.** An admin of the tenant consents once through
+**junis-hosted (Global cloud only): skip this step.** An admin of the tenant consents once through
 the link in [app-registration-setup.md](app-registration-setup.md#junis-hosted-consent-only), and
 the endpoint command in step 2 leaves out `-ClientId`. The rest of this step is self-hosted.
 
@@ -65,9 +64,9 @@ Entra-PIM-Manager-win-Setup.exe --silent
 %LocalAppData%\Entra-PIM-Manager\current\Entra-PIM-Manager.exe --tenant-id <guid> --client-id {junis-client-id}
 ```
 
-The app's own `--client-id` stays required, also for junis-hosted: pass the junis client id,
-published in [SECURITY.md](../SECURITY.md#the-junis-hosted-app-registration) once the registration
-goes live. For self-hosted, pass your own client id instead.
+The app's own `--client-id` stays required, also for junis-hosted: pass the junis client id
+published in [SECURITY.md](../SECURITY.md#the-junis-hosted-app-registration). For self-hosted, pass
+your own client id instead.
 
 `current\` is the executable Velopack's own install hook invokes, and Velopack replaces its
 contents in place on update — so the path stays valid. The launcher stub one directory up

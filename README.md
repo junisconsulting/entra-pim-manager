@@ -93,8 +93,7 @@ scopes under a name, star it, and it waits next to your pinned roles tomorrow.
 
 ## Quick start
 
-1. **Set up the tenant — an admin, once.** Either **junis-hosted** (Global cloud; available from the release that ships the junis client
-   id): consent once to
+1. **Set up the tenant — an admin, once.** Either **junis-hosted** (Global cloud): consent once to
    the App Registration junis publishes, [through one link](docs/app-registration-setup.md#junis-hosted-consent-only)
    — you need only the tenant id. Or **self-hosted**: run `scripts/create-app-registration.ps1`, or
    follow the [manual steps](docs/app-registration-setup.md), and you end up with a tenant id and a

@@ -43,7 +43,7 @@ Next to a tenant's own App Registration (self-hosted), the app offers one that j
 
 | | |
 | --- | --- |
-| Application (client) id | published here when the registration goes live |
+| Application (client) id | `c66c1206-5b51-4308-94f0-ca3f76708317` |
 | Publisher | junis GmbH, verified, publisher domain `junis.de` |
 | Sign-in audience | organizational accounts in any tenant (`AzureADMultipleOrgs`), no personal Microsoft accounts |
 | Permissions | the seven Microsoft Graph delegated permissions plus Azure Service Management `user_impersonation`, [listed with their ids](#its-permissions) — the same as self-hosted |

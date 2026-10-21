@@ -48,8 +48,7 @@ What happens next depends on how you got the app:
   tenant id, and choose how the app signs in there:
   - **junis-hosted** — "No setup — an admin consents once." The App Registration junis publishes;
     the tenant id is all you type. An admin of your tenant consents to it once, and if nobody has
-    yet, the sign-in panel shows the link to send them. Global cloud only, and available from the
-    release that ships the junis client id.
+    yet, the sign-in panel shows the link to send them. Global cloud only.
   - **self-hosted** — "Your own App Registration (client id)." Your tenant's own App Registration:
     enter its client id. With the cloud set to Entra China, this is the only choice: "Entra China
     needs your own App Registration."

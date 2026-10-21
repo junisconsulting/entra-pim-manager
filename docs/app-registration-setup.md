@@ -25,9 +25,6 @@
 
 ## junis-hosted: consent only
 
-> Available from the release that ships the junis client id; the release notes will say so.
-> Until then, use a self-hosted registration (§1–§5).
-
 Global cloud only — Entra China (21Vianet) needs a self-hosted registration
 ([§7](#7-sovereign-clouds-entra-china--21vianet)).
 
@@ -51,8 +48,8 @@ https://login.microsoftonline.com/{tenant-id}/adminconsent?client_id={junis-clie
 ```
 
 `{tenant-id}` is your tenant's id. `{junis-client-id}` is the junis client id,
-published in [SECURITY.md](../SECURITY.md#the-junis-hosted-app-registration)
-once the registration goes live. When a sign-in fails for missing consent, the
+published in [SECURITY.md](../SECURITY.md#the-junis-hosted-app-registration).
+When a sign-in fails for missing consent, the
 app's add-account panel shows the same link with both filled in, under "Send
 this link to an admin of this tenant:".
 
