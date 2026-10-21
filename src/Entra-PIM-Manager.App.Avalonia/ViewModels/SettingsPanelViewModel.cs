@@ -941,8 +941,17 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             return;
         }
 
-        await handler.Invoke(_lastNetworkReportText);
-        ReportCopied = true;
+        ReportCopied = false;
+        try
+        {
+            await handler.Invoke(_lastNetworkReportText);
+            ReportCopied = true;
+        }
+        catch (Exception ex)
+        {
+            // The clipboard can be held by another process; no "Copied" is the user's signal.
+            _logger.LogWarning(ex, "Copying the network report failed");
+        }
     }
 
     partial void OnIsOpenChanged(bool value) => OnPropertyChanged(nameof(PanelOffsetX));

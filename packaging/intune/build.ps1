@@ -69,7 +69,7 @@ if (Test-Path $content) {
 }
 
 New-Item -ItemType Directory -Path $content | Out-Null
-Copy-Item $SetupExe (Join-Path $content "Entra-PIM-Manager-win-Setup.exe")
+Copy-Item -LiteralPath $SetupExe (Join-Path $content "Entra-PIM-Manager-win-Setup.exe")
 Copy-Item (Join-Path $repoRoot "scripts\install-entra-pim-manager.ps1") $content
 Copy-Item (Join-Path $repoRoot "scripts\uninstall-entra-pim-manager.cmd") $content
 if ($LogoPath) {

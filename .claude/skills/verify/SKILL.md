@@ -5,7 +5,7 @@ description: Project verify procedure for Entra PIM Manager — run after any co
 
 # Entra PIM Manager Verify Procedure
 
-All commands run from the repository root. Steps 1, 2 and 4 always run; steps 3 and 5 are conditional on
+All commands run from the repository root. Steps 1, 2 and 4 always run; steps 3, 5 and 6 are conditional on
 what changed (check `git status` / the session's edits). Report every failure with its
 output — never summarize a red step as "mostly fine".
 
@@ -152,6 +152,15 @@ and a real synopsis. A synopsis that shows the parameter syntax means `Get-Help`
 comment-based help, because `#requires` sits directly above `<#`; keep a blank line between them.
 For a changed `install-entra-pim-manager.ps1`, also dry-run it under `pwsh` with `$env:LOCALAPPDATA`
 on a scratch folder and a stub script in place of the installed exe.
+
+## 6. Consent page — only when `site/consent/` or `build/check-consent-page.js` changed
+
+```bash
+node build/check-consent-page.js
+```
+
+CI runs the same check on every push and pull request, and the Pages workflow before every
+deployment.
 
 ## Reporting
 

@@ -528,7 +528,17 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
             return;
         }
 
-        await _favoritesStore.RemoveAsync(favorite.Favorite.Id);
+        try
+        {
+            await _favoritesStore.RemoveAsync(favorite.Favorite.Id);
+        }
+        catch (Exception ex)
+        {
+            // The chip staying is the user's signal; ValidationMessage belongs to the activation.
+            _logger.LogWarning(ex, "Removing a justification favourite failed");
+            return;
+        }
+
         JustificationFavorites.Remove(favorite);
         OnPropertyChanged(nameof(CanSaveCurrentJustification));
         OnPropertyChanged(nameof(HasFavoritesOrSaveable));
@@ -550,12 +560,22 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
             return;
         }
 
-        var saved = await _favoritesStore.AddAsync(
-            account.TenantId,
-            eligibility.Kind,
-            eligibility.ResourceId,
-            eligibility.ScopeId,
-            Justification.Trim());
+        JustificationFavorite saved;
+        try
+        {
+            saved = await _favoritesStore.AddAsync(
+                account.TenantId,
+                eligibility.Kind,
+                eligibility.ResourceId,
+                eligibility.ScopeId,
+                Justification.Trim());
+        }
+        catch (Exception ex)
+        {
+            // No new chip is the user's signal; ValidationMessage belongs to the activation.
+            _logger.LogWarning(ex, "Saving a justification favourite failed");
+            return;
+        }
 
         if (JustificationFavorites.All(f => f.Favorite.Id != saved.Id))
         {

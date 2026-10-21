@@ -127,12 +127,12 @@ $TenantId = ([guid]$TenantId).ToString()
 # 2. Install. Silent means no dialogs - and no app launch either, which is exactly why
 #    the configuration below is a second, separate call.
 if ($SetupExe) {
-    if (-not (Test-Path $SetupExe)) {
+    if (-not (Test-Path -LiteralPath $SetupExe)) {
         throw "Installer not found: $SetupExe"
     }
 
     Write-Host "Installing Entra PIM Manager..." -ForegroundColor Cyan
-    $setup = Start-Process -FilePath (Resolve-Path $SetupExe) -ArgumentList "--silent" -Wait -PassThru
+    $setup = Start-Process -FilePath (Resolve-Path -LiteralPath $SetupExe) -ArgumentList "--silent" -Wait -PassThru
     if ($setup.ExitCode -ne 0) {
         throw "The installer failed with exit code $($setup.ExitCode)."
     }
