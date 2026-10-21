@@ -104,7 +104,15 @@ The workflow already asserts the asset list, but confirm it on the release page:
 install it, and every already-installed client silently never sees the update. If the feed files are
 missing, fix and re-release rather than leaving it.
 
-Then confirm the release body matches `packaging/release-notes/{version}.md`.
+Then check it from the CLI. The body comes back from the Windows runner with CRLF and one trailing
+blank line, hence `-B --strip-trailing-cr`:
+
+```bash
+gh release view v{version} --json assets -q '.assets[].name'   # the table above, delta included
+gh release download v{version} -p releases.win.json -p RELEASES -D <scratch>   # both list {version} next to the previous one
+diff -B --strip-trailing-cr <(gh release view v{version} --json body -q .body) packaging/release-notes/{version}.md
+gh api repos/junisconsulting/entra-pim-manager/releases/latest --jq .tag_name   # gh release view has no isLatest field here
+```
 
 ## 6. Interpreting failures
 
@@ -128,6 +136,10 @@ Then confirm the release body matches `packaging/release-notes/{version}.md`.
 - **Build fails only in the release job** — it runs `dotnet build -c Release -warnaserror` against
   the whole repo including the Avalonia app; `verify` on Linux covers the same ground, so this
   usually means the tag points at a commit older than your fix.
+- **What does vpk / Update.exe actually do?** Read Velopack's source at the pinned tag, not its XML
+  docs (they say 30 s where `uninstall.rs` gives the uninstall hook 60): find the file with
+  `gh api "search/code?q=<error text>+repo:velopack/velopack" --jq '.items[].path'`, read it with
+  `gh api "repos/velopack/velopack/contents/<path>?ref=<Velopack version in the app .csproj>" --jq .content | base64 -d`.
 
 **Signing** ([ADR 0003](../../../docs/adr/0003-code-signing.md)). The job runs in the GitHub
 environment `release` (admits `v*` tags and `main`): secrets `AZURE_CLIENT_ID` (the managed identity)

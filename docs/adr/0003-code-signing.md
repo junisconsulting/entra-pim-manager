@@ -43,8 +43,15 @@ researched on 2026-10-17.
   one), Handelsregister data no older than 12 months that matches the public record exactly, two
   junis.de mailboxes, and a Verified ID check of a named representative of junis GmbH.
 - Runbook: never delete or recreate the certificate profile (that changes the EKU customers' rules
-  may use), never delete the identity validation, and renew it before it expires. Never sign a
+  may use), never delete the identity validation, and renew it before it expires. Renewal opens 60
+  days before expiry (Renew under Identity validations, Identity Verifier role) and is a full
+  re-validation of 1 to 20 business days; a lapsed validation stops certificate issuance, and every
+  release then fails at signing. On Basic a deleted profile stays "Deleting" for an undocumented
+  time and still counts against the one profile per type, so a replacement needs a new account in
+  the same subscription, which reuses the identity validation. Never sign a
   release with a "Public Trust Test" profile: its signatures die with the 72-hour leaf.
+- One certificate profile signs every junis product, not one per product: a customer's App Control
+  rule on its EKU therefore allows everything junis signs with it.
 - The signing identity is a user-assigned managed identity with *Artifact Signing Certificate Profile
   Signer* on the profile only, reached over OIDC from the `release` environment. The junis-hosted
   registration never gets a credential ([SECURITY.md](../../SECURITY.md)).

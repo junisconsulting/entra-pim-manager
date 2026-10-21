@@ -57,10 +57,12 @@ After **Accept**, the browser lands on junis' consent page, which says that the
 consent was granted and for which tenant. After **Cancel** it says that it was
 not. An account without the role mostly ends on Entra's own error page instead.
 
-An admin can also consent in the app's own sign-in window, the first time the
-tenant meets the app: the window lists all eight permissions. Tick **Consent on
-behalf of your organization** before **Accept**; without it the consent covers
-only the admin's own account, and nobody else in the tenant can sign in. If the
+An admin with Privileged Role Administrator or Global Administrator can also
+consent in the app's own sign-in window, the first time the tenant meets the
+app: the window lists all eight permissions. Tick **Consent on behalf of your
+organization** before **Accept**; without it the consent covers only the admin's
+own account, and nobody else in the tenant can sign in. Cloud Application and
+Application Administrators do not get that box; they use the link. If the
 tenant had already consented to the Microsoft Graph permissions alone, the window
 does not ask again and Azure resource roles stay unavailable. Then an admin opens
 Enterprise applications → Entra PIM Manager → **Permissions** → **Grant admin

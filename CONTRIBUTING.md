@@ -49,6 +49,10 @@ Admin-facing scripts under `scripts/` support an unattended rollout — see
 `packaging/intune/build.ps1` wraps the Setup.exe and these two endpoint scripts into the
 `.intunewin` the release attaches (Windows only).
 
+In these scripts, a path that comes from a parameter goes through `-LiteralPath` (`Test-Path`,
+`Copy-Item`). Without it, `[` and `]` are wildcards, so `Contoso[dark].png` is reported missing or
+silently not copied, even under `$ErrorActionPreference = 'Stop'`.
+
 ## Code conventions
 
 ### Language

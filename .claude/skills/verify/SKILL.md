@@ -1,12 +1,12 @@
 ---
 name: verify
-description: Project verify procedure for Entra PIM Manager — run after any code change. Build with warnings-as-errors and StyleCop, unit tests, the Core coverage gate, and a Velopack win-x64 Setup.exe so a fresh installable build with the current changes is always available for local testing. Use when asked to verify changes, before declaring work done, or when the /verify skill bootstraps.
+description: Project verify procedure for Entra PIM Manager — run after any code change. Build with warnings-as-errors and StyleCop, unit tests, the Core coverage gate, and a Velopack win-x64 Setup.exe so a fresh installable build with the current changes is always available for local testing, and a parse check of changed PowerShell scripts. Use when asked to verify changes, before declaring work done, or when the /verify skill bootstraps.
 ---
 
 # Entra PIM Manager Verify Procedure
 
-All commands run from the repository root. Steps 1, 2 and 4 always run; step 3 is conditional on
-whether `Core` changed (check `git status` / the session's edits). Report every failure with its
+All commands run from the repository root. Steps 1, 2 and 4 always run; steps 3 and 5 are conditional on
+what changed (check `git status` / the session's edits). Report every failure with its
 output — never summarize a red step as "mostly fine".
 
 The projects target `net8.0-windows10.0.17763.0`, but neither `Core` nor `Tests` pulls in a
@@ -135,6 +135,23 @@ Traps, all verified (see also `packaging/velopack/README.md`):
 
 After packing, tell the user the Setup.exe is ready and name the path — they copy that one file to
 Windows, quit the running tray instance, and run it to upgrade in place.
+
+## 5. PowerShell scripts — only when a `.ps1` changed
+
+The build never parses the scripts, and CI runs only `check-coverage.ps1`. `pwsh` on Linux checks them all:
+
+```bash
+pwsh -NoProfile -Command 'foreach ($f in Get-ChildItem scripts/*.ps1, packaging/*/build.ps1, build/*.ps1) {
+  $e = $null; $ast = [Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$e)
+  $ps7 = if ($ast.ScriptRequirements.RequiredPSVersion -lt [version]"7.0") { $ast.FindAll({ param($n) $n.GetType().Name -in "TernaryExpressionAst", "PipelineChainAst" -or "$($n.Operator)" -like "QuestionQuestion*" }, $true).Count } else { 0 }
+  "{0}: parse errors {1}, PS7-only syntax {2}, synopsis: {3}" -f $f.Name, $e.Count, $ps7, ((Get-Help $f.FullName).Synopsis -split "`n")[0] }'
+```
+
+Pass: 0 parse errors, 0 PS7-only syntax (`?:`, `??`, `&&`/`||` break the 5.1 scripts Intune runs),
+and a real synopsis. A synopsis that shows the parameter syntax means `Get-Help` lost the
+comment-based help, because `#requires` sits directly above `<#`; keep a blank line between them.
+For a changed `install-entra-pim-manager.ps1`, also dry-run it under `pwsh` with `$env:LOCALAPPDATA`
+on a scratch folder and a stub script in place of the installed exe.
 
 ## Reporting
 

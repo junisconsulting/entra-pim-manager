@@ -449,3 +449,21 @@ with `Scopes` and treat a missing one as missing consent. First observe on Windo
 WAM returns the scopes (`User.Read` or `https://graph.microsoft.com/User.Read`): a comparison that
 gets the format wrong fails every junis-hosted sign-in.
 
+
+---
+
+## Organization members could take over the consent page's domain
+
+**Evidence:** `gh api orgs/junisconsulting` (2026-10-17, still so 2026-10-21):
+`members_can_create_repositories` is `true`, and not every member is an owner. A member can create
+the organization site `junisconsulting.github.io` and give it a custom domain; GitHub then redirects
+every project site of the organization to that domain, the consent page included. Deferred by the
+maintainer.
+
+**Why it matters:** the consent page is a registered redirect URI (SECURITY.md, "Who can change
+it"). Whoever controls that domain decides what an admin sees after granting consent, outside the
+reviewed `pages.yml` deployment.
+
+**What makes the fix safe:** turn off repository creation for members, or have an owner create
+`junisconsulting.github.io` as an empty repository so the name is taken. Then add the rule to
+SECURITY.md "Who can change it".

@@ -320,10 +320,11 @@ hat, gibt es dort nichts zu aktivieren.
 in diesem Tenant nicht zugestimmt. Ein Admin macht das einmalig, siehe
 [app-registration-setup.md](app-registration-setup.md). Bei einem junis-hosted Tenant zeigt das
 Anmelde-Panel den Link dafür, unter „Send this link to an admin of this tenant:" — markieren,
-kopieren und einem Admin schicken. Bei einem junis-hosted Tenant kann ein Admin auch im
-Anmeldefenster der App zustimmen: vor
+kopieren und einem Admin schicken. Bei einem junis-hosted Tenant kann ein Privileged Role
+Administrator oder Global Administrator auch im Anmeldefenster der App zustimmen: vor
 **Accept** den Haken bei **Consent on behalf of your organization** setzen, sonst gilt die
-Zustimmung nur für sein eigenes Konto. Bleiben die Azure-Ressourcenrollen danach unerreichbar,
+Zustimmung nur für das eigene Konto. Andere Admin-Rollen bekommen diesen Haken nicht; sie nehmen
+den Link. Bleiben die Azure-Ressourcenrollen danach unerreichbar,
 erteilt ein Admin die Zustimmung unter Enterprise applications → Entra PIM Manager → Permissions mit
 „Grant admin consent".
 
