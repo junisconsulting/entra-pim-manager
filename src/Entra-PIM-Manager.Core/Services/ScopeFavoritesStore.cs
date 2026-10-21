@@ -2,13 +2,15 @@ namespace EntraPimManager.Core.Services;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using EntraPimManager.Core.Configuration;
 using EntraPimManager.Core.Models;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
 /// JSON-backed implementation of <see cref="IScopeFavoritesStore"/>. Mirrors
 /// <see cref="JustificationFavoritesStore"/>: in-process semaphore, atomic write via
-/// temp-file + rename, graceful reset on a corrupt file.
+/// temp-file + rename, graceful reset on a corrupt file. A file that cannot be read
+/// throws on every write instead of being replaced.
 /// </summary>
 /// <remarks>
 /// The file is not encrypted — it sits in the user's <c>%LocalAppData%</c> alongside
@@ -57,6 +59,13 @@ public sealed class ScopeFavoritesStore : IScopeFavoritesStore
         {
             _current = await ReadAsync(ct).ConfigureAwait(false);
         }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Startup must not fail over this. Writes re-read the file, so the empty list
+            // shown here is never what one builds on.
+            _logger.LogWarning(ex, "Scope favourites file at {Path} could not be read; showing none", _filePath);
+            _current = [];
+        }
         finally
         {
             _ioLock.Release();
@@ -99,7 +108,8 @@ public sealed class ScopeFavoritesStore : IScopeFavoritesStore
         await _ioLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var all = _current.ToList();
+            // From the file, not from Current: a startup read that failed left Current empty.
+            var all = await ReadAsync(ct).ConfigureAwait(false);
             change(all);
             await WriteAsync(all, ct).ConfigureAwait(false);
             _current = all;
@@ -122,7 +132,7 @@ public sealed class ScopeFavoritesStore : IScopeFavoritesStore
 
         try
         {
-            await using var stream = File.OpenRead(_filePath);
+            await using var stream = await RetryingFile.OpenReadAsync(_filePath, ct).ConfigureAwait(false);
             var favorites = await JsonSerializer
                 .DeserializeAsync<List<ScopeFavorite>>(stream, JsonOptions, ct)
                 .ConfigureAwait(false);
@@ -132,11 +142,12 @@ public sealed class ScopeFavoritesStore : IScopeFavoritesStore
             // deserialization and blow up on first use: every chip reads Scopes.
             return favorites?.Where(favorite => favorite is { Scopes: not null }).ToList() ?? [];
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (JsonException ex)
         {
+            // Only corrupt content resets; a failed read throws rather than seed a write.
             _logger.LogWarning(
                 ex,
-                "Scope favourites file at {Path} is unreadable; resetting it",
+                "Scope favourites file at {Path} is corrupt; resetting it",
                 _filePath);
             return [];
         }

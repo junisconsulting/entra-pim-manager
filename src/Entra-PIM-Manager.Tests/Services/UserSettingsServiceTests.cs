@@ -2,6 +2,7 @@ namespace EntraPimManager.Tests.Services;
 
 using EntraPimManager.Core.Configuration;
 using EntraPimManager.Core.Services;
+using EntraPimManager.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 /// <summary>
@@ -575,6 +576,50 @@ public sealed class UserSettingsServiceTests : IDisposable
         await store.LoadAsync();
 
         Assert.Null(store.Current.AccountAliases);
+    }
+
+    [Fact]
+    public async Task LoadAsync_WhileFileIsLocked_ShowsDefaultsAndTheNextUpdateKeepsTheFile()
+    {
+        // A lock at logon used to cache the defaults, and the first save of the session wrote
+        // them over aliases, pins, ticket systems and the rest.
+        await CreateStore().UpdateAsync(_ => new UserSettings(ThemePreference.Light, 4.0, false, 15));
+
+        var store = CreateStore();
+        using (LockedFile.Hold(_filePath))
+        {
+            await store.LoadAsync();
+        }
+
+        Assert.Equal(UserSettings.Default.Theme, store.Current.Theme);
+
+        await store.UpdateAsync(s => s with { ExpiryWarningMinutes = 20 });
+
+        var fresh = CreateStore();
+        await fresh.LoadAsync();
+        Assert.Equal(ThemePreference.Light, fresh.Current.Theme);
+        Assert.Equal(4.0, fresh.Current.DefaultDurationHours);
+        Assert.Equal(20, fresh.Current.ExpiryWarningMinutes);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhileTheUnreadFileIsStillLocked_ThrowsAndKeepsIt()
+    {
+        await CreateStore().UpdateAsync(_ => new UserSettings(ThemePreference.Light, 4.0, false, 15));
+
+        var store = CreateStore();
+        using (LockedFile.Hold(_filePath))
+        {
+            await store.LoadAsync();
+            await Assert.ThrowsAnyAsync<IOException>(
+                () => store.UpdateAsync(s => s with { ExpiryWarningMinutes = 20 }));
+            Assert.False(File.Exists(_filePath + ".tmp"));
+        }
+
+        var fresh = CreateStore();
+        await fresh.LoadAsync();
+        Assert.Equal(ThemePreference.Light, fresh.Current.Theme);
+        Assert.Equal(15, fresh.Current.ExpiryWarningMinutes);
     }
 
     private UserSettingsService CreateStore()

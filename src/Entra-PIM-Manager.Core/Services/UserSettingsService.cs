@@ -9,7 +9,8 @@ using Microsoft.Extensions.Logging;
 /// JSON-backed implementation of <see cref="IUserSettingsService"/>. Mirrors
 /// <see cref="JustificationFavoritesStore"/>: in-process semaphore, atomic
 /// write via temp-file + rename, graceful fall-back to
-/// <see cref="UserSettings.Default"/> on a missing or corrupt file.
+/// <see cref="UserSettings.Default"/> on a missing or corrupt file. A file that
+/// cannot be read is shown as the defaults but never overwritten with them.
 /// </summary>
 /// <remarks>
 /// The file is not encrypted — it lives in the user's per-user
@@ -30,6 +31,10 @@ public sealed class UserSettingsService : IUserSettingsService
     private readonly ILogger<UserSettingsService> _logger;
     private readonly SemaphoreSlim _ioLock = new(1, 1);
     private UserSettings _current = UserSettings.Default;
+
+    // False while Current holds the defaults because the file could not be read: the next
+    // update reads it first instead of writing the defaults over it.
+    private bool _loaded;
 
     public UserSettingsService(string filePath, ILogger<UserSettingsService> logger)
     {
@@ -52,6 +57,11 @@ public sealed class UserSettingsService : IUserSettingsService
         try
         {
             _current = await ReadAsync(ct).ConfigureAwait(false);
+            _loaded = true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "User settings file at {Path} could not be read; showing defaults", _filePath);
         }
         finally
         {
@@ -68,6 +78,12 @@ public sealed class UserSettingsService : IUserSettingsService
         await _ioLock.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            if (!_loaded)
+            {
+                _current = await ReadAsync(ct).ConfigureAwait(false);
+                _loaded = true;
+            }
+
             // The latest value, read under the lock: a save queued ahead of this one has
             // already published, so its change is the base here instead of being reverted.
             var current = _current;
@@ -110,17 +126,18 @@ public sealed class UserSettingsService : IUserSettingsService
 
         try
         {
-            await using var stream = File.OpenRead(_filePath);
+            await using var stream = await RetryingFile.OpenReadAsync(_filePath, ct).ConfigureAwait(false);
             var settings = await JsonSerializer
                 .DeserializeAsync<UserSettings>(stream, JsonOptions, ct)
                 .ConfigureAwait(false);
             return settings ?? UserSettings.Default;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (JsonException ex)
         {
+            // Only corrupt content falls back; a failed read throws rather than seed a write.
             _logger.LogWarning(
                 ex,
-                "User settings file at {Path} is unreadable; falling back to defaults",
+                "User settings file at {Path} is corrupt; falling back to defaults",
                 _filePath);
             return UserSettings.Default;
         }

@@ -2169,9 +2169,14 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
             }
         }
 
-        // A snapshot, not the live set: under load the update runs later, off the UI thread.
-        List<string> pinned = [.. _pinnedKeys];
-        PersistShellSettings(s => s with { PinnedEligibilities = pinned });
+        // Toggled against the stored pins, not written from _pinnedKeys: after a settings
+        // file that could not be read at startup, _pinnedKeys is empty and would replace them.
+        var isPinned = _pinnedKeys.Contains(key);
+        PersistShellSettings(s =>
+        {
+            var others = (s.PinnedEligibilities ?? []).Where(existing => existing != key);
+            return s with { PinnedEligibilities = isPinned ? [.. others, key] : [.. others] };
+        });
         RebuildShortcutSections();
     }
 

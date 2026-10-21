@@ -53,7 +53,7 @@ Most first-attempt failures here are the two StyleCop rules described in CLAUDE.
 dotnet test src/Entra-PIM-Manager.Tests/Entra-PIM-Manager.Tests.csproj -c Release --no-build -p:EnableWindowsTargeting=true
 ```
 
-Full pass in well under a second. `--no-build` is deliberate: step 1 already built with
+Full pass in about a second; the locked-file tests wait out the stores' short read retry. `--no-build` is deliberate: step 1 already built with
 `-warnaserror`, and a rebuild here would silently drop that flag.
 
 ## 3. Coverage gate — only when `Core` changed

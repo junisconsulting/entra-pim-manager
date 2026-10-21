@@ -467,3 +467,22 @@ reviewed `pages.yml` deployment.
 **What makes the fix safe:** turn off repository creation for members, or have an owner create
 `junisconsulting.github.io` as an empty repository so the name is taken. Then add the rule to
 SECURITY.md "Who can change it".
+
+---
+
+## A settings file locked past the startup still shows defaults for the session
+
+**Evidence:** code review of the store read-failure fix (2026-10-21). The stores now wait about
+350 ms for a locked file (`RetryingFile`) and never write over a file they could not read. A lock
+that outlasts the retry at startup still leaves `UserSettingsService.Current` on the defaults
+until the next successful update re-reads the file, and the accounts list empty until restart
+(`ShellViewModel.InitializeAsync` reads once).
+
+**Why it matters:** whatever is seeded from `Current` in that window acts on the defaults: the
+theme stays the default until restart, and the Settings panel, opened before the re-read, saves
+its seven fields from the defaults it showed (`SettingsPanelViewModel.PersistAsync`), so the
+first change there resets the other six.
+
+**What makes the fix safe:** make the panel write only the field that changed (one transform per
+`On…Changed` handler) instead of all seven, and re-apply the theme on `Changed`. Not observed in
+the field; a scanner holding a small JSON file for longer than the startup is unusual.

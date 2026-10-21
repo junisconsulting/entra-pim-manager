@@ -1,6 +1,7 @@
 namespace EntraPimManager.Tests.Auth;
 
 using EntraPimManager.Core.Auth;
+using EntraPimManager.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 /// <summary>
@@ -183,6 +184,53 @@ public sealed class AccountStoreTests : IDisposable
 
         // Corrupt file is treated as empty; subsequent writes recover.
         Assert.Empty(accounts);
+    }
+
+    [Fact]
+    public async Task UpsertAsync_WhileFileIsLocked_ThrowsAndKeepsEntries()
+    {
+        // A read that fails used to count as "no enrollments", and the write then dropped
+        // every other tenant's account.
+        var store = CreateStore();
+        await store.UpsertAsync(MakeAccount("oid-1"));
+
+        using (LockedFile.Hold(_filePath))
+        {
+            await Assert.ThrowsAnyAsync<IOException>(() => store.UpsertAsync(MakeAccount("oid-2")));
+            Assert.False(File.Exists(_filePath + ".tmp"));
+        }
+
+        var only = Assert.Single(await store.GetAllAsync());
+        Assert.Equal("oid-1", only.ObjectId);
+    }
+
+    [Fact]
+    public async Task RemoveAsync_WhileFileIsLocked_Throws()
+    {
+        // A silent no-op here let the caller purge the token and drop the row anyway.
+        var store = CreateStore();
+        await store.UpsertAsync(MakeAccount("oid-1"));
+
+        using (LockedFile.Hold(_filePath))
+        {
+            await Assert.ThrowsAnyAsync<IOException>(
+                () => store.RemoveAsync("oid-1", "11111111-1111-1111-1111-111111111111"));
+        }
+
+        Assert.Single(await store.GetAllAsync());
+    }
+
+    [Fact]
+    public async Task GetAllAsync_WhileFileIsLocked_Throws()
+    {
+        // No empty fallback for reads: callers decide on it whether to purge a token.
+        var store = CreateStore();
+        await store.UpsertAsync(MakeAccount("oid-1"));
+
+        using (LockedFile.Hold(_filePath))
+        {
+            await Assert.ThrowsAnyAsync<IOException>(() => store.GetAllAsync());
+        }
     }
 
     [Fact]

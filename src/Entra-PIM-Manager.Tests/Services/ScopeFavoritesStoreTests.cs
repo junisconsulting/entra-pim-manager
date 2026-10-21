@@ -2,6 +2,7 @@ namespace EntraPimManager.Tests.Services;
 
 using EntraPimManager.Core.Models;
 using EntraPimManager.Core.Services;
+using EntraPimManager.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 /// <summary>
@@ -151,6 +152,53 @@ public sealed class ScopeFavoritesStoreTests : IDisposable
 
         Assert.True(File.Exists(_filePath));
         Assert.False(File.Exists(_filePath + ".tmp"));
+    }
+
+    [Fact]
+    public async Task LoadAsync_WhileFileIsLocked_ShowsNoneAndTheNextSaveKeepsTheFile()
+    {
+        // The startup read is the only read the store used to make, and every later save
+        // built on it: a lock at logon turned the first save of the day into a wipe.
+        var seed = CreateStore();
+        await seed.AddAsync(Favorite("Project X"));
+        await seed.AddAsync(Favorite("Project Y"));
+
+        var store = CreateStore();
+        using (LockedFile.Hold(_filePath))
+        {
+            await store.LoadAsync();
+        }
+
+        Assert.Empty(store.Current);
+
+        await store.AddAsync(Favorite("Project Z"));
+
+        Assert.Equal(3, store.Current.Count);
+        var fresh = CreateStore();
+        await fresh.LoadAsync();
+        Assert.Equal(3, fresh.Current.Count);
+    }
+
+    [Fact]
+    public async Task AddAsync_WhileFileIsLocked_ThrowsAndKeepsTheFile()
+    {
+        var store = CreateStore();
+        await store.AddAsync(Favorite("Project X"));
+        await store.AddAsync(Favorite("Project Y"));
+        var raised = false;
+        store.Changed += () => raised = true;
+
+        using (LockedFile.Hold(_filePath))
+        {
+            await Assert.ThrowsAnyAsync<IOException>(() => store.AddAsync(Favorite("Project Z")));
+            Assert.False(File.Exists(_filePath + ".tmp"));
+        }
+
+        Assert.False(raised);
+        Assert.Equal(2, store.Current.Count);
+        var fresh = CreateStore();
+        await fresh.LoadAsync();
+        Assert.Equal(2, fresh.Current.Count);
     }
 
     private static ScopeFavorite Favorite(string name) => new(

@@ -2,6 +2,7 @@ namespace EntraPimManager.Core.Services;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using EntraPimManager.Core.Configuration;
 using EntraPimManager.Core.Models;
 using Microsoft.Extensions.Logging;
 
@@ -55,6 +56,12 @@ public sealed class JustificationFavoritesStore : IJustificationFavoritesStore
                 .Where(f => Matches(f, tenantId, kind, resourceId, scopeId))
                 .OrderBy(f => f.CreatedAt)
                 .ToList();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Display only: no chips this time. Add and Remove let the same failure throw.
+            _logger.LogWarning(ex, "Justification favourites file at {Path} could not be read", _filePath);
+            return [];
         }
         finally
         {
@@ -159,17 +166,19 @@ public sealed class JustificationFavoritesStore : IJustificationFavoritesStore
 
         try
         {
-            await using var stream = File.OpenRead(_filePath);
+            await using var stream = await RetryingFile.OpenReadAsync(_filePath, ct).ConfigureAwait(false);
             var favorites = await JsonSerializer
                 .DeserializeAsync<List<JustificationFavorite>>(stream, JsonOptions, ct)
                 .ConfigureAwait(false);
             return favorites ?? (IReadOnlyList<JustificationFavorite>)[];
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (JsonException ex)
         {
+            // Only corrupt content resets. A read that fails (a scanner holding the file) throws:
+            // building a write on an empty list would replace every saved favourite.
             _logger.LogWarning(
                 ex,
-                "Justification favourites file at {Path} is unreadable; resetting it",
+                "Justification favourites file at {Path} is corrupt; resetting it",
                 _filePath);
             return [];
         }

@@ -2,6 +2,7 @@ namespace EntraPimManager.Tests.Services;
 
 using EntraPimManager.Core.Models;
 using EntraPimManager.Core.Services;
+using EntraPimManager.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 
 /// <summary>
@@ -171,6 +172,53 @@ public sealed class JustificationFavoritesStoreTests : IDisposable
         var loaded = await store.GetForRoleAsync(TenantA, PimResourceKind.DirectoryRole, RoleA, TenantScope);
 
         Assert.Empty(loaded);
+    }
+
+    [Fact]
+    public async Task AddAsync_WhileFileIsLocked_ThrowsAndKeepsTheSavedFavorites()
+    {
+        // The data-loss case: a read that fails used to count as "no favourites", and the
+        // write then replaced every saved one with just the new entry.
+        var store = CreateStore();
+        await store.AddAsync(TenantA, PimResourceKind.DirectoryRole, RoleA, TenantScope, "INC-1");
+        await store.AddAsync(TenantA, PimResourceKind.DirectoryRole, RoleB, TenantScope, "INC-2");
+
+        using (LockedFile.Hold(_filePath))
+        {
+            await Assert.ThrowsAnyAsync<IOException>(
+                () => store.AddAsync(TenantA, PimResourceKind.DirectoryRole, RoleA, TenantScope, "INC-3"));
+            Assert.False(File.Exists(_filePath + ".tmp"));
+        }
+
+        Assert.Single(await store.GetForRoleAsync(TenantA, PimResourceKind.DirectoryRole, RoleA, TenantScope));
+        Assert.Single(await store.GetForRoleAsync(TenantA, PimResourceKind.DirectoryRole, RoleB, TenantScope));
+    }
+
+    [Fact]
+    public async Task RemoveAsync_WhileFileIsLocked_Throws()
+    {
+        // Silently "removing" nothing let the chip vanish and come back on the next open.
+        var store = CreateStore();
+        var saved = await store.AddAsync(TenantA, PimResourceKind.DirectoryRole, RoleA, TenantScope, "INC-1");
+
+        using (LockedFile.Hold(_filePath))
+        {
+            await Assert.ThrowsAnyAsync<IOException>(() => store.RemoveAsync(saved.Id));
+        }
+
+        Assert.Single(await store.GetForRoleAsync(TenantA, PimResourceKind.DirectoryRole, RoleA, TenantScope));
+    }
+
+    [Fact]
+    public async Task GetForRoleAsync_WhileFileIsLocked_ReturnsEmpty()
+    {
+        var store = CreateStore();
+        await store.AddAsync(TenantA, PimResourceKind.DirectoryRole, RoleA, TenantScope, "INC-1");
+
+        using (LockedFile.Hold(_filePath))
+        {
+            Assert.Empty(await store.GetForRoleAsync(TenantA, PimResourceKind.DirectoryRole, RoleA, TenantScope));
+        }
     }
 
     private JustificationFavoritesStore CreateStore() =>

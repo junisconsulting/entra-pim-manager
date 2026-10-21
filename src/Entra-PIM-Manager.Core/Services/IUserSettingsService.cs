@@ -26,8 +26,10 @@ public interface IUserSettingsService
 
     /// <summary>
     /// Reads the settings file from disk. Called once during host startup.
-    /// If the file is missing or corrupt, <see cref="Current"/> stays on
-    /// <see cref="UserSettings.Default"/> and no exception is thrown.
+    /// If the file is missing, corrupt or unreadable, <see cref="Current"/> stays on
+    /// <see cref="UserSettings.Default"/> and no exception is thrown. After an unreadable
+    /// file, the next <see cref="UpdateAsync"/> reads it again first and throws if it still
+    /// cannot, so the defaults are never written over the user's settings.
     /// </summary>
     Task LoadAsync(CancellationToken ct = default);
 

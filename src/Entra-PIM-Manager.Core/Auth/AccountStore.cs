@@ -2,6 +2,7 @@ namespace EntraPimManager.Core.Auth;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using EntraPimManager.Core.Configuration;
 using Microsoft.Extensions.Logging;
 
 /// <summary>
@@ -13,7 +14,9 @@ using Microsoft.Extensions.Logging;
 /// <remarks>
 /// The file is not encrypted on disk — it contains metadata only (oid, tenantId,
 /// upn, displayName). Tokens stay in the DPAPI-encrypted MSAL cache. If the file
-/// is corrupt or unreadable, the store rebuilds it empty and logs a warning.
+/// is corrupt, the store rebuilds it empty and logs a warning. If it cannot be read,
+/// every call throws: an empty list here would drop the other enrollments on the next
+/// write, and make the caller purge tokens they still need.
 /// </remarks>
 public sealed class AccountStore : IAccountStore
 {
@@ -197,15 +200,15 @@ public sealed class AccountStore : IAccountStore
 
         try
         {
-            await using var stream = File.OpenRead(_filePath);
+            await using var stream = await RetryingFile.OpenReadAsync(_filePath, ct).ConfigureAwait(false);
             var accounts = await JsonSerializer
                 .DeserializeAsync<List<SignedInAccount>>(stream, JsonOptions, ct)
                 .ConfigureAwait(false);
             return accounts ?? (IReadOnlyList<SignedInAccount>)[];
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (JsonException ex)
         {
-            _logger.LogWarning(ex, "Account store at {Path} is unreadable; resetting it", _filePath);
+            _logger.LogWarning(ex, "Account store at {Path} is corrupt; resetting it", _filePath);
             return [];
         }
     }

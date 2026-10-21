@@ -33,8 +33,9 @@ public interface IScopeFavoritesStore
     IEnumerable<ScopeFavorite> ForRole(string objectId, string tenantId, string resourceId, string scopeId);
 
     /// <summary>
-    /// Reads the file. Called once during host startup; a missing or corrupt file
-    /// leaves <see cref="Current"/> empty and throws nothing.
+    /// Reads the file. Called once during host startup; a missing, corrupt or unreadable
+    /// file leaves <see cref="Current"/> empty and throws nothing. Every write re-reads the
+    /// file and throws if it still cannot be read, so it never replaces sets it did not see.
     /// </summary>
     Task LoadAsync(CancellationToken ct = default);
 
