@@ -48,6 +48,8 @@ public partial class App : Application
     private UpdateController? _updateController;
     private FirstRunSetupController? _firstRunSetupController;
     private WhatsNewController? _whatsNewController;
+    private long _lastErrorToastTicks = -60_000;
+    private bool _shuttingDown;
 
     /// <summary>Service provider for views/code-behind that cannot get DI injection directly.</summary>
     public static IServiceProvider? Services { get; private set; }
@@ -95,6 +97,45 @@ public partial class App : Application
         }
 
         Services = _host.Services;
+
+        // The net behind every command's own catch (.claude/rules/async-commands.md): an
+        // exception nobody caught is logged and reported instead of ending the tray app,
+        // whose icon and expiry alarm the user relies on. One toast a minute at most, so a
+        // timer that keeps failing does not flood the notification center.
+        var toasts = Services.GetRequiredService<IToastService>();
+        Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            Log.Error(e.Exception, "Unhandled exception on the UI thread");
+
+            // A failing shutdown must still end the process, not leave it running on a disposed host.
+            if (_shuttingDown)
+            {
+                return;
+            }
+
+            e.Handled = true;
+            if (Environment.TickCount64 - _lastErrorToastTicks >= 60_000)
+            {
+                _lastErrorToastTicks = Environment.TickCount64;
+                toasts.ShowError("Unexpected error", "An unexpected error occurred. See the log file for details.");
+            }
+        };
+
+        // Off the UI thread nothing keeps the process alive; at least the cause reaches the log.
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            Log.Fatal(e.ExceptionObject as Exception, "Unhandled exception; the app ends");
+            Log.CloseAndFlush();
+        };
+
+        // A discarded task (`_ = SaveAsync()`) that fails past its own catch reaches no handler
+        // above; this logs it, late, when the task is collected.
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            Log.Error(e.Exception, "Unobserved task exception");
+            e.SetObserved();
+        };
+
         _popupController = Services.GetRequiredService<TrayPopupController>();
 
         // Surface the popup when a second launch signals us (single-instance).
@@ -140,6 +181,7 @@ public partial class App : Application
 
         desktop.ShutdownRequested += (_, _) =>
         {
+            _shuttingDown = true;
             _popupController?.PrepareForShutdown();
             _expiryAlertController?.PrepareForShutdown();
             _updateController?.PrepareForShutdown();

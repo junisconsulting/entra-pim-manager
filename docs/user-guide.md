@@ -319,6 +319,10 @@ cannot speed that up.
 **The tray icon is gone.** Windows hid it. Click the **^** arrow next to the clock and drag it back
 onto the bar.
 
+**A notification says "Unexpected error".** Something failed that the app did not expect. It keeps
+running; what you clicked may not have taken effect, so check it and try again. The cause is in
+the log.
+
 **Anything else** — **Settings → Diagnostics → Open log folder**. The log contains no passwords, no
 tokens and no justification text; it is safe to attach to a ticket.
 

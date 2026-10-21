@@ -340,6 +340,10 @@ Die App kann das nicht beschleunigen.
 **Das Tray-Symbol ist weg.** Windows hat es versteckt. Auf den Pfeil **^** neben der Uhr klicken und
 zurück auf die Leiste ziehen.
 
+**Eine Benachrichtigung meldet „Unexpected error".** Etwas ist fehlgeschlagen, womit die App nicht
+gerechnet hat. Sie läuft weiter; was du gerade angeklickt hast, hat womöglich nicht gegriffen, also
+prüfen und noch einmal versuchen. Die Ursache steht im Log.
+
 **Alles andere** — **Settings → Diagnostics → Open log folder**. Das Log enthält keine Passwörter,
 keine Tokens und keinen Begründungstext; es kann bedenkenlos an ein Ticket angehängt werden.
 
