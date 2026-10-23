@@ -138,7 +138,7 @@ is prefilled per tenant if your admin configured one; the number is yours to typ
 
 Then **Activate**. The role moves to ACTIVE within a few seconds.
 
-### Two notices worth reading
+### Notices worth reading
 
 **ℹ This activation requires approval** — you are not getting the role now. The request goes to an
 approver and waits. The row stays visible as pending, and the role activates when they say yes.
@@ -146,6 +146,13 @@ Nothing more to do on your side; chase the approver, not the app.
 
 **ℹ This activation may require additional verification (MFA)** — Windows asks you to confirm during
 the activation.
+
+**⚠ This role activates without asking you to sign in again** — the role's settings in your tenant
+ask for no fresh sign-in, so nothing makes you prove it is you before the role becomes active.
+**How to set it up** opens the guide for your PIM admin
+([docs/fresh-sign-in.md](fresh-sign-in.md)). The notice stays until the role requires an
+authentication context. For most Azure resource roles the app cannot read the role's settings and
+shows neither notice.
 
 **⚠ This group can carry directory roles** — on a PIM-for-Groups entry. Group membership can carry
 admin roles with it, so activating this may grant more than the group's name suggests. Worth knowing

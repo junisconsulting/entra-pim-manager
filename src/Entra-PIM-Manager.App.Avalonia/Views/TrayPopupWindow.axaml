@@ -1732,6 +1732,25 @@
               <Border Background="{DynamicResource WarningSoftBrush}"
                       CornerRadius="6"
                       Padding="10,8"
+                      IsVisible="{Binding ShowFreshSignInHint}">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="⚠ This role activates without asking you to sign in again. Strongly recommended: require a fresh sign-in for every activation with an authentication context."
+                             TextWrapping="Wrap"
+                             FontSize="{DynamicResource FontSmall}"
+                             Foreground="{DynamicResource WarningBrush}" />
+                  <Button Classes="link"
+                          HorizontalAlignment="Left"
+                          Command="{Binding OpenFreshSignInGuideCommand}"
+                          ToolTip.Tip="Opens the guide on GitHub">
+                    <TextBlock Text="How to set it up"
+                               FontSize="{DynamicResource FontSmall}"
+                               TextDecorations="Underline" />
+                  </Button>
+                </StackPanel>
+              </Border>
+              <Border Background="{DynamicResource WarningSoftBrush}"
+                      CornerRadius="6"
+                      Padding="10,8"
                       IsVisible="{Binding ShowRoleAssignableBanner}">
                 <TextBlock Text="⚠ This group can carry directory roles. Activating it may grant more than group membership."
                            TextWrapping="Wrap"

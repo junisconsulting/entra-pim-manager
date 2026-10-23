@@ -117,6 +117,7 @@ public sealed class PolicyService : IPolicyService
                     {
                         RequiresAuthContext = authContext.IsEnabled ?? false,
                         AuthContextClaim = authContext.ClaimValue,
+                        AuthContextKnown = true,
                     };
                     break;
 

@@ -1,7 +1,6 @@
 namespace EntraPimManager.AppAvalonia.Tray;
 
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -143,15 +142,5 @@ public sealed class WhatsNewController
         }
     }
 
-    private void OpenReleases()
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo($"{ShellViewModel.GitHubProjectUrl}/releases") { UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Could not open the releases page");
-        }
-    }
+    private void OpenReleases() => Browser.Open($"{ShellViewModel.GitHubProjectUrl}/releases", "releases page", _logger);
 }

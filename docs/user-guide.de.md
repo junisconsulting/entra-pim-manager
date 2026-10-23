@@ -149,7 +149,7 @@ Ticketsystem ist pro Tenant vorbelegt, falls dein Admin eines hinterlegt hat; di
 
 Dann **Activate**. Die Rolle wandert innerhalb weniger Sekunden nach ACTIVE.
 
-### Zwei Hinweise, die man lesen sollte
+### Hinweise, die man lesen sollte
 
 **ℹ This activation requires approval** — du bekommst die Rolle jetzt nicht. Die Anfrage geht an
 einen Genehmiger und wartet. Die Zeile bleibt als ausstehend sichtbar, und die Rolle wird aktiv,
@@ -158,6 +158,13 @@ die App.
 
 **ℹ This activation may require additional verification (MFA)** — Windows verlangt während der
 Aktivierung eine Bestätigung.
+
+**⚠ This role activates without asking you to sign in again** — die Einstellungen der Rolle in deinem
+Tenant verlangen keine erneute Anmeldung; nichts lässt dich beweisen, dass du es bist, bevor die
+Rolle aktiv wird. **How to set it up** öffnet die Anleitung für deinen PIM-Admin
+([docs/fresh-sign-in.md](fresh-sign-in.md), auf Englisch). Der Hinweis bleibt, bis die Rolle einen
+Authentication Context verlangt. Bei den meisten Azure-Ressourcenrollen kann die App die
+Einstellungen der Rolle nicht lesen und zeigt keinen der beiden Hinweise.
 
 **⚠ This group can carry directory roles** — bei einem PIM-for-Groups-Eintrag. Eine
 Gruppenmitgliedschaft kann Admin-Rollen mitbringen; die Aktivierung gibt dir also womöglich mehr,

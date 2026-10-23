@@ -26,4 +26,19 @@ public sealed record ActivationPolicy
 
     /// <summary>The authentication context claim value (e.g. <c>c1</c>), if any.</summary>
     public string? AuthContextClaim { get; init; }
+
+    /// <summary>
+    /// Whether the role's authentication-context rule came back, switched on or off. Every PIM
+    /// policy carries one, so <c>false</c> means the read failed or found nothing (normal for an
+    /// eligible-only user on an Azure resource role) and <see cref="RequiresAuthContext"/> is a
+    /// default that says nothing about the role.
+    /// </summary>
+    public bool AuthContextKnown { get; init; }
+
+    /// <summary>
+    /// The role is known to activate without an authentication context, so nothing asks the user
+    /// to sign in again. PIM's own MFA setting does not count: an earlier MFA in the session
+    /// satisfies it.
+    /// </summary>
+    public bool LacksFreshSignIn => AuthContextKnown && !RequiresAuthContext;
 }

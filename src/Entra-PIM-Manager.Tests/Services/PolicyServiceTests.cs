@@ -31,6 +31,8 @@ public sealed class PolicyServiceTests
         Assert.True(policy.RequiresApproval);
         Assert.True(policy.RequiresAuthContext);
         Assert.Equal("c1", policy.AuthContextClaim);
+        Assert.True(policy.AuthContextKnown);
+        Assert.False(policy.LacksFreshSignIn);
     }
 
     [Fact]
@@ -48,6 +50,43 @@ public sealed class PolicyServiceTests
         Assert.False(policy.RequiresTicketInfo);
         Assert.False(policy.RequiresApproval);
         Assert.False(policy.RequiresAuthContext);
+
+        // No authentication-context rule came back, so the app cannot tell: no hint.
+        Assert.False(policy.AuthContextKnown);
+        Assert.False(policy.LacksFreshSignIn);
+    }
+
+    [Fact]
+    public async Task GetPolicyAsync_WithTheAuthContextRuleSwitchedOff_LacksAFreshSignIn()
+    {
+        // The usual tenant: the rule exists on every role, but switched off.
+        const string Json = """
+            {"value":[{"id":"pa-ga","policy":{"id":"pol-ga","rules":[
+              {"@odata.type":"#microsoft.graph.unifiedRoleManagementPolicyEnablementRule","id":"Enablement_EndUser_Assignment","enabledRules":["Justification","MultiFactorAuthentication"]},
+              {"@odata.type":"#microsoft.graph.unifiedRoleManagementPolicyAuthenticationContextRule","id":"AuthenticationContext_EndUser_Assignment","isEnabled":false}
+            ]}}]}
+            """;
+        var handler = new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonResponse(Json));
+        var service = new PolicyService(GraphClientTestBuilder.Build(handler), Mock.Of<IPimAzureResourceService>(), new PolicyCache(), NullLogger<PolicyService>.Instance);
+
+        var policy = await service.GetPolicyAsync(TenantA, PimResourceKind.DirectoryRole, "role-def-ga", "/");
+
+        // PIM's own MFA setting does not count as a fresh sign-in.
+        Assert.True(policy.RequiresMfa);
+        Assert.True(policy.AuthContextKnown);
+        Assert.True(policy.LacksFreshSignIn);
+    }
+
+    [Fact]
+    public async Task GetPolicyAsync_WithNoPolicyForTheRole_KnowsNoAuthContext()
+    {
+        var handler = new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonResponse("""{"value":[]}"""));
+        var service = new PolicyService(GraphClientTestBuilder.Build(handler), Mock.Of<IPimAzureResourceService>(), new PolicyCache(), NullLogger<PolicyService>.Instance);
+
+        var policy = await service.GetPolicyAsync(TenantA, PimResourceKind.DirectoryRole, "role-def-ga", "/");
+
+        Assert.False(policy.AuthContextKnown);
+        Assert.False(policy.LacksFreshSignIn);
     }
 
     [Fact]
@@ -165,6 +204,10 @@ public sealed class PolicyServiceTests
 
         Assert.Equal(TimeSpan.FromHours(8), policy.MaximumDuration);
         Assert.True(policy.RequiresJustification);
+
+        // The defaults say nothing about the role, so no claim about a fresh sign-in either.
+        Assert.False(policy.AuthContextKnown);
+        Assert.False(policy.LacksFreshSignIn);
     }
 
     [Fact]
@@ -184,5 +227,7 @@ public sealed class PolicyServiceTests
 
         Assert.Equal(TimeSpan.FromHours(8), policy.MaximumDuration);
         Assert.True(policy.RequiresJustification);
+        Assert.False(policy.AuthContextKnown);
+        Assert.False(policy.LacksFreshSignIn);
     }
 }

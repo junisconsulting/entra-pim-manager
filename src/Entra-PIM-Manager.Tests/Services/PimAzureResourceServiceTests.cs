@@ -372,6 +372,27 @@ public sealed class PimAzureResourceServiceTests
         Assert.True(policy.RequiresApproval);
         Assert.True(policy.RequiresAuthContext);
         Assert.Equal("c1", policy.AuthContextClaim);
+        Assert.True(policy.AuthContextKnown);
+    }
+
+    [Fact]
+    public async Task GetPolicyAsync_WithoutAnAuthContext_LacksAFreshSignIn()
+    {
+        const string Json = """
+            {"value":[{"properties":{
+              "roleDefinitionId":"/subscriptions/sub-1/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c",
+              "effectiveRules":[
+                {"id":"Enablement_EndUser_Assignment","ruleType":"RoleManagementPolicyEnablementRule","enabledRules":["Justification"]},
+                {"id":"AuthenticationContext_EndUser_Assignment","ruleType":"RoleManagementPolicyAuthenticationContextRule","isEnabled":false}
+              ]}}]}
+            """;
+        var service = Build(new FakeHttpMessageHandler(FakeHttpMessageHandler.JsonResponse(Json)));
+
+        var policy = await service.GetPolicyAsync("/subscriptions/sub-1", ContributorId);
+
+        Assert.True(policy.AuthContextKnown);
+        Assert.False(policy.RequiresAuthContext);
+        Assert.True(policy.LacksFreshSignIn);
     }
 
     [Fact]
@@ -385,6 +406,8 @@ public sealed class PimAzureResourceServiceTests
         Assert.Equal(TimeSpan.FromHours(8), policy.MaximumDuration);
         Assert.True(policy.RequiresJustification);
         Assert.False(policy.RequiresAuthContext);
+        Assert.False(policy.AuthContextKnown);
+        Assert.False(policy.LacksFreshSignIn);
     }
 
     [Fact]

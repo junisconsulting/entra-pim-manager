@@ -3,6 +3,7 @@ namespace EntraPimManager.AppAvalonia.ViewModels;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EntraPimManager.AppAvalonia.Services;
 using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Collections;
 using EntraPimManager.Core.Configuration;
@@ -37,6 +38,9 @@ using Microsoft.Extensions.Options;
 /// </summary>
 public sealed partial class ActivationPanelViewModel : ObservableObject
 {
+    /// <summary>Linked from the fresh-sign-in hint. Installed apps open it, so the path never changes.</summary>
+    private const string FreshSignInGuideUrl = ShellViewModel.GitHubProjectUrl + "/blob/main/docs/fresh-sign-in.md";
+
     /// <summary>Time budget for the activation / validation Graph call.</summary>
     private static readonly TimeSpan GraphCallTimeout = TimeSpan.FromSeconds(30);
 
@@ -238,6 +242,9 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
     /// <summary>Whether to show the "may require step-up verification" banner.</summary>
     public bool ShowAuthContextBanner => Policy.RequiresAuthContext;
 
+    /// <summary>Whether to recommend a fresh sign-in: the role's settings were read and ask for none.</summary>
+    public bool ShowFreshSignInHint => Policy.LacksFreshSignIn;
+
     /// <summary>
     /// Whether to warn that this group can carry directory roles.
     /// </summary>
@@ -432,6 +439,7 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
         OnPropertyChanged(nameof(RequiresTicket));
         OnPropertyChanged(nameof(ShowApprovalBanner));
         OnPropertyChanged(nameof(ShowAuthContextBanner));
+        OnPropertyChanged(nameof(ShowFreshSignInHint));
     }
 
     partial void OnIsValidatingChanged(bool value) => OnPropertyChanged(nameof(IsBusy));
@@ -481,6 +489,9 @@ public sealed partial class ActivationPanelViewModel : ObservableObject
 
     [RelayCommand]
     private Task ValidateAsync() => SubmitAsync(isValidationOnly: true);
+
+    [RelayCommand]
+    private void OpenFreshSignInGuide() => Browser.Open(FreshSignInGuideUrl, "fresh sign-in guide", _logger);
 
     [RelayCommand]
     private Task SubmitAsync() => SubmitAsync(isValidationOnly: false);

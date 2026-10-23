@@ -342,6 +342,7 @@ public sealed class PimAzureResourceService : IPimAzureResourceService
                     {
                         RequiresAuthContext = Flag(rule, "isEnabled"),
                         AuthContextClaim = string.IsNullOrEmpty(claim) ? null : claim,
+                        AuthContextKnown = true,
                     };
                     break;
                 }

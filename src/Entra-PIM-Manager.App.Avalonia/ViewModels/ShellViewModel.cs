@@ -1,7 +1,6 @@
 namespace EntraPimManager.AppAvalonia.ViewModels;
 
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.Reflection;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -800,7 +799,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
 
     /// <summary>Opens the GitHub project page in the user's default browser.</summary>
     [RelayCommand]
-    private void OpenGitHub() => OpenInBrowser(GitHubProjectUrl, "GitHub project page");
+    private void OpenGitHub() => Browser.Open(GitHubProjectUrl, "GitHub project page", _logger);
 
     /// <summary>
     /// Opens the GitHub release this build came from — the footer version is the
@@ -822,23 +821,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         var url = isTagged
             ? $"{GitHubProjectUrl}/releases/tag/{VersionText}"
             : $"{GitHubProjectUrl}/releases";
-        OpenInBrowser(url, "release page");
-    }
-
-    /// <summary>
-    /// Hands a URL to the user's default browser. Shared so the footer's two links
-    /// cannot drift apart in how they fail — neither is worth an error in the UI.
-    /// </summary>
-    private void OpenInBrowser(string url, string target)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to open the {Target}", target);
-        }
+        Browser.Open(url, "release page", _logger);
     }
 
     partial void OnFilterTextChanged(string value) => ApplyFilter();
