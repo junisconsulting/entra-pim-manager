@@ -494,6 +494,21 @@ Aktivierung und beantragt sofort neu.
 - [ ] Log prüfen: `Deactivation for re-activation submitted …` vorhanden, **keine** Begründung und
       **kein** Token im Klartext.
 
+### 3c. Hinweis „erneute Anmeldung" — ab 1.1.0
+
+Die App kennt den Auth Context einer Rolle nur, wenn sie deren PIM-Einstellungen lesen darf. Bei
+Azure-Rollen darf ein nur Berechtigter das meist nicht; dann zeigt sie bewusst gar nichts.
+
+- [ ] Verzeichnisrolle **ohne** Auth Context öffnen → Banner „⚠ This role activates without asking
+      you to sign in again. Strongly recommended: …" mit Link **How to set it up**. Der Link öffnet
+      `docs/fresh-sign-in.md` auf GitHub; das Popup verschwindet hinter dem Browser, beim
+      Wiederöffnen ist das Formular unverändert da.
+- [ ] Dieselbe Rolle erneut öffnen → der Hinweis ist wieder da (nicht wegklickbar).
+- [ ] Rolle **mit** Auth Context → nur „ℹ This activation may require additional verification
+      (MFA).", kein neuer Hinweis.
+- [ ] PIM-for-Groups-Eintrag ohne Auth Context → Hinweis erscheint.
+- [ ] Azure-Ressourcenrolle als nur Berechtigter → **keines** der beiden Banner.
+
 ## 4. Tray-App & UI — Phase 4
 
 - [ ] App startet ohne sichtbares Hauptfenster, nur Tray-Icon.
@@ -828,6 +843,12 @@ gesetzt, mindestens ein Konto enrolled), dann die neue Version darüber installi
 - [ ] **Claims-Challenge / Conditional Access:** Aktivierung einer Rolle, die
       eine MFA-/Auth-Context-Step-up erfordert → WAM-Re-Auth-Prompt erscheint,
       Aktivierung danach erfolgreich.
+- [ ] **Gesperrte Datei (ab 1.1.0):** Mindestens zwei gespeicherte Begründungen vorhanden. In
+      PowerShell die Datei sperren wie ein Virenscanner:
+      `$f = [IO.File]::Open("$env:LOCALAPPDATA\junis\Entra-PIM-Manager\favorites.json", 'Open', 'ReadWrite', 'None')`.
+      In der App eine weitere Begründung als Favorit speichern → kein neuer Chip, die App läuft
+      weiter, das Log hat `Saving a justification favourite failed`. `$f.Close()`, erneut
+      speichern → klappt, und **alle** alten Favoriten sind noch da.
 - [ ] **Tenant ohne ARM-Consent:** Tenant-Gruppe zeigt „Azure resource roles
       unavailable: …", Directory-Rollen und Gruppen laden weiter; nach erteiltem
       Consent erscheinen die Azure-Zeilen (spätestens nach Neustart).
