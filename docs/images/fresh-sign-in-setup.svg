@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 360" width="960" height="360">
+  <title>Setting up a fresh sign-in once per tenant in the Entra admin center: create an authentication context and publish it to apps, create a Conditional Access policy that targets it for the eligible admins, excludes emergency access accounts, grants phishing-resistant MFA and asks every time, then require the context on activation in each role's PIM settings</title>
+  <style>
+    text { font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif; }
+    .top { font-size: 13px; font-weight: 600; fill: #64748B; }
+    .h { font-size: 15px; font-weight: 600; fill: #0F172A; }
+    .mono { font-size: 11px; fill: #6D28D9; font-family: "Cascadia Code", Consolas, Menlo, monospace; }
+    .t { font-size: 12px; fill: #475569; }
+    .ok { font-size: 12.5px; fill: #0F172A; }
+    .k { font-size: 12px; fill: #64748B; }
+    .v { font-size: 12px; fill: #0F172A; }
+    .res { font-size: 11.5px; fill: #64748B; }
+    .pick { font-size: 12.5px; font-weight: 700; fill: #6D28D9; }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7C3AED"/>
+    </marker>
+    <path id="check" d="M-4 0 l2.8 3 l5.2 -6" fill="none" stroke="#15803D" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </defs>
+  <rect x="0.5" y="0.5" width="959" height="359" rx="16" fill="#F8FAFC" stroke="#E2E8F0"/>
+  <text x="24" y="34" class="top">Once per tenant, in the Entra admin center</text>
+  <text x="936" y="34" font-size="12" fill="#94A3B8" text-anchor="end">Needs Conditional Access Administrator + Privileged Role Administrator</text>
+
+  <!-- 1: Authentication context -->
+  <rect x="24" y="52" width="288" height="284" rx="12" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <circle cx="54" cy="80" r="11" fill="#7C3AED"/><text x="54" y="84.5" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">1</text>
+  <text x="74" y="80" class="h">Authentication context</text>
+  <text x="74" y="97" class="mono">Conditional Access</text>
+  <text x="40" y="124" class="t">Create one, for example:</text>
+  <rect x="36" y="136" width="264" height="132" rx="8" fill="#F8FAFC" stroke="#E2E8F0"/>
+  <rect x="52" y="152" width="122" height="26" rx="13" fill="#F5F3FF" stroke="#DDD6FE"/>
+  <text x="113" y="169.5" class="pick" text-anchor="middle">PIM activation</text>
+  <use href="#check" transform="translate(58 206)"/><text x="70" y="210" class="ok">Publish to apps</text>
+  <text x="52" y="244" class="k">Without it, PIM cannot offer it.</text>
+  <text x="40" y="311" class="res">The name is yours to choose</text>
+
+  <path d="M314 194 H332" stroke="#7C3AED" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 2: Conditional Access policy -->
+  <rect x="336" y="52" width="288" height="284" rx="12" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <circle cx="366" cy="80" r="11" fill="#7C3AED"/><text x="366" y="84.5" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">2</text>
+  <text x="386" y="80" class="h">CA policy</text>
+  <text x="386" y="97" class="mono">Conditional Access → Policies</text>
+  <text x="352" y="124" class="t">New policy:</text>
+  <rect x="348" y="136" width="264" height="132" rx="8" fill="#F8FAFC" stroke="#E2E8F0"/>
+  <text x="362" y="160" class="k">Target</text><text x="434" y="160" class="v">the context</text>
+  <text x="362" y="183" class="k">Users</text><text x="434" y="183" class="v">your eligible admins</text>
+  <text x="362" y="206" class="k">Exclude</text><text x="434" y="206" class="v">emergency access accounts</text>
+  <text x="362" y="229" class="k">Grant</text><text x="434" y="229" class="v">phishing-resistant MFA</text>
+  <text x="362" y="252" class="k">Frequency</text><text x="434" y="252" class="v" font-weight="700">Every time</text>
+  <text x="352" y="294" class="res">Turn it on for a pilot group first:</text>
+  <text x="352" y="311" class="res">report-only asks nobody</text>
+
+  <path d="M626 194 H644" stroke="#7C3AED" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- 3: PIM role settings -->
+  <rect x="648" y="52" width="288" height="284" rx="12" fill="#FFFFFF" stroke="#E2E8F0"/>
+  <circle cx="678" cy="80" r="11" fill="#7C3AED"/><text x="678" y="84.5" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="middle">3</text>
+  <text x="698" y="80" class="h">PIM role settings</text>
+  <text x="698" y="97" class="mono">each role you protect</text>
+  <text x="664" y="124" class="t">On activation, require:</text>
+  <rect x="660" y="136" width="264" height="132" rx="8" fill="#F8FAFC" stroke="#E2E8F0"/>
+  <text x="676" y="160" class="v">Conditional Access</text>
+  <text x="676" y="178" class="v">authentication context</text>
+  <rect x="676" y="190" width="122" height="26" rx="13" fill="#F5F3FF" stroke="#DDD6FE"/>
+  <text x="737" y="207.5" class="pick" text-anchor="middle">PIM activation</text>
+  <path d="M672 232.5 H912" stroke="#E2E8F0"/>
+  <text x="676" y="254" class="k">Entra roles · groups · Azure roles</text>
+  <text x="664" y="294" class="res">Then every activation asks</text>
+  <text x="664" y="311" class="res">you to sign in again</text>
+</svg>

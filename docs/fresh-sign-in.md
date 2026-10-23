@@ -1,70 +1,51 @@
 # A fresh sign-in for every activation
 
-Entra PIM Manager makes activating a role take three clicks. Unless your tenant asks for it,
-nothing in those three clicks makes you prove again that it is you: the sign-in you did earlier,
-and the tokens Windows keeps from it, are enough for the role to become active. Whoever sits at
-your unlocked PC, or holds your stolen tokens, gets the same three clicks.
+**Three settings in the Entra admin center, and every PIM activation asks you to sign in again —
+with a passkey in Windows Hello, a glance or a touch.**
 
-This page shows how to make every activation ask for a fresh sign-in. The activation panel points
-out each role that does not, with "⚠ This role activates without asking you to sign in again" and
-a link here.
+You came here from "⚠ This role activates without asking you to sign in again" in Entra PIM Manager.
 
-## Why PIM's MFA setting is not enough
-
-PIM's role setting **On activation, require multifactor authentication** checks that the session
-has an MFA claim, not that you just signed in. Microsoft says so: "Users might not be prompted for
-multifactor authentication if they authenticated with strong credentials or provided multifactor
-authentication earlier in the session"
-([PIM role settings](https://learn.microsoft.com/entra/id-governance/privileged-identity-management/pim-how-to-change-default-settings#on-activation-require-multifactor-authentication)).
-
-Only a **Conditional Access authentication context** with the sign-in frequency **Every time**
-asks for a fresh sign-in on each activation, and Entra checks and logs it. Every tenant that can use
-PIM is licensed for it: PIM needs Microsoft Entra ID P2 or Entra ID Governance, and both come with
-or require P1, which covers Conditional Access.
+![Without an authentication context, the morning's sign-in is enough to activate a role hours later, for anyone at the unlocked PC; with an authentication context set to Every time, Windows asks again on each activation, and Entra checks and logs it](images/fresh-sign-in-why.svg)
 
 ## Set it up
 
-You need Conditional Access Administrator and Privileged Role Administrator; you can activate both
-with Entra PIM Manager.
+![Once per tenant: 1, an authentication context, published to apps; 2, a Conditional Access policy for it: eligible admins, emergency access accounts excluded, phishing-resistant MFA, sign-in frequency every time; 3, in each role's PIM settings, require that context on activation](images/fresh-sign-in-setup.svg)
 
-1. Under **Conditional Access → Authentication contexts**, create a context, for example
-   "PIM activation", and tick **Publish to apps**.
-2. Create a Conditional Access policy:
-   - **Target resources:** that authentication context.
-   - **Users:** all users, or the group of your eligible admins. Not the directory role: nobody
-     holds it yet at the moment of activation. Exclude your emergency access accounts.
-   - **Grant:** require an authentication strength, ideally phishing-resistant MFA.
-   - **Session:** sign-in frequency **Every time**.
-
-   Turn it on for a pilot group first. A policy in report-only mode does not ask anyone anything.
-3. In the PIM settings of each role (Entra roles, groups and Azure resource roles alike), set
-   **On activation, require Microsoft Entra Conditional Access authentication context** to that
-   context.
-
-Microsoft's walkthrough:
+In this order: the policy has to exist and be on before PIM requires the context. Microsoft's
+walkthrough:
 [On activation, require Conditional Access authentication context](https://learn.microsoft.com/entra/id-governance/privileged-identity-management/pim-how-to-change-default-settings#on-activation-require-microsoft-entra-conditional-access-authentication-context).
 
 ## Answer it with a glance or a touch
 
-A fresh sign-in on every activation only stays painless if the sign-in is. **Microsoft Entra
-passkey on Windows** stores a passkey for your admin account in the PC's Windows Hello, without
-joining or registering the device, so the prompt becomes a face, fingerprint or PIN, and it counts
-as phishing-resistant MFA. An admin allows it once under **Authentication methods → Passkey
-(FIDO2)** with a passkey profile that permits Windows Hello; each admin then registers the passkey
-under [Security info](https://mysignins.microsoft.com/security-info). Microsoft's guide:
-[Microsoft Entra passkey on Windows](https://learn.microsoft.com/entra/identity/authentication/how-to-authentication-entra-passkeys-on-windows).
-An account that already has Windows Hello for Business on that PC uses that instead.
+- **Microsoft Entra passkey on Windows** keeps a passkey for your admin account in the PC's
+  Windows Hello. No device join needed, and it counts as phishing-resistant MFA.
+- **Allow it once:** Authentication methods → Passkey (FIDO2), with a passkey profile that permits
+  Windows Hello.
+- **Register it, per admin and PC:** [Security info](https://mysignins.microsoft.com/security-info)
+  → Add sign-in method → Passkey.
+  [Microsoft's guide](https://learn.microsoft.com/entra/identity/authentication/how-to-authentication-entra-passkeys-on-windows)
 
-## What changes in Entra PIM Manager
+<details>
+<summary><b>Good to know</b></summary>
 
-- The hint disappears from the role. Instead, "ℹ This activation may require additional
-  verification (MFA)" tells you that Windows will ask during the activation. The app sees only
-  that the role asks for a context, not the Conditional Access policy behind it: make sure that
-  policy is on, targets the context, and uses **Every time**, or the context asks for nothing.
-- Each activation brings up the Windows sign-in, for directory roles, PIM for Groups and Azure
-  resource roles alike. Entra waives the prompt for further activations within ten minutes, so
-  ticking three subscriptions asks once.
-- An account added with a device-code sign-in cannot satisfy an authentication context. Remove it
-  and add it again with the normal sign-in.
-- For most Azure resource roles the app cannot read the role's settings with your permissions, so
-  it shows no hint either way. The setting applies all the same.
+- **Why PIM's own MFA setting is not enough.** "On activation, require multifactor
+  authentication" checks for an MFA in the session. Microsoft: "Users might not be prompted for
+  multifactor authentication if they authenticated with strong credentials or provided
+  multifactor authentication earlier in the session"
+  ([PIM role settings](https://learn.microsoft.com/entra/id-governance/privileged-identity-management/pim-how-to-change-default-settings#on-activation-require-multifactor-authentication)).
+- **Licence.** Every tenant that can use PIM is licensed for this: PIM needs Microsoft Entra ID P2
+  or Entra ID Governance, and both come with or require P1, which covers Conditional Access.
+- **The app sees the context, not the policy.** After step 3 the hint gives way to "ℹ This
+  activation may require additional verification (MFA)". Whether anything is asked depends on the
+  policy: switched off or in report-only mode, it asks nobody.
+- **Ten minutes.** Entra waives the prompt for further activations within ten minutes, for
+  directory roles, PIM for Groups and Azure resource roles alike, so ticking three subscriptions
+  asks once.
+- **Device-code accounts** cannot satisfy an authentication context. Remove the account and add
+  it again with the normal sign-in.
+- **Azure resource roles.** For most of them the app cannot read the role's settings with your
+  permissions, so it shows no hint either way. The setting applies all the same.
+- **Windows Hello for Business.** An account that already has it on that PC uses it instead of a
+  passkey.
+
+</details>
