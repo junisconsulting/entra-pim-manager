@@ -6,10 +6,15 @@ with a passkey in Windows Hello, a glance or a touch.**
 You came here from "⚠ This role activates without asking you to sign in again" in Entra PIM Manager.
 
 > [!IMPORTANT]
-> **Only an admin with the right roles can set this up** — often not the person who saw the hint.
-> It takes **Conditional Access Administrator** for the policy, and for the roles' PIM settings
-> **Privileged Role Administrator** (Entra roles, role-assignable groups) or **Owner / User Access
-> Administrator** on the resource (Azure roles). Not you? Send them this page.
+> **Only an admin with these rights can set this up** — often not the person who saw the hint.
+> Not you? Send them this page.
+>
+> | For | Least privilege | Also works |
+> | --- | --- | --- |
+> | Steps 1 and 2: context and policy | Conditional Access Administrator | Security Administrator, Global Administrator |
+> | Step 3: Entra roles | Privileged Role Administrator | Global Administrator |
+> | Step 3: groups | Privileged Role Administrator; Groups Administrator for groups that cannot carry roles | Global Administrator, an owner of the group |
+> | Step 3: Azure roles | User Access Administrator on the resource | Owner; a Global Administrator who elevated access to Azure |
 
 ![Without an authentication context, the morning's sign-in is enough to activate a role hours later, for anyone at the unlocked PC; with an authentication context set to Every time, Windows asks again on each activation, and Entra checks and logs it](images/fresh-sign-in-why.svg)
 
@@ -25,8 +30,8 @@ walkthrough:
 
 - **Microsoft Entra passkey on Windows** keeps a passkey for your admin account in the PC's
   Windows Hello. No device join needed, and it counts as phishing-resistant MFA.
-- **Allow it once** (Authentication Policy Administrator): Authentication methods → Passkey
-  (FIDO2), with a passkey profile that permits Windows Hello.
+- **Allow it once** (Authentication Policy Administrator or Global Administrator): Authentication
+  methods → Passkey (FIDO2), with a passkey profile that permits Windows Hello.
 - **Register it, per admin and PC:** [Security info](https://mysignins.microsoft.com/security-info)
   → Add sign-in method → Passkey.
   [Microsoft's guide](https://learn.microsoft.com/entra/identity/authentication/how-to-authentication-entra-passkeys-on-windows)
