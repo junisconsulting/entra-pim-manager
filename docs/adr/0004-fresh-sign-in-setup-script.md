@@ -35,5 +35,6 @@ separately.
 - The script is signed in the release workflow like the binaries. Under `AllSigned` it still asks
   once per release whether to trust the publisher, because the 72-hour certificate changes daily
   (ADR 0003).
-- The admin who runs it needs Conditional Access Administrator and Privileged Role Administrator,
-  which they can activate with the app itself.
+- The admin who runs it needs Conditional Access Administrator, and for the roles' PIM settings
+  Privileged Role Administrator (Entra roles, role-assignable groups) or Owner / User Access
+  Administrator on the resource (Azure roles), which they can activate with the app itself.

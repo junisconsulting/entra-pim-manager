@@ -20,7 +20,7 @@
   </defs>
   <rect x="0.5" y="0.5" width="959" height="359" rx="16" fill="#F8FAFC" stroke="#E2E8F0"/>
   <text x="24" y="34" class="top">Once per tenant, in the Entra admin center</text>
-  <text x="936" y="34" font-size="12" fill="#94A3B8" text-anchor="end">Needs Conditional Access Administrator + Privileged Role Administrator</text>
+  <text x="936" y="34" font-size="12" fill="#94A3B8" text-anchor="end">Needs admin rights on Conditional Access and on the roles</text>
 
   <!-- 1: Authentication context -->
   <rect x="24" y="52" width="288" height="284" rx="12" fill="#FFFFFF" stroke="#E2E8F0"/>
