@@ -22,7 +22,28 @@ You came here from "⚠ This role activates without asking you to sign in again"
 
 ![Once per tenant: 1, an authentication context, published to apps; 2, a Conditional Access policy for it: eligible admins, emergency access accounts excluded, phishing-resistant MFA, sign-in frequency every time; 3, in each role's PIM settings, require that context on activation](images/fresh-sign-in-setup.svg)
 
-In this order: the policy has to exist and be on before PIM requires the context. Microsoft's
+**With the script.** [`scripts/setup-cap-and-authcontext-for-pim.ps1`](../scripts/setup-cap-and-authcontext-for-pim.ps1)
+does all three steps for Entra roles, groups and Azure roles. It asks which areas to cover, lets
+you create or pick the context and the policy, shows an overview of every change, and changes
+nothing before you confirm. Where it sets the context, it switches PIM's own "require MFA on
+activation" off, as the admin center does; the policy asks from then on. Run it again later to
+cover new roles, groups or subscriptions.
+
+```powershell
+Unblock-File .\setup-cap-and-authcontext-for-pim.ps1   # downloaded and not signed yet
+.\setup-cap-and-authcontext-for-pim.ps1 -WhatIf          # what it would change
+.\setup-cap-and-authcontext-for-pim.ps1
+```
+
+- It needs PowerShell 7 (`pwsh`, e.g. `winget install Microsoft.PowerShell`). Missing modules
+  are installed for your user after you agree.
+- An existing Conditional Access policy is only accepted if it requires MFA, because PIM's own
+  MFA check is switched off where the context is set.
+- It signs in with Microsoft Graph PowerShell. In a tenant where that has never been used for
+  these permissions, a Cloud Application Administrator or Privileged Role Administrator consents
+  once at the first sign-in.
+
+**By hand**, in this order: the policy has to exist and be on before PIM requires the context. Microsoft's
 walkthrough:
 [On activation, require Conditional Access authentication context](https://learn.microsoft.com/entra/id-governance/privileged-identity-management/pim-how-to-change-default-settings#on-activation-require-microsoft-entra-conditional-access-authentication-context).
 
