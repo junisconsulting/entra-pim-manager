@@ -341,6 +341,13 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     /// </summary>
     public bool IsHostingChoiceAvailable => _options.JunisHostedClientId is not null;
 
+    /// <summary>
+    /// Managed-rollout lock from configuration. When true, the add-tenant form
+    /// is hidden and its command disabled; existing tenants and accounts are
+    /// untouched.
+    /// </summary>
+    public bool IsTenantLockdown => _options.TenantLockdown;
+
     /// <summary>Entra China has no junis-hosted registration: the form disables that way.</summary>
     public bool IsNewTenantChina => NewTenantCloud.Cloud == EntraCloud.China;
 
@@ -351,8 +358,9 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     public bool IsNewTenantAlreadyConfigured => Guid.TryParse(NewTenantId, out _)
         && _registrations.Any(r => SlotOf(r)?.Key == new TenantSlot(NewTenantCloud.Cloud, NewTenantId).Key);
 
-    /// <summary>Add is allowed for a new tenant id once the chosen way yields a client id.</summary>
-    public bool CanAddRegistration => Guid.TryParse(NewTenantId, out _)
+    /// <summary>Add is allowed for a new tenant id once the chosen way yields a client id — never under tenant lockdown.</summary>
+    public bool CanAddRegistration => !IsTenantLockdown
+        && Guid.TryParse(NewTenantId, out _)
         && !IsNewTenantAlreadyConfigured
         && NewClientIdResolved() is not null;
 

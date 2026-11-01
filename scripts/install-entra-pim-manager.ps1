@@ -52,6 +52,11 @@
     Optional PNG with your organization's logo, shown at the top right of the panel. Copied into
     the per-user data folder as logo.png; takes effect at the next app start. PNG only.
 
+.PARAMETER TenantLockdown
+    Managed-rollout lock: hides the add-tenant form in Settings and disables its
+    command. Existing tenants and accounts keep working. Takes effect at the next
+    app start.
+
 .PARAMETER NoStart
     Do not launch the app when finished. Use this for an unattended rollout that should
     not put a tray icon in front of the user mid-install - autostart is already set, so
@@ -82,6 +87,7 @@ param(
     [string]$Label = "",
     [string]$TicketSystem = "",
     [string]$LogoPath = "",
+    [switch]$TenantLockdown,
     [switch]$NoStart
 )
 
@@ -186,6 +192,10 @@ if ($Label) {
 
 if ($TicketSystem) {
     $argumentLine += " --ticket-system $(& $quote $TicketSystem)"
+}
+
+if ($TenantLockdown) {
+    $argumentLine += " --tenant-lockdown true"
 }
 
 Write-Host "Configuring tenant $TenantId..." -ForegroundColor Cyan

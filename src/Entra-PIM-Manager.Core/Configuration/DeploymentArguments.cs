@@ -24,6 +24,7 @@ public static class DeploymentArguments
     private const string CloudFlag = "--cloud";
     private const string LabelFlag = "--label";
     private const string TicketSystemFlag = "--ticket-system";
+    private const string TenantLockdownFlag = "--tenant-lockdown";
 
     /// <summary>
     /// Reads a deployment registration out of <paramref name="args"/>. Returns
@@ -40,6 +41,7 @@ public static class DeploymentArguments
         string? cloud = null;
         string? label = null;
         string? ticketSystem = null;
+        bool? tenantLockdown = null;
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -61,57 +63,72 @@ public static class DeploymentArguments
                 case ClientIdFlag: clientId = value; break;
                 case CloudFlag: cloud = value; break;
                 case LabelFlag: label = value; break;
+                case TenantLockdownFlag:
+                    if (!bool.TryParse(value.Trim(), out var locked))
+                    {
+                        return Result.Invalid($"{TenantLockdownFlag} must be true or false.");
+                    }
+
+                    tenantLockdown = locked;
+                    break;
                 default: ticketSystem = value; break;
             }
         }
 
-        if (tenantId is null && clientId is null)
+        if (tenantId is null && clientId is null && tenantLockdown is null)
         {
             return Result.NotRequested;
         }
 
-        if (tenantId is null || clientId is null)
+        if ((tenantId is null) != (clientId is null))
         {
             return Result.Invalid($"{TenantIdFlag} and {ClientIdFlag} must be given together.");
         }
 
-        if (!Guid.TryParse(tenantId.Trim(), out var tenant))
+        TenantAppRegistration? registration = null;
+        if (tenantId is not null && clientId is not null)
         {
-            return Result.Invalid($"{TenantIdFlag} is not a GUID.");
-        }
+            if (!Guid.TryParse(tenantId.Trim(), out var tenant))
+            {
+                return Result.Invalid($"{TenantIdFlag} is not a GUID.");
+            }
 
-        // The client id is validated HERE because LocalConfigStore does not: it would
-        // persist a typo, and the next launch would then fail options validation and
-        // shut down with no window and no message. That is unrecoverable for a user
-        // who never typed the value in the first place.
-        if (!Guid.TryParse(clientId.Trim(), out _))
-        {
-            return Result.Invalid($"{ClientIdFlag} is not a GUID.");
-        }
+            // The client id is validated HERE because LocalConfigStore does not: it would
+            // persist a typo, and the next launch would then fail options validation and
+            // shut down with no window and no message. That is unrecoverable for a user
+            // who never typed the value in the first place.
+            if (!Guid.TryParse(clientId.Trim(), out _))
+            {
+                return Result.Invalid($"{ClientIdFlag} is not a GUID.");
+            }
 
-        if (!TryResolveCloud(cloud, out var resolvedCloud))
-        {
-            return Result.Invalid($"{CloudFlag} must be one of: {string.Join(", ", Enum.GetNames<EntraCloud>())}.");
-        }
+            if (!TryResolveCloud(cloud, out var resolvedCloud))
+            {
+                return Result.Invalid($"{CloudFlag} must be one of: {string.Join(", ", Enum.GetNames<EntraCloud>())}.");
+            }
 
-        // Normalised exactly like SettingsPanelViewModel.AddTenant so both routes
-        // write byte-identical entries.
-        return new Result(
-            new TenantAppRegistration
+            // Normalised exactly like SettingsPanelViewModel.AddTenant so both routes
+            // write byte-identical entries.
+            registration = new TenantAppRegistration
             {
                 TenantId = tenant.ToString(),
                 ClientId = clientId.Trim(),
                 Cloud = resolvedCloud.ToString(),
                 Label = string.IsNullOrWhiteSpace(label) ? null : label.Trim(),
-            },
+            };
+        }
+
+        return new Result(
+            registration,
             string.IsNullOrWhiteSpace(ticketSystem) ? null : ticketSystem.Trim(),
+            TenantLockdown: tenantLockdown,
             Error: null);
     }
 
     /// <summary>The recognised flag in its canonical spelling, or null for anything else.</summary>
     private static string? KnownFlag(string argument)
     {
-        string[] flags = [TenantIdFlag, ClientIdFlag, CloudFlag, LabelFlag, TicketSystemFlag];
+        string[] flags = [TenantIdFlag, ClientIdFlag, CloudFlag, LabelFlag, TicketSystemFlag, TenantLockdownFlag];
         return Array.Find(flags, f => string.Equals(f, argument, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -151,17 +168,22 @@ public static class DeploymentArguments
     /// <paramref name="Registration"/> because it is workflow rather than auth
     /// configuration and lives in <c>settings.json</c>, not in the registration list.
     /// </param>
+    /// <param name="TenantLockdown">
+    /// Managed-rollout lock for the add-tenant UI, or null when the flag was not
+    /// given. Independent of <paramref name="Registration"/>: lockdown alone is a
+    /// valid request.
+    /// </param>
     /// <param name="Error">Why the arguments were rejected, or null when they were not.</param>
-    public sealed record Result(TenantAppRegistration? Registration, string? TicketSystem, string? Error)
+    public sealed record Result(TenantAppRegistration? Registration, string? TicketSystem, bool? TenantLockdown, string? Error)
     {
         /// <summary>No deployment flag was present — carry on with a normal launch.</summary>
-        public static Result NotRequested { get; } = new(null, null, null);
+        public static Result NotRequested { get; } = new(null, null, null, null);
 
         /// <summary>True when the caller meant to configure, whether or not it succeeded.</summary>
-        public bool IsRequested => Registration is not null || Error is not null;
+        public bool IsRequested => Registration is not null || TenantLockdown is not null || Error is not null;
 
         // ponytail: the message is for tests and future diagnostics — the app is a
         // WinExe with no console, so deployment only ever sees the exit code.
-        internal static Result Invalid(string error) => new(null, null, error);
+        internal static Result Invalid(string error) => new(null, null, null, error);
     }
 }

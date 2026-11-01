@@ -12,6 +12,7 @@ using EntraPimManager.Core.Auth;
 public static class LocalConfigStore
 {
     private const string TenantRegistrationsKey = "TenantAppRegistrations";
+    private const string TenantLockdownKey = "TenantLockdown";
 
     /// <summary>
     /// Adds <paramref name="registration"/> to <c>TenantAppRegistrations</c>, replacing an
@@ -68,6 +69,19 @@ public static class LocalConfigStore
         }
 
         list.RemoveAt(index);
+        WriteRoot(configFilePath, root);
+    }
+
+    /// <summary>
+    /// Persists the managed-rollout lock (<see cref="EntraPimManagerOptions.TenantLockdown"/>).
+    /// Read-modify-write like the registration methods; preserves unrelated keys.
+    /// </summary>
+    public static void SaveTenantLockdown(string configFilePath, bool locked)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(configFilePath);
+
+        var root = LoadRoot(configFilePath);
+        SectionOf(root)[TenantLockdownKey] = locked;
         WriteRoot(configFilePath, root);
     }
 

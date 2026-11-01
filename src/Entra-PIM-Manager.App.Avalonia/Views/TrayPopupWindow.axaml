@@ -2202,8 +2202,9 @@
 
                   <!-- Adding a tenant. Always reachable, and the only thing on
                        screen when nothing is configured yet — the first-run state
-                       must not be an empty list with no way forward. -->
-                  <StackPanel Spacing="6">
+                       must not be an empty list with no way forward.
+                       Hidden under managed-rollout tenant lockdown. -->
+                  <StackPanel Spacing="6" IsVisible="{Binding !IsTenantLockdown}">
                     <TextBlock Text="Add a tenant"
                                FontSize="{DynamicResource FontCaption}"
                                FontWeight="Medium"

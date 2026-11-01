@@ -95,6 +95,7 @@ The user lands on "Add account" instead of the configuration prompt.
 | `--cloud <Global\|China>` | `-Cloud` | no | Defaults to `Global` |
 | `--label <text>` | `-Label` | no | Tenant alias in the sign-in picker and tenant list |
 | `--ticket-system <text>` | `-TicketSystem` | no | e.g. `ServiceNow`, prefilled into the activation form |
+| `--tenant-lockdown true\|false` | `-TenantLockdown` | no | Hides the add-tenant form (managed rollout); existing tenants keep working |
 | — | `-LogoPath <file.png>` | no | Script only, see [Your organization's logo](#your-organizations-logo) |
 
 Run it once per tenant to configure several. An entry for a tenant that is already configured is
