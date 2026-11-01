@@ -70,6 +70,15 @@ public interface IAuthService
     Task<IReadOnlyList<SignedInAccount>> GetAllAccountsAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// Best-effort silent session restore for an enrolled <paramref name="account"/>:
+    /// attempts a broker silent token acquisition with the enrollment scopes and
+    /// reports whether it succeeded. Never shows UI and never throws: any failure
+    /// (no cached account, expired refresh token, no network) yields false so the
+    /// caller keeps the explicit sign-in path. Intended for startup restore.
+    /// </summary>
+    Task<bool> TrySilentSignInAsync(SignedInAccount account, CancellationToken ct = default);
+
+    /// <summary>
     /// Persists the enrolled accounts in the given order. No MSAL state is
     /// touched — only the <see cref="IAccountStore"/> ordering.
     /// </summary>

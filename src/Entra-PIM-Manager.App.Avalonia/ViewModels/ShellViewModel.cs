@@ -372,6 +372,12 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         {
             var accounts = await _authService.GetAllAccountsAsync(ct);
 
+            // Startup session restore: attempt a silent broker sign-in per
+            // enrolled account before the first refresh, so a reboot lands
+            // signed in instead of red. Best-effort and UI-free — anything
+            // failing here keeps the explicit sign-in path untouched.
+            await Task.WhenAll(accounts.Select(a => RestoreSessionQuietlyAsync(a, ct)));
+
             // Read before ReplaceAccounts: it makes the first enrollment active, and
             // that is saved as the last-used one at once, over the user's real choice.
             var lastKey = _userSettings.Current.LastUsedAccountKey;
@@ -583,6 +589,23 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Best-effort silent restore of one enrollment at startup. Never throws and
+    /// never shows UI: <see cref="IAuthService.TrySilentSignInAsync"/> already
+    /// swallows failures into false, this only guards the await itself.
+    /// </summary>
+    private async Task RestoreSessionQuietlyAsync(SignedInAccount account, CancellationToken ct)
+    {
+        try
+        {
+            await _authService.TrySilentSignInAsync(account, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Startup session restore skipped an account");
         }
     }
 

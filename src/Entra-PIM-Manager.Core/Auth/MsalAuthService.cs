@@ -210,6 +210,39 @@ public sealed class MsalAuthService : IAuthService, IDisposable
     }
 
     /// <inheritdoc />
+    public async Task<bool> TrySilentSignInAsync(SignedInAccount account, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+
+        try
+        {
+            var clientId = _options.ClientIdFor(account.Cloud, account.TenantId);
+            if (clientId is null)
+            {
+                return false;
+            }
+
+            await AcquireTokenForAccountAsync(
+                account.ObjectId,
+                account.TenantId,
+                account.Cloud,
+                _options.EnrollmentScopes(account.Cloud, clientId),
+                claimsChallenge: null,
+                silentOnly: true,
+                ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception ex) when (ex is MsalException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            _logger.LogDebug(
+                ex,
+                "Silent startup sign-in failed for tenant {TenantId}; explicit sign-in stays available",
+                account.TenantId);
+            return false;
+        }
+    }
+
+    /// <inheritdoc />
     public void Dispose()
     {
         _authLock.Dispose();
