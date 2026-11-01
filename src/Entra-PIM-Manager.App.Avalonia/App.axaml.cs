@@ -179,6 +179,14 @@ public partial class App : Application
         _whatsNewController = Services.GetRequiredService<WhatsNewController>();
         _whatsNewController.Start();
 
+        // Managed-rollout convenience (opt-in, default off): surface the panel
+        // once after launch instead of starting tray-only. Posted to the UI
+        // thread so first-run and release-notes windows settle first.
+        if (userSettings.Current.OpenWindowAtStartup)
+        {
+            Dispatcher.UIThread.Post(() => _popupController?.Show());
+        }
+
         desktop.ShutdownRequested += (_, _) =>
         {
             _shuttingDown = true;

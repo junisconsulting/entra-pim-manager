@@ -121,6 +121,13 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     private bool _automaticUpdatesEnabled;
 
     /// <summary>
+    /// Bound to the "Open main window at startup" toggle. Opens the tray popup
+    /// once after launch when true; tray-only start otherwise. Default off.
+    /// </summary>
+    [ObservableProperty]
+    private bool _openWindowAtStartup;
+
+    /// <summary>
     /// Bound to the log-detail ComboBox in DIAGNOSTICS. Applied live through
     /// the Serilog level switch (App subscribes to the settings Changed
     /// event), so no restart is needed.
@@ -443,6 +450,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
                 ?? ExpiryThresholdOptions[0];
             ExpiryWarningEnabled = current.ExpiryWarningEnabled;
             AutomaticUpdatesEnabled = current.AutomaticUpdatesEnabled;
+            OpenWindowAtStartup = current.OpenWindowAtStartup;
             SyncTenantNodes();
             ClearForm();
             ShowRestartPrompt = false;
@@ -1051,6 +1059,16 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         SchedulePersist();
     }
 
+    partial void OnOpenWindowAtStartupChanged(bool value)
+    {
+        if (_suppressPersist)
+        {
+            return;
+        }
+
+        SchedulePersist();
+    }
+
     partial void OnSelectedExpiryThresholdChanged(ExpiryThresholdOption value)
     {
         if (_suppressPersist)
@@ -1144,6 +1162,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         var expiryWarningMinutes = SelectedExpiryThreshold.Minutes;
         var tenantsExpanded = _persistedTenantsExpanded;
         var automaticUpdatesEnabled = AutomaticUpdatesEnabled;
+        var openWindowAtStartup = OpenWindowAtStartup;
         var logLevel = SelectedLogLevel.Value;
 
         await SaveSettingsAsync(current => current with
@@ -1154,6 +1173,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
             ExpiryWarningMinutes = expiryWarningMinutes,
             SettingsAccountsExpanded = tenantsExpanded,
             AutomaticUpdatesEnabled = automaticUpdatesEnabled,
+            OpenWindowAtStartup = openWindowAtStartup,
             LogLevel = logLevel,
         }).ConfigureAwait(false);
     }

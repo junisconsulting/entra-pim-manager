@@ -2355,6 +2355,22 @@
                                 OffContent="" />
                 </Grid>
 
+                <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                  <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="Open main window at startup"
+                               FontSize="{DynamicResource FontBody}"
+                               Foreground="{DynamicResource TextPrimaryBrush}" />
+                    <TextBlock Text="Shows the panel once after launch instead of starting tray-only."
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1"
+                                IsChecked="{Binding OpenWindowAtStartup}"
+                                OnContent=""
+                                OffContent="" />
+                </Grid>
+
                 <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center"
                       IsVisible="{Binding CanManageStartMenuShortcut}">
                   <StackPanel Grid.Column="0" VerticalAlignment="Center">
