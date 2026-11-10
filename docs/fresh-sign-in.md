@@ -43,8 +43,10 @@ Unblock-File .\setup-cap-and-authcontext-for-pim.ps1   # downloaded and not sign
   these permissions, a Cloud Application Administrator or Privileged Role Administrator consents
   once at the first sign-in.
 
-**By hand**, in this order: the policy has to exist and be on before PIM requires the context. Microsoft's
-walkthrough:
+**By hand**, in this order: the policy has to exist and be on before PIM requires the context. Set
+its session control **Sign-in frequency** to **Every time**: with only an MFA or authentication
+strength requirement, a session that already used such a method activates without being asked.
+Microsoft's walkthrough:
 [On activation, require Conditional Access authentication context](https://learn.microsoft.com/entra/id-governance/privileged-identity-management/pim-how-to-change-default-settings#on-activation-require-microsoft-entra-conditional-access-authentication-context).
 
 ## Answer it with a glance or a touch
@@ -69,10 +71,12 @@ walkthrough:
   or Entra ID Governance, and both come with or require P1, which covers Conditional Access.
 - **The app sees the context, not the policy.** After step 3 the hint gives way to "ℹ This
   activation may require additional verification (MFA)". Whether anything is asked depends on the
-  policy: switched off or in report-only mode, it asks nobody.
+  policy: switched off or in report-only mode, it asks nobody; without sign-in frequency Every
+  time, it asks nobody whose session already used the required method.
 - **Ten minutes.** Entra waives the prompt for further activations within ten minutes, for
   directory roles, PIM for Groups and Azure resource roles alike, so ticking three subscriptions
-  asks once.
+  asks once. "Every time" also allows five minutes of clock skew
+  ([session lifetime](https://learn.microsoft.com/entra/identity/conditional-access/concept-session-lifetime#user-sign-in-frequency)).
 - **Device-code accounts** cannot satisfy an authentication context. Remove the account and add
   it again with the normal sign-in.
 - **Azure resource roles.** For most of them the app cannot read the role's settings with your

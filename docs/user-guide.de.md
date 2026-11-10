@@ -163,7 +163,9 @@ Aktivierung eine Bestätigung.
 Tenant verlangen keine erneute Anmeldung; nichts lässt dich beweisen, dass du es bist, bevor die
 Rolle aktiv wird. **How to set it up** öffnet die Anleitung für deinen PIM-Admin
 ([docs/fresh-sign-in.md](fresh-sign-in.md), auf Englisch). Der Hinweis bleibt, bis die Rolle einen
-Authentication Context verlangt. Bei den meisten Azure-Ressourcenrollen kann die App die
+Authentication Context verlangt. Die App sieht nur den Context, nicht die Conditional-Access-Policy
+dahinter: Die Aktivierung fragt nur dann erneut, wenn diese Policy die Anmeldehäufigkeit auf
+„Every time“ setzt. Bei den meisten Azure-Ressourcenrollen kann die App die
 Einstellungen der Rolle nicht lesen und zeigt keinen der beiden Hinweise.
 
 **⚠ This group can carry directory roles** — bei einem PIM-for-Groups-Eintrag. Eine

@@ -92,8 +92,9 @@ GmbH, for self-hosted your own registration.
 - **Block device code flow** with a Conditional Access policy (Entra ID P1). A
   self-hosted tenant loses the app's device-code fallback with it
   ([§6](#6-verification), step 4).
-- **An authentication context on activation**, so every activation asks for a
-  fresh sign-in — see [fresh-sign-in.md](fresh-sign-in.md).
+- **An authentication context on activation**, with a Conditional Access policy
+  set to sign-in frequency Every time, so every activation asks for a fresh
+  sign-in — see [fresh-sign-in.md](fresh-sign-in.md).
 - **The admin consent workflow** (Enterprise applications → Consent and
   permissions → Admin consent settings), so users request approval from the
   Windows sign-in window instead of forwarding links.
