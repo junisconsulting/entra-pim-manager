@@ -142,6 +142,46 @@ Intune.
   one themselves under **Settings → APPEARANCE → Logo**, which writes the same file.
 - A file the app cannot decode shows no logo, and the reason is in the log.
 
+### Lock the tenant list
+
+On managed devices you can hide tenant management from users. Set this machine policy value, and
+the app no longer offers **Add a tenant**, the switch between junis-hosted and self-hosted, or
+**Remove tenant**. Users keep their accounts, labels and ticket systems, and see
+"Tenants are managed by your organization." in Settings
+([ADR 0005](adr/0005-tenant-lockdown-machine-policy.md)).
+
+| Key | Value | Type | Data |
+| --- | --- | --- | --- |
+| `HKLM\SOFTWARE\Policies\junis\Entra-PIM-Manager` | `TenantLockdown` | `REG_DWORD` | `1` locks, `0` or absent does not |
+
+Any other type, a `REG_SZ` `"1"` for example, is ignored and logged as a warning. The app reads the
+value at startup, so a change takes effect at the next app start. The app only reads this key and
+never writes it; users cannot change it without admin rights.
+
+The tenant itself still comes from the install script in the user's context. The lock is a separate
+**device** setting and needs admin rights, so it cannot go into the Win32 app from
+[step 3](#3-intune-the-ready-made-win32-app), which runs as the user. In Intune, add it as a
+**platform script** (Devices → Scripts and remediations → Platform scripts) with **Run this script
+using the logged on credentials: No**:
+
+```powershell
+$key = 'HKLM:\SOFTWARE\Policies\junis\Entra-PIM-Manager'
+if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+New-ItemProperty -Path $key -Name TenantLockdown -PropertyType DWord -Value 1 -Force | Out-Null
+```
+
+It works from the 32-bit PowerShell Intune starts by default: Windows does not redirect
+`SOFTWARE\Policies` for 32-bit processes. A platform script runs once and does not undo itself when
+you unassign it; to lift the lock, assign a script that sets `0`. With Group Policy, a registry
+preference item (Computer Configuration → Preferences → Windows Settings → Registry) sets the same
+value.
+
+> **The lock is not a security boundary.** It keeps the app's own settings tidy. It does not stop
+> anyone from signing in to another tenant, in a browser or with another tool. To keep users on
+> managed devices out of foreign tenants, use
+> [tenant restrictions v2](https://learn.microsoft.com/entra/external-id/tenant-restrictions-v2)
+> in your cross-tenant access settings.
+
 ## 3. Intune: the ready-made Win32 app
 
 Every release also carries `Entra-PIM-Manager-win-Setup.intunewin`: the same Setup.exe, packed for

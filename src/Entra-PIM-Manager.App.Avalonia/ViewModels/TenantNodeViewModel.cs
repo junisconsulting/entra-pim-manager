@@ -27,6 +27,7 @@ using EntraPimManager.Core.Configuration;
 public sealed partial class TenantNodeViewModel : ObservableObject
 {
     private readonly EntraPimManagerOptions _options;
+    private readonly bool _isTenantLockdown;
     private readonly Func<UserSettings> _settings;
     private readonly Action<TenantNodeViewModel> _addAccount;
 
@@ -49,6 +50,7 @@ public sealed partial class TenantNodeViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSave))]
+    [NotifyPropertyChangedFor(nameof(IsClientIdFieldVisible))]
     private bool _isJunisHostedDraft;
 
     [ObservableProperty]
@@ -65,6 +67,7 @@ public sealed partial class TenantNodeViewModel : ObservableObject
     public TenantNodeViewModel(
         TenantSlot slot,
         EntraPimManagerOptions options,
+        bool isTenantLockdown,
         Func<UserSettings> settings,
         Func<TenantNodeViewModel, Task> save,
         Func<TenantNodeViewModel, Task> remove,
@@ -81,6 +84,7 @@ public sealed partial class TenantNodeViewModel : ObservableObject
 
         Slot = slot;
         _options = options;
+        _isTenantLockdown = isTenantLockdown;
         _settings = settings;
         _addAccount = addAccount;
         RemoveConfirmation = new ArmedConfirmation(() => remove(this), () => !isBusy());
@@ -152,8 +156,19 @@ public sealed partial class TenantNodeViewModel : ObservableObject
         ? "junis-hosted"
         : "self-hosted";
 
-    /// <summary>The editor offers the way only where junis-hosted exists: Global, with a shipped junis id.</summary>
-    public bool IsHostingChoiceVisible => _options.JunisHostedClientId is not null && Cloud == EntraCloud.Global;
+    /// <summary>
+    /// The editor offers the way only where junis-hosted exists: Global, with a shipped junis
+    /// id. Never under the organization's tenant lock, which keeps the registration as deployed.
+    /// </summary>
+    public bool IsHostingChoiceVisible => !_isTenantLockdown
+        && _options.JunisHostedClientId is not null
+        && Cloud == EntraCloud.Global;
+
+    /// <summary>The client id is typed only for self-hosted, and never under the tenant lock.</summary>
+    public bool IsClientIdFieldVisible => !_isTenantLockdown && !IsJunisHostedDraft;
+
+    /// <summary>Removing the tenant is an admin's call under the tenant lock; accounts still go one by one.</summary>
+    public bool IsRemoveVisible => !_isTenantLockdown;
 
     /// <summary>The client id Save would write, or <c>null</c> when the editor holds no valid one.</summary>
     public string? ResolvedClientIdDraft => _options.ResolveClientId(
@@ -193,10 +208,15 @@ public sealed partial class TenantNodeViewModel : ObservableObject
         ? null
         : HasRegistration
             ? "Restart the app to sign in to this tenant."
-            : "Add an App Registration for this tenant first.";
+            : _isTenantLockdown
+                ? "Your organization manages this tenant's App Registration."
+                : "Add an App Registration for this tenant first.";
 
-    /// <summary>Save is allowed once the chosen way yields a client id.</summary>
-    public bool CanSave => ResolvedClientIdDraft is not null;
+    /// <summary>
+    /// Save is allowed once the chosen way yields a client id. Under the tenant lock only for
+    /// a tenant that has a registration: saving one without would add a tenant.
+    /// </summary>
+    public bool CanSave => ResolvedClientIdDraft is not null && (HasRegistration || !_isTenantLockdown);
 
     /// <summary>
     /// The second click "Remove tenant" asks for. It sits inside the configuration rather
