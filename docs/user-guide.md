@@ -270,6 +270,12 @@ the accounts signed in through the old App Registration are removed, and you add
 the restart. Changing an App Registration takes effect after a restart, and the app says so when it
 does; until then, **+ Add account…** on that card stays disabled.
 
+If your organization manages the tenant list, Settings says "Tenants are managed by your
+organization." instead of offering **Add a tenant**, and the gear shows only the label and the ticket
+system: no switching between junis-hosted and self-hosted, no **Remove tenant**. Your accounts work
+as usual, and you can still add or remove them. When no tenant is configured yet, ask your IT
+department.
+
 ## Updates
 
 The app checks GitHub once a day and offers what it finds; you choose **Install** or **Later**, and

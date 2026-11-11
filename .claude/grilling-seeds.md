@@ -26,3 +26,10 @@ design tree when a change touches the area, not a questionnaire.
 - **Can the modules share one session, and on which PowerShell?** `Microsoft.Graph.Authentication`
   and `Az.Accounts` conflict in Windows PowerShell 5.1 (Az issue #27378). The fresh-sign-in script
   was specified for 5.1 and 7 and had to become PowerShell 7 only. Found 2026-10-27.
+
+## Hiding or locking an action
+
+- **Which other screens send the user to it, and which other paths reach the same write?** The
+  tenant lock hid the add form, but the welcome card and the add-account panel still pointed at
+  it, and the gear's Save could still write a new registration for a card that had only
+  accounts. Found 2026-11-11 in review and while building, after the grilling had settled scope.

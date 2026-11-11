@@ -35,15 +35,6 @@ public sealed class EntraPimManagerOptions
     /// </remarks>
     public List<TenantAppRegistration> TenantAppRegistrations { get; set; } = [];
 
-    /// <summary>
-    /// Managed-rollout lock: when true, the UI offers no way to add tenants
-    /// (the add-tenant form is hidden and its command disabled). Existing
-    /// tenants, accounts and sign-ins keep working unchanged. Default false.
-    /// Settable in <c>appsettings.local.json</c> as
-    /// <c>EntraPimManager:TenantLockdown</c> or via <c>--tenant-lockdown</c>.
-    /// </summary>
-    public bool TenantLockdown { get; set; }
-
     /// <summary>Delegated Microsoft Graph scopes requested for PIM activation flows.</summary>
     public string[] Scopes { get; set; } = [];
 

@@ -43,6 +43,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     private readonly IShortcutService _shortcuts;
     private readonly EntraPimManagerOptions _options;
     private readonly INetworkDiagnosticsService _networkDiagnostics;
+    private readonly bool _isTenantLockdown;
     private readonly IToastService _toastService;
     private readonly ILogger<SettingsPanelViewModel> _logger;
 
@@ -219,15 +220,18 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
         IShortcutService shortcuts,
         IOptions<EntraPimManagerOptions> options,
         INetworkDiagnosticsService networkDiagnostics,
+        ITenantLockdownPolicy tenantLockdown,
         IToastService toastService,
         ILogger<SettingsPanelViewModel> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(tenantLockdown);
         _userSettings = userSettings;
         _autostart = autostart;
         _shortcuts = shortcuts;
         _options = options.Value;
         _networkDiagnostics = networkDiagnostics;
+        _isTenantLockdown = tenantLockdown.IsActive;
         _toastService = toastService;
         _logger = logger;
 
@@ -342,11 +346,19 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
     public bool IsHostingChoiceAvailable => _options.JunisHostedClientId is not null;
 
     /// <summary>
-    /// Managed-rollout lock from configuration. When true, the add-tenant form
-    /// is hidden and its command disabled; existing tenants and accounts are
-    /// untouched.
+    /// The organization's machine policy locks the tenant list (docs/adr/0005): the add
+    /// form is hidden and its command disabled; accounts, labels and ticket systems stay
+    /// editable.
     /// </summary>
-    public bool IsTenantLockdown => _options.TenantLockdown;
+    public bool IsTenantLockdown => _isTenantLockdown;
+
+    /// <summary>
+    /// Shown in place of the add form while locked. No notification needed: under the lock
+    /// nothing can add or remove a registration, so the count is fixed for the session.
+    /// </summary>
+    public string TenantLockdownHint => _registrations.Count == 0
+        ? "Tenants are managed by your organization. None is configured yet — contact your IT department."
+        : "Tenants are managed by your organization.";
 
     /// <summary>Entra China has no junis-hosted registration: the form disables that way.</summary>
     public bool IsNewTenantChina => NewTenantCloud.Cloud == EntraCloud.China;
@@ -532,6 +544,7 @@ public sealed partial class SettingsPanelViewModel : ObservableObject
                 ?? new TenantNodeViewModel(
                     slot,
                     _options,
+                    _isTenantLockdown,
                     () => _userSettings.Current,
                     SaveNodeAsync,
                     RemoveNodeAsync,

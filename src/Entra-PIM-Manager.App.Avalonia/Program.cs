@@ -116,25 +116,17 @@ public static class Program
     /// </summary>
     private static int ApplyDeploymentConfiguration(DeploymentArguments.Result deployment)
     {
-        if (deployment.Registration is null && deployment.TenantLockdown is null)
+        if (deployment.Registration is null)
         {
             return ExitInvalidArguments;
         }
 
         try
         {
-            if (deployment.Registration is not null)
+            LocalConfigStore.SaveTenantRegistration(AppPaths.LocalConfigFile, deployment.Registration);
+            if (deployment.TicketSystem is not null)
             {
-                LocalConfigStore.SaveTenantRegistration(AppPaths.LocalConfigFile, deployment.Registration);
-                if (deployment.TicketSystem is not null)
-                {
-                    SaveTicketSystem(deployment.Registration.TenantId, deployment.TicketSystem);
-                }
-            }
-
-            if (deployment.TenantLockdown is not null)
-            {
-                LocalConfigStore.SaveTenantLockdown(AppPaths.LocalConfigFile, deployment.TenantLockdown.Value);
+                SaveTicketSystem(deployment.Registration.TenantId, deployment.TicketSystem);
             }
 
             return 0;

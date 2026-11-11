@@ -412,6 +412,7 @@ public partial class App : Application
         // UI + tray (App.Avalonia).
         builder.Services.AddSingleton<IToastService, ToastService>();
         builder.Services.AddSingleton<IAutostartService, AutostartService>();
+        builder.Services.AddSingleton<ITenantLockdownPolicy, TenantLockdownPolicy>();
         builder.Services.AddSingleton<ActivationPanelViewModel>();
         builder.Services.AddSingleton<AddTenantPanelViewModel>();
         builder.Services.AddSingleton<SettingsPanelViewModel>();

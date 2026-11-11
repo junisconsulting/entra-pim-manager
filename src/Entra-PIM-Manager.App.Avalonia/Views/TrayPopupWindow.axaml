@@ -450,7 +450,7 @@
             <TextBox Text="{Binding ClientIdDraft}"
                      PlaceholderText="Client id — 00000000-0000-0000-0000-000000000000"
                      FontSize="{DynamicResource FontBody}"
-                     IsVisible="{Binding !IsJunisHostedDraft}" />
+                     IsVisible="{Binding IsClientIdFieldVisible}" />
             <TextBox Text="{Binding LabelDraft}"
                      PlaceholderText="Label (optional)"
                      FontSize="{DynamicResource FontBody}" />
@@ -466,20 +466,23 @@
                    in: hiding the button that has the focus would send Escape to the
                    window, which hides the popup with the button still armed. -->
               <!-- Steps aside while Save is armed: the row has no room for both long
-                   labels, and the focus is on Save then, never here. -->
-              <Button Grid.Column="0"
-                      Classes="dangertext"
-                      Classes.ghost="{Binding !RemoveConfirmation.IsArmed}"
-                      Classes.destructive="{Binding RemoveConfirmation.IsArmed}"
-                      Padding="10,5"
-                      IsVisible="{Binding !SaveConfirmation.IsArmed}"
-                      Command="{Binding RemoveConfirmation.Command}"
-                      ToolTip.Tip="Removes this tenant: its accounts and their sign-ins, its App Registration and its ticket system. Active roles stay active until they expire.">
-                <Panel>
-                  <TextBlock Text="Remove tenant" IsVisible="{Binding !RemoveConfirmation.IsArmed}" />
-                  <TextBlock Text="Click again to remove" IsVisible="{Binding RemoveConfirmation.IsArmed}" />
-                </Panel>
-              </Button>
+                   labels, and the focus is on Save then, never here. Absent under the
+                   organization's tenant lock, fixed for the session, so it never takes
+                   the focus away. -->
+              <Panel Grid.Column="0" IsVisible="{Binding IsRemoveVisible}">
+                <Button Classes="dangertext"
+                        Classes.ghost="{Binding !RemoveConfirmation.IsArmed}"
+                        Classes.destructive="{Binding RemoveConfirmation.IsArmed}"
+                        Padding="10,5"
+                        IsVisible="{Binding !SaveConfirmation.IsArmed}"
+                        Command="{Binding RemoveConfirmation.Command}"
+                        ToolTip.Tip="Removes this tenant: its accounts and their sign-ins, its App Registration and its ticket system. Active roles stay active until they expire.">
+                  <Panel>
+                    <TextBlock Text="Remove tenant" IsVisible="{Binding !RemoveConfirmation.IsArmed}" />
+                    <TextBlock Text="Click again to remove" IsVisible="{Binding RemoveConfirmation.IsArmed}" />
+                  </Panel>
+                </Button>
+              </Panel>
               <Button Grid.Column="2"
                       Classes="secondary"
                       Content="Cancel"
@@ -1028,10 +1031,21 @@
                              Foreground="{DynamicResource TextSecondaryBrush}"
                              TextWrapping="Wrap"
                              TextAlignment="Center"
-                             MaxWidth="320" />
+                             MaxWidth="320"
+                             IsVisible="{Binding !SettingsPanel.IsTenantLockdown}" />
+                  <!-- Under the organization's tenant lock Settings offers no add, so the
+                       card says who to ask instead of sending the user there. -->
+                  <TextBlock Text="{Binding SettingsPanel.TenantLockdownHint}"
+                             FontSize="{DynamicResource FontBody}"
+                             Foreground="{DynamicResource TextSecondaryBrush}"
+                             TextWrapping="Wrap"
+                             TextAlignment="Center"
+                             MaxWidth="320"
+                             IsVisible="{Binding SettingsPanel.IsTenantLockdown}" />
                   <Button Classes="primary"
                           Command="{Binding OpenSettingsPanelCommand}"
-                          HorizontalAlignment="Center">
+                          HorizontalAlignment="Center"
+                          IsVisible="{Binding !SettingsPanel.IsTenantLockdown}">
                     <TextBlock Text="Set up your first tenant" />
                   </Button>
                 </StackPanel>
@@ -1917,7 +1931,7 @@
                            Margin="0,6,0,0" />
               </StackPanel>
 
-              <TextBlock Text="The Windows account picker opens after Sign in. Choose an account that is a member or guest of the selected tenant — the same identity can be enrolled in several tenants. To sign in to a tenant that is not listed, add it under Settings → Tenants first."
+              <TextBlock Text="{Binding SignInHint}"
                          TextWrapping="Wrap"
                          FontSize="{DynamicResource FontSmall}"
                          Foreground="{DynamicResource TextTertiaryBrush}" />
@@ -2200,10 +2214,18 @@
                     </ItemsControl.ItemsPanel>
                   </ItemsControl>
 
-                  <!-- Adding a tenant. Always reachable, and the only thing on
-                       screen when nothing is configured yet — the first-run state
-                       must not be an empty list with no way forward.
-                       Hidden under managed-rollout tenant lockdown. -->
+                  <!-- Under the organization's tenant lock the form gives way to a line
+                       saying who manages the list, so even an empty list is never a
+                       dead end without an explanation. -->
+                  <TextBlock Text="{Binding TenantLockdownHint}"
+                             FontSize="{DynamicResource FontSmall}"
+                             Foreground="{DynamicResource TextTertiaryBrush}"
+                             TextWrapping="Wrap"
+                             IsVisible="{Binding IsTenantLockdown}" />
+
+                  <!-- Adding a tenant. Reachable unless the organization locks the list,
+                       and the only thing on screen when nothing is configured yet — the
+                       first-run state must not be an empty list with no way forward. -->
                   <StackPanel Spacing="6" IsVisible="{Binding !IsTenantLockdown}">
                     <TextBlock Text="Add a tenant"
                                FontSize="{DynamicResource FontCaption}"

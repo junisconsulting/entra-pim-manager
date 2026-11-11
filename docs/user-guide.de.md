@@ -287,6 +287,12 @@ nach: Die Konten, die über die alte App Registration angemeldet sind, werden en
 sie nach dem Neustart neu hinzu. Eine geänderte App Registration greift erst nach einem Neustart —
 die App sagt es dann auch; bis dahin bleibt **+ Add account…** auf dieser Karte gesperrt.
 
+Verwaltet deine Organisation die Tenant-Liste, steht in den Einstellungen statt **Add a tenant** der
+Satz „Tenants are managed by your organization.", und das Zahnrad zeigt nur Label und Ticketsystem:
+kein Wechsel zwischen junis-hosted und self-hosted, kein **Remove tenant**. Deine Konten funktionieren
+wie gewohnt, und du kannst sie weiterhin hinzufügen und entfernen. Ist noch kein Tenant eingerichtet,
+wende dich an deine IT.
+
 ## Updates
 
 Die App prüft einmal täglich auf GitHub und bietet an, was sie findet; du wählst **Install** oder
