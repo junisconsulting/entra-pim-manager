@@ -486,3 +486,48 @@ first change there resets the other six.
 **What makes the fix safe:** make the panel write only the field that changed (one transform per
 `On…Changed` handler) instead of all seven, and re-apply the theme on `Changed`. Not observed in
 the field; a scanner holding a small JSON file for longer than the startup is unusual.
+
+---
+
+## The fresh-sign-in setup script knows only the Global cloud
+
+**Evidence:** `scripts/setup-cap-and-authcontext-for-pim.ps1` signs in to Graph and Azure without
+naming an environment, so it reaches only the Global cloud (decided 2026-10-27 while designing
+it). Microsoft Learn marks the APIs it calls as available in China (authentication-context update,
+Conditional Access policy create, PIM rule update), but says nothing about whether sign-in
+frequency "Every time", authentication contexts in PIM, and PIM for Groups work there as
+features, and no China tenant is available to try it.
+
+**Why it matters:** the app supports China tenants and shows them the fresh-sign-in hint; their
+admins have to follow the manual steps in `docs/fresh-sign-in.md`.
+
+**What makes the fix safe:** a `-Cloud China` parameter like `create-app-registration.ps1`'s
+(`Connect-MgGraph -Environment China`, `Connect-AzAccount -Environment AzureChinaCloud`), and one
+run against a China tenant before the docs offer it.
+
+---
+
+## Fresh-sign-in script: assumptions not yet verified against a tenant
+
+**Evidence:** `scripts/setup-cap-and-authcontext-for-pim.ps1` was written from Microsoft Learn and
+the repo skills on a Linux host, and exercised only against mocked Graph and ARM responses
+(2026-10-27). Four points need one run in a licensed test tenant:
+
+- Graph v1.0 accepts `conditions.applications.includeAuthenticationContextClassReferences` when
+  creating a Conditional Access policy; Learn documents the field only for beta. If not: the policy
+  calls go to `/beta`, with a comment saying why.
+- An unfiltered `roleEligibilitySchedules` listing at a subscription also returns resource groups,
+  resources and the management groups above. If not: also list at each visible management group.
+- Graph accepts the authentication-context rule while `MultiFactorAuthentication` is still in the
+  enablement rule (the script writes the context first, then drops MFA); ARM accepts both rules in
+  one PATCH. If not: drop MFA first, in the order the API demands.
+- `Microsoft.Graph.Authentication` and `Az.Accounts` work in one PowerShell 7 session, Graph signed
+  in first. If not: run the Azure part in its own `pwsh` process.
+
+**Why it matters:** each is a place where the docs and the API could disagree without the mock
+noticing. The symptom would be a policy that cannot be created, Azure scopes left out, or every
+role in the failure list.
+
+**What makes the fix safe:** run the script in the test tenant with `-WhatIf`, then for real with
+one Entra role, one PIM group and one Azure role at subscription and resource-group scope; then
+activate each in the app and confirm the fresh sign-in.

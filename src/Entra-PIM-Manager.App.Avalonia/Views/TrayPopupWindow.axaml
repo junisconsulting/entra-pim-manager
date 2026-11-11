@@ -1734,7 +1734,7 @@
                       Padding="10,8"
                       IsVisible="{Binding ShowFreshSignInHint}">
                 <StackPanel Spacing="4">
-                  <TextBlock Text="⚠ This role activates without asking you to sign in again. Strongly recommended: require a fresh sign-in for every activation with an authentication context."
+                  <TextBlock Text="⚠ This role activates without asking you to sign in again. Strongly recommended: require a fresh sign-in for every activation with an authentication context and a Conditional Access policy set to sign-in frequency Every time."
                              TextWrapping="Wrap"
                              FontSize="{DynamicResource FontSmall}"
                              Foreground="{DynamicResource WarningBrush}" />

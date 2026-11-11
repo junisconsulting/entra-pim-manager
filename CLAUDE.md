@@ -42,6 +42,8 @@ Assume every commit is world-readable: no tenant IDs, no internal hostnames, no 
 
 Never write PIM Graph, PIM ARM or MSAL desktop code from memory — all three areas are full of
 obsolete patterns that are common in training data. The skills are the authority.
+A subagent's research report is not the skill: read the skill itself before writing the call
+(2026-10-27, a report put the ARM policy lookup on `roleManagementPolicies`, which has no `roleDefinitionId`).
 
 ## Architecture (three projects, one layering boundary)
 

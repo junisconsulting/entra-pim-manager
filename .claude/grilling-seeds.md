@@ -20,3 +20,9 @@ design tree when a change touches the area, not a questionnaire.
   and `PolicyService` falls back to default limits that look like "no auth context, no approval".
   A feature that shows or decides something from the policy has to tell "not readable" from "not
   set". Found 2026-10-22 while planning the fresh-sign-in hint, after the wording was settled.
+
+## Admin scripts against Graph and Azure
+
+- **Can the modules share one session, and on which PowerShell?** `Microsoft.Graph.Authentication`
+  and `Az.Accounts` conflict in Windows PowerShell 5.1 (Az issue #27378). The fresh-sign-in script
+  was specified for 5.1 and 7 and had to become PowerShell 7 only. Found 2026-10-27.

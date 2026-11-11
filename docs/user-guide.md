@@ -151,7 +151,8 @@ the activation.
 ask for no fresh sign-in, so nothing makes you prove it is you before the role becomes active.
 **How to set it up** opens the guide for your PIM admin
 ([docs/fresh-sign-in.md](fresh-sign-in.md)). The notice stays until the role requires an
-authentication context. For most Azure resource roles the app cannot read the role's settings and
+authentication context. The app sees only the context, not the Conditional Access policy behind
+it: the activation asks again only if that policy sets sign-in frequency to Every time. For most Azure resource roles the app cannot read the role's settings and
 shows neither notice.
 
 **⚠ This group can carry directory roles** — on a PIM-for-Groups entry. Group membership can carry

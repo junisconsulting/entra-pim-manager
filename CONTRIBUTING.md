@@ -49,6 +49,12 @@ Admin-facing scripts under `scripts/` support an unattended rollout — see
 `packaging/intune/build.ps1` wraps the Setup.exe and these two endpoint scripts into the
 `.intunewin` the release attaches (Windows only).
 
+`setup-cap-and-authcontext-for-pim.ps1` is not part of the rollout: an admin runs it interactively
+to set up the fresh sign-in per activation (`docs/fresh-sign-in.md`, ADR 0004). It needs
+PowerShell 7, because `Microsoft.Graph.Authentication` and `Az.Accounts` cannot share a Windows
+PowerShell 5.1 session. Values in its Graph request bodies stay plain `[string]`s: the module
+before 2.40 cannot serialize the wrapped strings a pipeline returns.
+
 In these scripts, a path that comes from a parameter goes through `-LiteralPath` (`Test-Path`,
 `Copy-Item`). Without it, `[` and `]` are wildcards, so `Contoso[dark].png` is reported missing or
 silently not copied, even under `$ErrorActionPreference = 'Stop'`.
