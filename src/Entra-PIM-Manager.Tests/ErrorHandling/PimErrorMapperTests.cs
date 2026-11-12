@@ -295,14 +295,41 @@ public sealed class PimErrorMapperTests
     }
 
     [Fact]
-    public void DescribeFetchFailure_NoMsalAccountForEnrollment_TellsTheUserToReAddTheAccount()
+    public void DescribeFetchFailure_NoMsalAccountForEnrollment_TellsTheUserToSignInAgainWithoutRemoving()
     {
-        // MsalAuthService throws this when the enrollment's registration changed
-        // underneath it — the only repair is a fresh sign-in.
+        // MsalAuthService throws this when the enrollment's registration changed underneath
+        // it, or when the cache came up empty after a logon (#13). The message cannot tell
+        // the two apart, so it must blame neither, and a fresh sign-in replaces the
+        // enrollment in place.
         var caption = PimErrorMapper.DescribeFetchFailure(
             new MsalUiRequiredException(MsalError.UserNullError, "No MSAL account for oid"));
 
-        Assert.Contains("add it again", caption, StringComparison.Ordinal);
+        Assert.Contains("Sign in again with + Add account", caption, StringComparison.Ordinal);
+        Assert.DoesNotContain("App Registration", caption, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove", caption, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DescribeFetchFailure_BrokerNeedsTheUser_AsksForASignInInsteadOfTheLog()
+    {
+        // Field test 2026-11-12: on a pooled host the broker forgets the account at every
+        // logon, and the held-back startup sign-in fails like this until the panel opens.
+        var caption = PimErrorMapper.DescribeFetchFailure(
+            new MsalUiRequiredException("wam_no_account_for_id", "Could not find a WAM account for the selected user."),
+            AuthMethod.Broker);
+
+        Assert.Equal("This account needs a new sign-in. Refresh to sign in.", caption);
+    }
+
+    [Fact]
+    public void DescribeFetchFailure_DeviceCodeNeedsTheUser_DoesNotPromiseARefreshSignIn()
+    {
+        // A device-code account renews without any window, so a refresh can never sign it in.
+        var caption = PimErrorMapper.DescribeFetchFailure(
+            new MsalUiRequiredException("invalid_grant", "AADSTS700082: The refresh token has expired due to inactivity."),
+            AuthMethod.DeviceCode);
+
+        Assert.DoesNotContain("Refresh to sign in", caption, StringComparison.Ordinal);
     }
 
     [Fact]

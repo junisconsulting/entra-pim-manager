@@ -423,10 +423,12 @@ field of the add-account panel is gone.
 - **"The sign-in ended up in a different tenant than the selected entry"**: the
   token Entra issued names another tenant than the entry. Check the entry's
   tenant id.
-- **"Sign-in for this account is no longer valid (its App Registration may have
-  changed)"** on a tenant group: the entry the account was enrolled through was
-  removed or its client id changed. Remove the account in Settings and add it
-  again through the current entry.
+- **"The saved sign-in for this account is missing"** on a tenant group: the app
+  holds no sign-in for the account under the client id its tenant entry names.
+  Either that client id changed, or the app's token cache came up empty after a
+  logon (seen on pooled AVD hosts, issue #13; cause not yet confirmed). Sign in
+  again with **+ Add account** on the tenant's card; there is no need to remove
+  the account first.
 - **"Azure resource roles unavailable: This tenant has not consented…"** on a
   tenant group: the registration lacks the Azure Service Management →
   `user_impersonation` permission, or the tenant has not consented to it yet

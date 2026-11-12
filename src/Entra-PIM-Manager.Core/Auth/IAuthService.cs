@@ -98,6 +98,10 @@ public interface IAuthService
     /// false, because a Conditional Access step-up is exactly what the prompt is for.
     /// </param>
     /// <param name="ct">Cancellation token.</param>
+    /// <remarks>
+    /// Between <see cref="DeferInteractiveSignIn"/> and <see cref="AllowInteractiveSignIn"/>
+    /// every call behaves as if <paramref name="silentOnly"/> were true.
+    /// </remarks>
     Task<AuthenticationResult> AcquireTokenForAccountAsync(
         string objectId,
         string tenantId,
@@ -106,4 +110,22 @@ public interface IAuthService
         string? claimsChallenge = null,
         bool silentOnly = false,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Holds back the interactive WAM fallback until <see cref="AllowInteractiveSignIn"/>:
+    /// every token request in between is silent-only. The app calls this at startup, so the
+    /// first load after a logon never opens a sign-in window nobody asked for — on pooled
+    /// hosts with FSLogix the broker forgets an admin account at every logon, and an
+    /// unprompted sign-in window in a privileged-access tool looks like phishing.
+    /// </summary>
+    void DeferInteractiveSignIn();
+
+    /// <summary>
+    /// Lets token requests fall back to the WAM window again.
+    /// </summary>
+    /// <returns>
+    /// True when a request needed the user while the fallback was held back, so the caller
+    /// can repeat it now that a window may open.
+    /// </returns>
+    bool AllowInteractiveSignIn();
 }

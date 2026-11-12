@@ -1,5 +1,6 @@
 namespace EntraPimManager.Core.Auth;
 
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using EntraPimManager.Core.Configuration;
 using Microsoft.Extensions.Logging;
@@ -21,10 +22,16 @@ public sealed class TokenCacheFactory
 {
     private readonly ILogger<TokenCacheFactory> _logger;
 
+    // The extension reports a cache file it cannot read only to a TraceSource, then goes on
+    // with an empty cache; this brings that report into the app log (see MsalCacheTraceListener).
+    private readonly TraceSource _cacheTrace = new("MsalCache", SourceLevels.All);
+
     public TokenCacheFactory(ILogger<TokenCacheFactory> logger)
     {
         _logger = logger;
         CacheDirectory = AppPaths.DataDirectory;
+        _cacheTrace.Listeners.Clear();
+        _cacheTrace.Listeners.Add(new MsalCacheTraceListener(logger));
     }
 
     /// <summary>Directory holding the encrypted token cache files (non-roaming).</summary>
@@ -57,7 +64,7 @@ public sealed class TokenCacheFactory
         MsalCacheHelper helper;
         try
         {
-            helper = await MsalCacheHelper.CreateAsync(storageProperties).ConfigureAwait(false);
+            helper = await MsalCacheHelper.CreateAsync(storageProperties, _cacheTrace).ConfigureAwait(false);
             helper.VerifyPersistence();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -67,7 +74,7 @@ public sealed class TokenCacheFactory
                 "MSAL token cache {File} could not be opened; rebuilding it",
                 cacheFileName);
             DeleteCacheFile(cacheFileName);
-            helper = await MsalCacheHelper.CreateAsync(storageProperties).ConfigureAwait(false);
+            helper = await MsalCacheHelper.CreateAsync(storageProperties, _cacheTrace).ConfigureAwait(false);
         }
 
         helper.RegisterCache(tokenCache);

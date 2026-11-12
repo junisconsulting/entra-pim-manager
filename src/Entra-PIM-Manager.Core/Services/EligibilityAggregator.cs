@@ -24,6 +24,10 @@ using Microsoft.Identity.Client;
 /// </remarks>
 public sealed class EligibilityAggregator : IEligibilityAggregator
 {
+    // Thrown by Microsoft.Identity.Client.Broker 4.66.0 when WAM no longer knows the
+    // account, as on a pooled host after every logon; MSAL has no constant for it.
+    private const string WamNoAccountForId = "wam_no_account_for_id";
+
     // Raised from 20 s after a field timeout on a healthy tenant (2026-09-04):
     // the ARM tenant-root listing pages over every scope in the estate, and a
     // single retry on a 429 already exceeded the old budget. Still well inside
@@ -239,8 +243,8 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
     /// failure into a user-facing reason instead of an exception, so the Graph
     /// surfaces of the same account are unaffected. A failed token acquisition
     /// (consent missing, prompt dismissed) or a timed-out prompt puts the
-    /// enrollment on <see cref="AzureBackoff"/>; an ordinary ARM error is
-    /// simply retried on the next refresh.
+    /// enrollment on <see cref="AzureBackoff"/>; an ordinary ARM error, and a
+    /// sign-in the account has lost, is simply retried on the next refresh.
     /// </summary>
     private async Task<(IReadOnlyList<T> Items, string? LoadError)> FetchAzureSafeAsync<T>(
         SignedInAccount account,
@@ -274,7 +278,9 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
             // Only a failed sign-in earns the hour. Anything cancelled — a slow read on
             // a large estate, a token call that didn't finish — may well succeed on the
             // next tick, and an hour without Azure roles is the worse answer by far.
-            if (ex is MsalException)
+            // A sign-in the account has lost (no MSAL account, or WAM forgot it) does not
+            // either: retrying is a local lookup, and the user's next sign-in fixes it.
+            if (ex is MsalException and not MsalUiRequiredException { ErrorCode: MsalError.UserNullError or WamNoAccountForId })
             {
                 _azureBackoff[key] = (DateTimeOffset.UtcNow + AzureBackoff, reason);
             }

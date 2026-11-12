@@ -303,6 +303,17 @@ admin grants it. A Conditional Access policy that wants a managed device is one 
 signed in with a device code, that is the cause: that sign-in cannot prove anything about the
 device, so remove the account and add it again with the normal sign-in.
 
+**A tenant says "This account needs a new sign-in".** Windows no longer holds the sign-in for that
+account. Press **⟳** next to ELIGIBILITIES and sign in when the Windows sign-in window appears; the
+panel closes while you sign in, so open it again afterwards. On a shared virtual desktop (pooled
+Azure Virtual Desktop with FSLogix) this happens after every logon when the admin account is not the
+one you sign in to Windows with — Windows forgets it by design. The app does not open the sign-in
+window on its own after a logon; it appears the first time you open the panel.
+
+**A tenant says "The saved sign-in for this account is missing".** Open **Settings**, choose
+**+ Add account** on that tenant's card and sign in with the same account. There is no need to
+remove it first.
+
 **Sign-in window opens and stays blank.** Usually a network that blocks a Microsoft endpoint. Run
 **Settings → Diagnostics → Network check**, hit **Copy report**, and send that to IT — it names the
 endpoint that is blocked instead of leaving them guessing.

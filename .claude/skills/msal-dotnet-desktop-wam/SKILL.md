@@ -189,19 +189,29 @@ Default in-memory cache is lost on app restart, forcing re-prompts. Use `Microso
 ```csharp
 var cacheDir = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-    "Entra PIM Manager");
+    "junis",
+    "Entra-PIM-Manager");
 Directory.CreateDirectory(cacheDir);
 
 var storageProperties = new StorageCreationPropertiesBuilder(
-        cacheFileName: "msal.cache",
+        cacheFileName: $"msal-{clientId}.cache",
         cacheDirectory: cacheDir)
     .Build();
 
-var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);
+// Without a TraceSource a cache file that cannot be decrypted fails silently (see below).
+var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties, traceSource);
 cacheHelper.RegisterCache(pca.UserTokenCache);
 ```
 
-On Windows, DPAPI encrypts the cache per-user. Cache file at `%LocalAppData%\Entra-PIM-Manager\msal.cache` is unreadable by other users on the same machine.
+In this repo that is `TokenCacheFactory.RegisterAsync`; use it rather than a second copy.
+
+On Windows, DPAPI encrypts the cache per-user. Entra PIM Manager keeps one file per App
+Registration, `%LocalAppData%\junis\Entra-PIM-Manager\msal-{clientId}.cache` (device-code:
+`msal-devicecode-{clientId}.cache`), unreadable by other users on the same machine. A file the
+extension cannot decrypt is **not** an exception: it logs "Could not read the token cache.
+Ignoring." to the `TraceSource` given to `MsalCacheHelper.CreateAsync` and goes on with an empty
+cache, so the app only sees "no account". `TokenCacheFactory` wires that `TraceSource` into the app
+log (`MsalCacheTraceListener`).
 
 See `references/token-cache.md` for cross-platform variants and concurrent-access locking.
 

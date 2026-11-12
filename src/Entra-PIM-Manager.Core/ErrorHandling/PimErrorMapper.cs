@@ -159,14 +159,15 @@ public static class PimErrorMapper
             return "PIM is not set up in this tenant, usually because it has no Microsoft Entra ID P2 or Governance license.";
         }
 
-        // MsalAuthService found no cached MSAL account for this enrollment. The
-        // realistic cause is an App Registration change (the tenant's entry got
-        // a different client id), which moves the enrollment to a different MSAL
-        // client whose cache has never seen it. Only a fresh sign-in can repair
-        // that — say so instead of "see the log".
+        // MsalAuthService found no cached MSAL account for this enrollment. One known
+        // cause is an App Registration change, which moves the enrollment to a
+        // different MSAL client whose cache has never seen it. #13 shows another: a
+        // cache that comes up empty after every logon on a pooled host, cause not yet
+        // confirmed. The message cannot tell them apart, so it names none. A fresh
+        // sign-in repairs both, and it replaces the enrollment in place — no remove needed.
         if (exception is MsalUiRequiredException { ErrorCode: MsalError.UserNullError })
         {
-            return "Sign-in for this account is no longer valid (its App Registration may have changed). Remove the account in Settings and add it again.";
+            return "The saved sign-in for this account is missing. Sign in again with + Add account on this tenant's card in Settings.";
         }
 
         // AADSTS65001: the tenant has not consented to a permission the app now
@@ -225,6 +226,15 @@ public static class PimErrorMapper
         if (exception is ArmRequestException)
         {
             return "Azure Resource Manager rejected the request. See the log file for details.";
+        }
+
+        // Any other UI-required failure means the broker needs the user — on a pooled
+        // host it forgets the account at every logon. Until the panel is first opened the
+        // app holds that window back (IAuthService.DeferInteractiveSignIn); from the open
+        // panel a refresh brings it up. A device-code account has no window to bring up.
+        if (exception is MsalUiRequiredException && authMethod != AuthMethod.DeviceCode)
+        {
+            return "This account needs a new sign-in. Refresh to sign in.";
         }
 
         return "Couldn't load eligibilities for this tenant. See the log file for details.";

@@ -512,6 +512,13 @@ Azure-Rollen darf ein nur Berechtigter das meist nicht; dann zeigt sie bewusst g
 ## 4. Tray-App & UI — Phase 4
 
 - [ ] App startet ohne sichtbares Hauptfenster, nur Tray-Icon.
+- [ ] Nach Ab- und Anmelden an Windows (Konto eingetragen, Autostart an) wird das Tray-Icon
+      **ohne Klick** grau oder grün, und es erscheint kein WAM-Fenster von selbst. Eine aktive Rolle
+      im Warnfenster löst den Ablauf-Alarm ebenfalls ohne Klick aus. Windows startet den Autostart
+      bis zu ~2 min verzögert (#20).
+- [ ] Pool-Host mit FSLogix, Admin-Konto ≠ Windows-Konto, Anmeldung auf einem anderen Host: kein
+      WAM-Fenster von selbst, auch nicht nach mehreren Minuten. Erster Klick aufs Tray-Icon → genau
+      ein WAM-Fenster, danach das Fenster mit geladener Liste (#20).
 - [ ] Kontextmenü: Open, Refresh, Settings…, Start with Windows, Exit.
 - [ ] Tray-Icon-Variante bei ≥ 1 aktiver Rolle ist sichtbar anders.
 - [ ] „Refresh" aktualisiert beide Listen.

@@ -50,6 +50,8 @@ public sealed class MsalAuthService : IAuthService, IDisposable
     // — WAM owns those). Routing between the two sets is by SignedInAccount.AuthMethod.
     private readonly Dictionary<string, IPublicClientApplication> _deviceCodePcas = new(StringComparer.OrdinalIgnoreCase);
 
+    private readonly SignInHoldBack _holdBack = new();
+
     public MsalAuthService(
         IOptions<EntraPimManagerOptions> options,
         IWindowTracker windowTracker,
@@ -199,15 +201,33 @@ public sealed class MsalAuthService : IAuthService, IDisposable
                     $"No MSAL account for oid '{objectId}' in cloud '{cloud}' under client id '{clientId}'. The account must be re-enrolled.");
             }
 
-            return authMethod == AuthMethod.DeviceCode
-                ? await AcquireForDeviceCodeAccountAsync(pca, account, tenantId, scopes, ct).ConfigureAwait(false)
-                : await AcquireForAccountAsync(pca, account, tenantId, scopes, claimsChallenge, silentOnly, ct).ConfigureAwait(false);
+            if (authMethod == AuthMethod.DeviceCode)
+            {
+                return await AcquireForDeviceCodeAccountAsync(pca, account, tenantId, scopes, ct).ConfigureAwait(false);
+            }
+
+            var heldBack = _holdBack.AppliesTo(silentOnly);
+            try
+            {
+                return await AcquireForAccountAsync(pca, account, tenantId, scopes, claimsChallenge, silentOnly || heldBack, ct).ConfigureAwait(false);
+            }
+            catch (MsalUiRequiredException) when (heldBack)
+            {
+                _holdBack.RecordHeldBack();
+                throw;
+            }
         }
         finally
         {
             _authLock.Release();
         }
     }
+
+    /// <inheritdoc />
+    public void DeferInteractiveSignIn() => _holdBack.Defer();
+
+    /// <inheritdoc />
+    public bool AllowInteractiveSignIn() => _holdBack.Allow();
 
     /// <inheritdoc />
     public void Dispose()

@@ -103,7 +103,9 @@ replaced, not duplicated.
 That is also how a rollout switches a tenant: re-running the script without `-ClientId` makes it
 junis-hosted, re-running it with `-ClientId` makes it self-hosted again. The script cannot remove
 accounts, so have users remove the tenant's accounts in the app first. Otherwise those accounts
-show "no longer valid", and the old registration's tokens stay with Windows.
+show "The saved sign-in for this account is missing", and the old registration's tokens stay with
+Windows. Users who already see the message sign in again with **+ Add account** on the tenant's
+card, through the new registration; they do not have to remove the account first.
 
 The first four go into `appsettings.local.json` and take effect at the next app start. The ticket
 system goes into `settings.json` instead — it is workflow rather than auth configuration — and also
@@ -276,6 +278,27 @@ behaviour **User**.
 machine also has an `appsettings.local.json` next to the executable — a developer convenience when
 running from source — its entries merge field by field into the per-user list and produce
 registrations nobody configured.
+
+## Pooled hosts with FSLogix
+
+On pooled session hosts (Azure Virtual Desktop, Remote Desktop Services) with FSLogix profile
+containers, the app and its accounts follow the user from host to host. The Windows sign-in
+broker's state does not: FSLogix deliberately leaves the broker's data out of the container
+([nonroamable identity data](https://learn.microsoft.com/fslogix/concepts-container-types#profile-container)),
+and broker tokens are bound to the device. An admin account that is not the Windows sign-in account
+therefore needs **one sign-in per logon**. The app keeps the account, the broker no longer knows it,
+and the first time the user opens the panel after a logon, the Windows sign-in window appears. Seen
+in a field test on hybrid-joined pooled hosts on 2026-11-12.
+
+The app cannot avoid this, and FSLogix's `RoamIdentity` is no way around it: Microsoft recommends
+leaving it off and rules it out for Microsoft Entra joined and Intune-managed devices
+([RoamIdentity](https://learn.microsoft.com/fslogix/reference-configuration-settings#roamidentity)).
+The app does not open the sign-in window on its own after a logon, because an unprompted sign-in
+window in a privileged-access tool looks like phishing. Until the user opens the panel once, the
+tray therefore shows no roles for that account.
+
+An admin account that *is* the Windows sign-in account may stay silent, since the broker can use
+the session's own sign-in. That has not been tested.
 
 ## Before you roll this out
 

@@ -380,6 +380,27 @@ public sealed class EligibilityAggregatorTests
         azure.Verify(s => s.GetEligibleAzureRolesAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
+    [Theory]
+    [InlineData("wam_no_account_for_id")]
+    [InlineData(MsalError.UserNullError)]
+    public async Task GetAggregatedEligibilities_LostSignIn_TriesTheAzureSurfaceAgainNextTime(string errorCode)
+    {
+        // Field test 2026-11-12: on a pooled host WAM forgets the account at every logon,
+        // and the held-back startup refresh fails like this. The sign-in that follows on the
+        // first panel open must bring the Azure roles back at once, not an hour later.
+        var account = MakeAccount("oid-a", "tenant-a");
+        var azure = new Mock<IPimAzureResourceService>();
+        azure
+            .Setup(s => s.GetEligibleAzureRolesAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new MsalUiRequiredException(errorCode, "lost sign-in"));
+        var aggregator = BuildAggregator(account, azure.Object);
+
+        await aggregator.GetAggregatedEligibilitiesAsync(new[] { account });
+        await aggregator.GetAggregatedEligibilitiesAsync(new[] { account });
+
+        azure.Verify(s => s.GetEligibleAzureRolesAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
     [Fact]
     public void ForgetAzureBackoff_AnAccountThatNeverFailed_IsHarmless()
     {

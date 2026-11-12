@@ -322,6 +322,18 @@ verwaltetes Gerät verlangt, gehört zur IT. Und wenn du dich per Device Code an
 die Ursache: diese Anmeldung kann nichts über das Gerät nachweisen — Konto entfernen und normal neu
 anmelden.
 
+**Ein Tenant meldet "This account needs a new sign-in".** Windows hat die Anmeldung für dieses Konto
+nicht mehr. **⟳** neben ELIGIBILITIES drücken und anmelden, wenn das Windows-Anmeldefenster
+erscheint; das Fenster der App schließt sich dabei, danach wieder öffnen. Auf einem geteilten
+virtuellen Desktop (Azure Virtual Desktop im Pool mit FSLogix) passiert das nach jeder Anmeldung,
+wenn das Admin-Konto nicht das ist, mit dem du dich an Windows anmeldest — Windows vergisst es dort
+absichtlich. Nach einer Anmeldung an Windows öffnet die App das Anmeldefenster nicht von selbst; es
+erscheint, wenn du das Fenster der App zum ersten Mal öffnest.
+
+**Ein Tenant meldet "The saved sign-in for this account is missing".** **Settings** öffnen, auf der
+Karte des Tenants **+ Add account** wählen und mit demselben Konto anmelden. Vorher entfernen ist
+nicht nötig.
+
 **Das Anmeldefenster öffnet sich und bleibt leer.** Meist blockiert das Netzwerk einen
 Microsoft-Endpunkt. **Settings → Diagnostics → Network check** ausführen, **Copy report** drücken
 und das an die IT schicken — darin steht, welcher Endpunkt blockiert ist, statt dass jemand raten

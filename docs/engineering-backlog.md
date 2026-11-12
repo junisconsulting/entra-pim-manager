@@ -315,6 +315,20 @@ and no reason to consent.
 aggregator before it touches ARM, validated like the other fields — only if a tenant actually
 asks; until then the backoff is the answer.
 
+## A lost sign-in is repaired only from Settings
+
+**Evidence:** issue #13 (pooled AVD, 2026-11-11): after every Windows logon the MSAL cache holds no
+account for an enrollment that `accounts.json` still lists, so every read fails with `user_null`
+and the tenant group shows the "sign in again" message. The repair is a new sign-in through
+**+ Add account** on the tenant's card in Settings; `AccountStore.UpsertAsync` replaces the entry,
+so no remove is needed. A "Sign in again" button in the message itself was considered and
+deferred: while the cache loss on that host is unexplained, it would hide the symptom rather than
+fix it.
+
+**What makes the fix safe:** the button runs the same broker sign-in as **+ Add account** for that
+tenant and must keep refusing a sign-in that lands in another tenant (`ToEnrollment`). Check that
+the account keeps its position in the list, which `EnrollAccountItem` currently moves to the end.
+
 ## Tooltips inside the Settings account row never fire
 
 **Evidence:** the account row's content `Grid` (`TrayPopupWindow.axaml`, inside the

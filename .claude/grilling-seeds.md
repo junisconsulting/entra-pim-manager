@@ -33,3 +33,12 @@ design tree when a change touches the area, not a questionnaire.
   tenant lock hid the add form, but the welcome card and the add-account panel still pointed at
   it, and the gear's Save could still write a new registration for a card that had only
   accounts. Found 2026-11-11 in review and while building, after the grilling had settled scope.
+
+## Sign-in and token timing
+
+- **Does the change make the app ask for tokens without a click, or earlier than before?** On
+  pooled AVD hosts with FSLogix the broker forgets an admin account that is not the Windows sign-in
+  account at every logon (`wam_no_account_for_id`). Any interactive fallback on that path becomes
+  an unprompted sign-in window, and a silent ARM failure an hour-long Azure back-off. Startup
+  loading (#20) was first decided with the interactive fallback and reversed after the field test
+  on 2026-11-12.
