@@ -249,8 +249,10 @@ The gear icon, bottom right.
 **APPEARANCE** — Theme: System, Light or Dark. **Logo** puts your organization's logo at the top
 right of the panel: **Choose…** takes a PNG, **Remove** takes it away again.
 
-**BEHAVIOR** — Start with Windows. Keep a Start-menu entry. Default activation duration (the
-slider's starting value, not a limit — the limit is your admin's policy).
+**BEHAVIOR** — Start with Windows. Open the panel at startup (off by default): the panel opens
+once after the app starts, for example to check your roles right after you sign in to Windows; if a
+sign-in has expired, the Windows sign-in window comes first. Keep a Start-menu entry. Default
+activation duration (the slider's starting value, not a limit — the limit is your admin's policy).
 
 **NOTIFICATIONS** — Notify before expiry, and how early.
 

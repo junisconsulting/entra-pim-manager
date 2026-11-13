@@ -56,11 +56,12 @@ public sealed class FirstRunSetupController
     /// <summary>
     /// Shows the setup window when the first-run marker is present. No-ops otherwise.
     /// </summary>
-    public void Start()
+    /// <returns>Whether the setup window is shown.</returns>
+    public bool Start()
     {
         if (!File.Exists(AppPaths.FirstRunSetupMarkerFile))
         {
-            return;
+            return false;
         }
 
         // Seed from the live state: autostart was defaulted on by the install hook and the
@@ -71,6 +72,7 @@ public sealed class FirstRunSetupController
         _viewModel.CreateStartMenuShortcut = !_shortcuts.IsSupported || _shortcuts.IsStartMenuShortcutPresent;
 
         Dispatcher.UIThread.Post(() => _window.Show());
+        return true;
     }
 
     private void Apply()

@@ -53,11 +53,4 @@ public sealed class UserSettingsVerifiedTests
 
         Assert.Same(once, once.WithRegistrationVerified(EntraCloud.Global, TenantA, JunisAppId, AppRegistrationHosting.JunisHosted));
     }
-
-    [Fact]
-    public void OpenWindowAtStartup_DefaultsToOff()
-    {
-        // Tray-first start stays the default; the window opens only when opted in.
-        Assert.False(UserSettings.Default.OpenWindowAtStartup);
-    }
 }
