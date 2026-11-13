@@ -77,3 +77,8 @@ they fail with `NETSDK1100`.
   without X" is usually part of the requirement.
 - `montage -label '%t' *.png -tile 2x -geometry +12+12 sheet.png` (ImageMagick) puts the variants
   on one sheet for the user.
+- Inter has no symbol glyphs such as ⓘ (U+24D8); headless they render as a box. Check them on
+  Windows, where a system font supplies them.
+- For a before/after comparison, copy the style files into the scratchpad (`git show HEAD:` for
+  BEFORE) instead of the ProjectReference, which compiles the working tree's styles into both and
+  writes into the repo's `bin`/`obj`.

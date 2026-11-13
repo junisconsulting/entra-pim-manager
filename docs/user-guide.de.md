@@ -259,7 +259,7 @@ Bevor du ihn drückst:
 
 ## Einstellungen
 
-Das Zahnrad unten rechts.
+Das Zahnrad unten rechts. Fahr mit der Maus über ein ⓘ neben einer Einstellung, um zu sehen, was sie bewirkt.
 
 **APPEARANCE** — Theme: System, hell oder dunkel. **Logo** setzt das Logo deiner Organisation oben
 rechts ins Fenster: **Choose…** nimmt ein PNG, **Remove** entfernt es wieder.

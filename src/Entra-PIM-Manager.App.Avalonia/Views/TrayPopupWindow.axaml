@@ -2140,12 +2140,16 @@
                         Padding="0"
                         Command="{Binding ToggleTenantsSectionCommand}">
                   <Grid ColumnDefinitions="Auto,Auto,*,Auto">
-                    <TextBlock Grid.Column="0"
-                               Text="TENANTS"
-                               FontSize="{DynamicResource FontCaption}"
-                               FontWeight="Medium"
-                               Foreground="{DynamicResource TextTertiaryBrush}"
-                               VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="TENANTS"
+                                 FontSize="{DynamicResource FontCaption}"
+                                 FontWeight="Medium"
+                                 Foreground="{DynamicResource TextTertiaryBrush}"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Classes="info"
+                                 FontSize="{DynamicResource FontCaption}"
+                                 ToolTip.Tip="One card per tenant: its App Registration, its ticket system, and the accounts signed into it." />
+                    </StackPanel>
                     <Border Grid.Column="1"
                             Background="{DynamicResource SuccessSoftBrush}"
                             CornerRadius="4"
@@ -2179,11 +2183,6 @@
                 </Button>
 
                 <StackPanel Spacing="8" IsVisible="{Binding IsTenantsSectionExpanded}">
-                  <TextBlock Text="One card per tenant: its App Registration, its ticket system, and the accounts signed into it."
-                             FontSize="{DynamicResource FontSmall}"
-                             Foreground="{DynamicResource TextTertiaryBrush}"
-                             TextWrapping="Wrap" />
-
                   <!-- One banner for the whole section, above the cards: inside a
                        collapsed configuration disclosure it would be invisible
                        exactly when it matters. -->
@@ -2332,13 +2331,12 @@
                 <!-- Logo: what a rollout can place, chosen here for an install by hand. -->
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalAlignment="Center">
                   <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock Text="Logo"
-                               FontSize="{DynamicResource FontBody}"
-                               Foreground="{DynamicResource TextPrimaryBrush}" />
-                    <TextBlock Text="Your organization's logo at the top right. A tightly cropped PNG, ideally transparent."
-                               FontSize="{DynamicResource FontSmall}"
-                               Foreground="{DynamicResource TextTertiaryBrush}"
-                               TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="Logo"
+                                 FontSize="{DynamicResource FontBody}"
+                                 Foreground="{DynamicResource TextPrimaryBrush}" />
+                      <TextBlock Classes="info" ToolTip.Tip="Your organization's logo at the top right. A tightly cropped PNG, ideally transparent." />
+                    </StackPanel>
                   </StackPanel>
                   <Button Grid.Column="1"
                           Classes="secondary"
@@ -2367,10 +2365,6 @@
                     <TextBlock Text="Start with Windows"
                                FontSize="{DynamicResource FontBody}"
                                Foreground="{DynamicResource TextPrimaryBrush}" />
-                    <TextBlock Text="Launches the tray app when you sign in."
-                               FontSize="{DynamicResource FontSmall}"
-                               Foreground="{DynamicResource TextTertiaryBrush}"
-                               TextWrapping="Wrap" />
                   </StackPanel>
                   <ToggleSwitch Grid.Column="1"
                                 IsChecked="{Binding StartWithWindows}"
@@ -2384,17 +2378,9 @@
                       <TextBlock Text="Open the panel at startup"
                                  FontSize="{DynamicResource FontBody}"
                                  Foreground="{DynamicResource TextPrimaryBrush}" />
-                      <TextBlock Text="&#x24D8;"
-                                 FontSize="{DynamicResource FontBody}"
-                                 Foreground="{DynamicResource TextTertiaryBrush}"
-                                 VerticalAlignment="Center"
-                                 Background="Transparent"
+                      <TextBlock Classes="info"
                                  ToolTip.Tip="If a sign-in has expired, the Windows sign-in window opens first, then the panel." />
                     </StackPanel>
-                    <TextBlock Text="Shows the panel once after launch instead of starting tray-only."
-                               FontSize="{DynamicResource FontSmall}"
-                               Foreground="{DynamicResource TextTertiaryBrush}"
-                               TextWrapping="Wrap" />
                   </StackPanel>
                   <ToggleSwitch Grid.Column="1"
                                 IsChecked="{Binding OpenPanelAtStartup}"
@@ -2408,10 +2394,6 @@
                     <TextBlock Text="Start menu entry"
                                FontSize="{DynamicResource FontBody}"
                                Foreground="{DynamicResource TextPrimaryBrush}" />
-                    <TextBlock Text="Keep a shortcut in the Start menu to find and pin the app."
-                               FontSize="{DynamicResource FontSmall}"
-                               Foreground="{DynamicResource TextTertiaryBrush}"
-                               TextWrapping="Wrap" />
                   </StackPanel>
                   <ToggleSwitch Grid.Column="1"
                                 IsChecked="{Binding CreateStartMenuShortcut}"
@@ -2421,13 +2403,12 @@
 
                 <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
                   <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock Text="Default activation duration"
-                               FontSize="{DynamicResource FontBody}"
-                               Foreground="{DynamicResource TextPrimaryBrush}" />
-                    <TextBlock Text="Used as the starting value of the duration slider."
-                               FontSize="{DynamicResource FontSmall}"
-                               Foreground="{DynamicResource TextTertiaryBrush}"
-                               TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="Default activation duration"
+                                 FontSize="{DynamicResource FontBody}"
+                                 Foreground="{DynamicResource TextPrimaryBrush}" />
+                      <TextBlock Classes="info" ToolTip.Tip="The duration slider's starting value, not a limit. The limit is your admin's policy." />
+                    </StackPanel>
                   </StackPanel>
                   <ComboBox Grid.Column="1"
                             ItemsSource="{Binding DurationOptions}"
@@ -2456,10 +2437,6 @@
                     <TextBlock Text="Notify before expiry"
                                FontSize="{DynamicResource FontBody}"
                                Foreground="{DynamicResource TextPrimaryBrush}" />
-                    <TextBlock Text="Toast when an active role nears its expiry."
-                               FontSize="{DynamicResource FontSmall}"
-                               Foreground="{DynamicResource TextTertiaryBrush}"
-                               TextWrapping="Wrap" />
                   </StackPanel>
                   <ToggleSwitch Grid.Column="1"
                                 IsChecked="{Binding ExpiryWarningEnabled}"
@@ -2472,10 +2449,6 @@
                     <TextBlock Text="Warning threshold"
                                FontSize="{DynamicResource FontBody}"
                                Foreground="{DynamicResource TextPrimaryBrush}" />
-                    <TextBlock Text="How early the warning toast fires."
-                               FontSize="{DynamicResource FontSmall}"
-                               Foreground="{DynamicResource TextTertiaryBrush}"
-                               TextWrapping="Wrap" />
                   </StackPanel>
                   <ComboBox Grid.Column="1"
                             ItemsSource="{Binding ExpiryThresholdOptions}"
@@ -2502,13 +2475,12 @@
 
                 <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
                   <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock Text="Automatic updates"
-                               FontSize="{DynamicResource FontBody}"
-                               Foreground="{DynamicResource TextPrimaryBrush}" />
-                    <TextBlock Text="Check GitHub for new releases and offer to install them."
-                               FontSize="{DynamicResource FontSmall}"
-                               Foreground="{DynamicResource TextTertiaryBrush}"
-                               TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="Automatic updates"
+                                 FontSize="{DynamicResource FontBody}"
+                                 Foreground="{DynamicResource TextPrimaryBrush}" />
+                      <TextBlock Classes="info" ToolTip.Tip="Check GitHub for new releases and offer to install them." />
+                    </StackPanel>
                   </StackPanel>
                   <ToggleSwitch Grid.Column="1"
                                 IsChecked="{Binding AutomaticUpdatesEnabled}"
@@ -2522,13 +2494,9 @@
                      update to install" and they are not interchangeable. -->
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalAlignment="Center">
                   <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
-                    <TextBlock Text="Check now"
+                    <TextBlock Text="Updates"
                                FontSize="{DynamicResource FontBody}"
                                Foreground="{DynamicResource TextPrimaryBrush}" />
-                    <TextBlock Text="Look for a newer version right now."
-                               FontSize="{DynamicResource FontSmall}"
-                               Foreground="{DynamicResource TextTertiaryBrush}"
-                               TextWrapping="Wrap" />
                     <TextBlock Text="{Binding UpdateCheckStatus}"
                                FontSize="{DynamicResource FontSmall}"
                                Foreground="{DynamicResource TextSecondaryBrush}"
@@ -2575,13 +2543,12 @@
 
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" VerticalAlignment="Center">
                   <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock Text="Log detail"
-                               FontSize="{DynamicResource FontBody}"
-                               Foreground="{DynamicResource TextPrimaryBrush}" />
-                    <TextBlock Text="Applies immediately. Debug records full sign-in detail for troubleshooting — log files grow large."
-                               FontSize="{DynamicResource FontSmall}"
-                               Foreground="{DynamicResource TextTertiaryBrush}"
-                               TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="Log detail"
+                                 FontSize="{DynamicResource FontBody}"
+                                 Foreground="{DynamicResource TextPrimaryBrush}" />
+                      <TextBlock Classes="info" ToolTip.Tip="Applies immediately. Debug records full sign-in detail for troubleshooting — log files grow large." />
+                    </StackPanel>
                   </StackPanel>
                   <ComboBox Grid.Column="1"
                             ItemsSource="{Binding LogLevelOptions}"
@@ -2598,13 +2565,9 @@
 
                 <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
                   <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                    <TextBlock Text="Log files"
+                    <TextBlock Text="Logs"
                                FontSize="{DynamicResource FontBody}"
                                Foreground="{DynamicResource TextPrimaryBrush}" />
-                    <TextBlock Text="Open the folder with the rolling log files — useful when reporting a problem."
-                               FontSize="{DynamicResource FontSmall}"
-                               Foreground="{DynamicResource TextTertiaryBrush}"
-                               TextWrapping="Wrap" />
                   </StackPanel>
                   <Button Grid.Column="1"
                           Classes="secondary"

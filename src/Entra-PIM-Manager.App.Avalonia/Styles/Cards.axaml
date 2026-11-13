@@ -31,6 +31,20 @@
     <Setter Property="Padding" Value="14" />
   </Style>
 
+  <!-- ===== Info glyph next to a settings label =====                  -->
+  <!-- The explanation lives in its ToolTip.Tip, so a row shows only     -->
+  <!-- label and control. Only what a user needs to see without hovering -->
+  <!-- stays as visible text (status, choices, troubleshooting hooks).   -->
+  <!-- The transparent background makes the whole glyph box hoverable.   -->
+
+  <Style Selector="TextBlock.info">
+    <Setter Property="Text" Value="&#x24D8;" />
+    <Setter Property="FontSize" Value="{DynamicResource FontBody}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextTertiaryBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
   <!-- ===== Active role card ===== -->
 
   <Style Selector="Border.active">

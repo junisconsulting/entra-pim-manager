@@ -244,7 +244,7 @@ Before you press it:
 
 ## Settings
 
-The gear icon, bottom right.
+The gear icon, bottom right. Hover an ⓘ next to a setting for what it does.
 
 **APPEARANCE** — Theme: System, Light or Dark. **Logo** puts your organization's logo at the top
 right of the panel: **Choose…** takes a PNG, **Remove** takes it away again.
