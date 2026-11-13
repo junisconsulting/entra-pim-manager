@@ -36,9 +36,10 @@ public sealed class MsalLogThrottle
     private const int MaxRemembered = 500;
 
     // Two linear alternatives, no nested quantifier — it cannot backtrack, so it needs
-    // no timeout.
+    // no timeout. The date is followed by a space in MSAL's own header and by a "T" in
+    // the cache extension's ISO one ([MSAL.Extension][2026-11-13T06:17:48.0562016Z]).
     private static readonly Regex PerCallHeader = new(
-        @"\[\d{4}-\d\d-\d\d [^\]]*\]|\[MSAL:\d+\]",
+        @"\[\d{4}-\d\d-\d\d[ T][^\]]*\]|\[MSAL:\d+\]",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private readonly ConcurrentDictionary<string, byte> _seen = new(StringComparer.Ordinal);

@@ -18,6 +18,10 @@ public sealed class MsalCacheTraceListener : TraceListener
 {
     private readonly ILogger _logger;
 
+    // While a cache file stays unreadable the extension repeats the same warnings on every
+    // refresh — twelve lines a minute in the field test of 2026-11-13. Once per process is enough.
+    private readonly MsalLogThrottle _throttle = new();
+
     public MsalCacheTraceListener(ILogger logger)
     {
         _logger = logger;
@@ -25,7 +29,15 @@ public sealed class MsalCacheTraceListener : TraceListener
 
     /// <inheritdoc />
     public override void TraceEvent(TraceEventCache? eventCache, string source, TraceEventType eventType, int id, string? message)
-        => _logger.Log(LevelFor(eventType), "[MSAL cache] {Message}", message);
+    {
+        // IsEnabled first, as for MSAL's own lines: a line dropped by the level must not
+        // count as seen, or it would never show once the user switches to Debug.
+        var level = LevelFor(eventType);
+        if (_logger.IsEnabled(level) && _throttle.ShouldLog(level, message))
+        {
+            _logger.Log(level, "[MSAL cache] {Message}", message);
+        }
+    }
 
     /// <inheritdoc />
     public override void TraceEvent(TraceEventCache? eventCache, string source, TraceEventType eventType, int id, string? format, params object?[]? args)
