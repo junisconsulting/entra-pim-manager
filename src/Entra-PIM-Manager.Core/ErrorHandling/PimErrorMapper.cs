@@ -159,14 +159,16 @@ public static class PimErrorMapper
             return "PIM is not set up in this tenant, usually because it has no Microsoft Entra ID P2 or Governance license.";
         }
 
-        // MsalAuthService found no cached MSAL account for this enrollment. The
-        // realistic cause is an App Registration change (the tenant's entry got
-        // a different client id), which moves the enrollment to a different MSAL
-        // client whose cache has never seen it. Only a fresh sign-in can repair
-        // that — say so instead of "see the log".
+        // MsalAuthService found no cached MSAL account for this enrollment. One known
+        // cause is an App Registration change, which moves the enrollment to a
+        // different MSAL client whose cache has never seen it. #13 shows another: a
+        // cache that comes up empty after every logon on a pooled host, because DPAPI
+        // cannot decrypt it (see the msal skill's token-cache reference). The message
+        // cannot tell them apart, so it names none. A fresh sign-in repairs both, and it
+        // replaces the enrollment in place — no remove needed.
         if (exception is MsalUiRequiredException { ErrorCode: MsalError.UserNullError })
         {
-            return "Sign-in for this account is no longer valid (its App Registration may have changed). Remove the account in Settings and add it again.";
+            return "The saved sign-in for this account is missing. Sign in again with + Add account on this tenant's card in Settings.";
         }
 
         // AADSTS65001: the tenant has not consented to a permission the app now
@@ -201,9 +203,7 @@ public static class PimErrorMapper
         // account that would land in exactly the same place. MsalException, not
         // MsalUiRequiredException: MSAL's UiRequired throttle wraps the original
         // in a different type on every repeat of the same failure.
-        if (exception is MsalException
-            && (exception.Message.Contains("AADSTS53001", StringComparison.Ordinal)
-                || exception.Message.Contains("AADSTS53000", StringComparison.Ordinal)))
+        if (exception is MsalException && IsDeviceStateRequired(exception.Message))
         {
             return authMethod == AuthMethod.DeviceCode
                 ? "A Conditional Access policy requires a managed device, which device-code sign-in cannot present. Remove this account in Settings and add it again using the standard sign-in."
@@ -225,6 +225,22 @@ public static class PimErrorMapper
         if (exception is ArmRequestException)
         {
             return "Azure Resource Manager rejected the request. See the log file for details.";
+        }
+
+        // Any other UI-required failure means the broker needs the user — on a pooled
+        // host it forgets the account at every logon. Until the panel is first opened the
+        // app holds that window back (IAuthService.DeferInteractiveSignIn); from the open
+        // panel a refresh brings it up. A device-code account has no window to bring up.
+        if (exception is MsalUiRequiredException && authMethod != AuthMethod.DeviceCode)
+        {
+            return "This account needs a new sign-in. Refresh to sign in.";
+        }
+
+        // A device-code account renews without a window, so only a fresh device-code sign-in
+        // helps — and the red tray (#21) sends the user here, so this card has to say how.
+        if (exception is MsalUiRequiredException)
+        {
+            return "This account's device-code sign-in has expired. Sign in again with + Add account on this tenant's card in Settings, under Advanced.";
         }
 
         return "Couldn't load eligibilities for this tenant. See the log file for details.";
@@ -258,6 +274,23 @@ public static class PimErrorMapper
 
         return DescribeFetchFailure(exception, authMethod, hosting);
     }
+
+    /// <summary>
+    /// Whether a new sign-in fixes <paramref name="exception"/>: a UI-required failure that is
+    /// not one of the cases only an admin or the device can fix — missing consent, not
+    /// assigned (50105), a disabled app, Conditional Access device state. Drives the red tray
+    /// icon (#21).
+    /// </summary>
+    /// <remarks>
+    /// Known limit: WAM's silent call hides the AADSTS code ("Error Message: (pii)"), so until
+    /// the panel is first opened a missing consent looks like a lapsed sign-in and counts.
+    /// </remarks>
+    public static bool IsSignInNeeded(Exception exception)
+        => exception is MsalUiRequiredException
+            && !IsConsentMissing(exception)
+            && !HasAadsts(exception.Message, "50105")
+            && !IsDeviceStateRequired(exception.Message)
+            && !IsAppDisabled(exception.Message);
 
     private static UserFacingError Map(string code, int statusCode, string? message) => code switch
     {
@@ -406,6 +439,15 @@ public static class PimErrorMapper
     /// </summary>
     private static bool IsAppDisabled(string message)
         => HasAadsts(message, "7000112|70001");
+
+    /// <summary>
+    /// AADSTS53000 / 53001: Conditional Access wants a compliant or domain-joined device. A
+    /// prefix match on purpose, so AADSTS530002 / 530003 (device must be compliant / managed)
+    /// count too — one check for the card text and the tray, so the two cannot drift apart.
+    /// </summary>
+    private static bool IsDeviceStateRequired(string message)
+        => message.Contains("AADSTS53000", StringComparison.Ordinal)
+            || message.Contains("AADSTS53001", StringComparison.Ordinal);
 
     private static UserFacingError MapCancel(AppRegistrationHosting hosting, bool addingAccount)
     {

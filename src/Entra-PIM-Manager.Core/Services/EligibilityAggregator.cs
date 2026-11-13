@@ -112,7 +112,7 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
         var dict = new Dictionary<SignedInAccount, ActiveAssignmentFetchResult>();
         for (var i = 0; i < snapshot.Count; i++)
         {
-            dict[snapshot[i]] = new ActiveAssignmentFetchResult(results[i].Items, results[i].LoadError);
+            dict[snapshot[i]] = new ActiveAssignmentFetchResult(results[i].Items, results[i].LoadError, results[i].NeedsSignIn);
         }
 
         return dict;
@@ -139,7 +139,7 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
         var dict = new Dictionary<SignedInAccount, EligibilityFetchResult>();
         for (var i = 0; i < snapshot.Count; i++)
         {
-            dict[snapshot[i]] = new EligibilityFetchResult(results[i].Items, results[i].LoadError);
+            dict[snapshot[i]] = new EligibilityFetchResult(results[i].Items, results[i].LoadError, results[i].NeedsSignIn);
         }
 
         return dict;
@@ -207,10 +207,11 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
     /// <summary>
     /// Runs <paramref name="fetch"/> for a single account with a per-account
     /// timeout, logging any failure and returning it as an empty list plus a
-    /// user-facing reason. Used by the cross-tenant fan-out so a slow or
-    /// broken tenant cannot poison the aggregate result.
+    /// user-facing reason, and whether a new sign-in fixes it. Used by the
+    /// cross-tenant fan-out so a slow or broken tenant cannot poison the
+    /// aggregate result.
     /// </summary>
-    private async Task<(IReadOnlyList<T> Items, string? LoadError)> FetchSafeAsync<T>(
+    private async Task<(IReadOnlyList<T> Items, string? LoadError, bool NeedsSignIn)> FetchSafeAsync<T>(
         SignedInAccount account,
         Func<SignedInAccount, CancellationToken, Task<(IReadOnlyList<T> Items, string? LoadError)>> fetch,
         string fetchLabel,
@@ -220,7 +221,8 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(PerAccountTimeout);
-            return await fetch(account, cts.Token).ConfigureAwait(false);
+            var (items, loadError) = await fetch(account, cts.Token).ConfigureAwait(false);
+            return (items, loadError, false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
@@ -230,7 +232,10 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
                 fetchLabel,
                 account.ObjectId,
                 account.TenantId);
-            return (Array.Empty<T>(), PimErrorMapper.DescribeFetchFailure(ex, account.AuthMethod, _options.HostingFor(account.Cloud, account.TenantId)));
+            return (
+                Array.Empty<T>(),
+                PimErrorMapper.DescribeFetchFailure(ex, account.AuthMethod, _options.HostingFor(account.Cloud, account.TenantId)),
+                PimErrorMapper.IsSignInNeeded(ex));
         }
     }
 
@@ -239,8 +244,8 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
     /// failure into a user-facing reason instead of an exception, so the Graph
     /// surfaces of the same account are unaffected. A failed token acquisition
     /// (consent missing, prompt dismissed) or a timed-out prompt puts the
-    /// enrollment on <see cref="AzureBackoff"/>; an ordinary ARM error is
-    /// simply retried on the next refresh.
+    /// enrollment on <see cref="AzureBackoff"/>; an ordinary ARM error, and a
+    /// sign-in the account has lost, is simply retried on the next refresh.
     /// </summary>
     private async Task<(IReadOnlyList<T> Items, string? LoadError)> FetchAzureSafeAsync<T>(
         SignedInAccount account,
@@ -274,7 +279,9 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
             // Only a failed sign-in earns the hour. Anything cancelled — a slow read on
             // a large estate, a token call that didn't finish — may well succeed on the
             // next tick, and an hour without Azure roles is the worse answer by far.
-            if (ex is MsalException)
+            // A sign-in the account has lost (no MSAL account, or WAM forgot it) does not
+            // either: retrying is a local lookup, and the user's next sign-in fixes it.
+            if (ex is MsalException and not MsalUiRequiredException { ErrorCode: MsalError.UserNullError or WindowsAccountSafetyNet.WamNoAccountForId })
             {
                 _azureBackoff[key] = (DateTimeOffset.UtcNow + AzureBackoff, reason);
             }

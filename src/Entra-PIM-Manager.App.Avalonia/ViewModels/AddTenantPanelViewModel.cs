@@ -3,6 +3,7 @@ namespace EntraPimManager.AppAvalonia.ViewModels;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EntraPimManager.AppAvalonia.Services;
 using EntraPimManager.Core.Auth;
 using EntraPimManager.Core.Configuration;
 using EntraPimManager.Core.ErrorHandling;
@@ -30,6 +31,10 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     private const string NoRegistrationMessage =
         "No App Registration is configured yet. Add one under Settings → Tenants first.";
 
+    /// <summary><see cref="NoRegistrationMessage"/> under the organization's tenant lock, where Settings offers no add.</summary>
+    private const string NoRegistrationLockedMessage =
+        "No App Registration is configured yet. Your organization manages tenants — contact your IT department.";
+
     private static readonly TimeSpan AuthCallTimeout = TimeSpan.FromMinutes(2);
 
     // Device code is completed on a second device (phone), so it needs a much
@@ -40,6 +45,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     private readonly IAuthService _authService;
     private readonly EntraPimManagerOptions _options;
     private readonly ILogger<AddTenantPanelViewModel> _logger;
+    private readonly bool _isTenantLockdown;
 
     // Cancellation handle for an in-flight device-code sign-in. Held in a field
     // (rather than a local `using`) so the user can abort the up-to-10-minute
@@ -102,12 +108,15 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     public AddTenantPanelViewModel(
         IAuthService authService,
         IOptions<EntraPimManagerOptions> options,
+        ITenantLockdownPolicy tenantLockdown,
         ILogger<AddTenantPanelViewModel> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(tenantLockdown);
         _authService = authService;
         _options = options.Value;
         _logger = logger;
+        _isTenantLockdown = tenantLockdown.IsActive;
 
         // One target per configured entry, in configuration order — the same
         // wording as the cards in Settings → TENANTS. Entries the
@@ -162,6 +171,13 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     /// False for a junis-hosted target: that registration has public client flows off, so
     /// the panel swaps the "Advanced" disclosure for a caption saying so.
     /// </summary>
+    /// <summary>
+    /// The line under the picker. Its last sentence points at Settings → Tenants, which offers
+    /// no add under the organization's tenant lock, so it is left out there.
+    /// </summary>
+    public string SignInHint => "The Windows account picker opens after Sign in. Choose an account that is a member or guest of the selected tenant — the same identity can be enrolled in several tenants."
+        + (_isTenantLockdown ? string.Empty : " To sign in to a tenant that is not listed, add it under Settings → Tenants first.");
+
     public bool IsDeviceCodeAvailable => SelectedTarget?.Hosting != AppRegistrationHosting.JunisHosted;
 
     /// <summary>
@@ -248,7 +264,7 @@ public sealed partial class AddTenantPanelViewModel : ObservableObject
     {
         if (SelectedTarget is not { } target)
         {
-            ErrorMessage = NoRegistrationMessage;
+            ErrorMessage = _isTenantLockdown ? NoRegistrationLockedMessage : NoRegistrationMessage;
             return null;
         }
 

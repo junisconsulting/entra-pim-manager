@@ -42,6 +42,8 @@ Assume every commit is world-readable: no tenant IDs, no internal hostnames, no 
 
 Never write PIM Graph, PIM ARM or MSAL desktop code from memory — all three areas are full of
 obsolete patterns that are common in training data. The skills are the authority.
+A subagent's research report is not the skill: read the skill itself before writing the call
+(2026-10-27, a report put the ARM policy lookup on `roleManagementPolicies`, which has no `roleDefinitionId`).
 
 ## Architecture (three projects, one layering boundary)
 
@@ -120,7 +122,8 @@ from `CONTRIBUTING.md` work as documented; the flags above are the Linux-host ad
 This is a privileged-access tool; these are not style preferences.
 
 - **Per-user install only.** No `HKLM`, no `Program Files`, no Windows service, no SYSTEM scheduled
-  task. Autostart goes through `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` only.
+  task. Autostart goes through `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` only. The one
+  `HKLM` read is the organization's tenant-lock policy (ADR 0005); the app never writes `HKLM`.
 - **Never log access, ID, or refresh tokens — and never log justification text**, which may contain
   incident detail. User identifiers in logs are limited to the OID; never UPN or mail. Ticket numbers
   are fine.

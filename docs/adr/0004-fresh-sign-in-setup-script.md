@@ -4,10 +4,10 @@ PIM roles in most tenants activate without a fresh sign-in, because that needs a
 authentication context with sign-in frequency "Every time", and few tenants configure one. To make
 that setup as easy as possible, Entra PIM Manager ships a PowerShell script signed by junis GmbH
 that configures it, and the app starts it from a button with the tenant id filled in. The script
-signs in through Microsoft Graph PowerShell, so neither the app nor a junis service gains a
-permission. Decided 2026-10-22. Neither the script nor the button exists yet: the hint in the
-activation panel ships first and links to a manual guide; the script's exact scope is designed
-separately.
+signs in through Microsoft Graph PowerShell, and for Azure resource roles through Az PowerShell, so
+neither the app nor a junis service gains a permission. Decided 2026-10-22. The hint in the
+activation panel ships first and links to a manual guide; the script's scope was settled on
+2026-10-27 (below), the button and the signing follow it.
 
 ## Considered options
 
@@ -35,6 +35,12 @@ separately.
 - The script is signed in the release workflow like the binaries. Under `AllSigned` it still asks
   once per release whether to trust the publisher, because the 72-hour certificate changes daily
   (ADR 0003).
+- The script sets the context on the Entra roles the admin picks (all by default), but only on
+  groups and Azure role-and-scope pairs that have eligibilities: writing a group's policy onboards
+  the group into PIM for good, and Azure keeps one policy per role and scope, hundreds per
+  subscription. Where it sets the context it switches PIM's own MFA requirement off, as the portal
+  does. Context and policy are created or picked from a list by the admin, never matched by name,
+  because naming differs in every tenant.
 - The admin who runs it needs Conditional Access Administrator, and for the roles' PIM settings
   Privileged Role Administrator (Entra roles, role-assignable groups) or Owner / User Access
   Administrator on the resource (Azure roles), which they can activate with the app itself.

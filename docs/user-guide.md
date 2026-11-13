@@ -90,10 +90,13 @@ detail.
 
 | Icon | Meaning |
 | --- | --- |
-| **Red** | Not signed in — no account connected, or the session expired and needs a new sign-in |
+| **Red** | No account connected ("not signed in"), or none of your accounts can sign in without you ("sign-in needed") — open the panel; it shows how to sign in again |
 | **Grey** | Signed in, nothing active. The normal resting state |
 | **Green** | At least one role is active. The tooltip counts them |
 | **Amber** | An active role is about to expire. The tooltip names it and counts down |
+
+When only some of your accounts need a new sign-in, the icon keeps the colour of the others and
+the tooltip ends with how many need one.
 
 The shield is drawn to suit your taskbar, light or dark, and follows it if you change the Windows
 theme. Only the small dot carries a meaning.
@@ -151,7 +154,8 @@ the activation.
 ask for no fresh sign-in, so nothing makes you prove it is you before the role becomes active.
 **How to set it up** opens the guide for your PIM admin
 ([docs/fresh-sign-in.md](fresh-sign-in.md)). The notice stays until the role requires an
-authentication context. For most Azure resource roles the app cannot read the role's settings and
+authentication context. The app sees only the context, not the Conditional Access policy behind
+it: the activation asks again only if that policy sets sign-in frequency to Every time. For most Azure resource roles the app cannot read the role's settings and
 shows neither notice.
 
 **⚠ This group can carry directory roles** — on a PIM-for-Groups entry. Group membership can carry
@@ -269,6 +273,12 @@ the accounts signed in through the old App Registration are removed, and you add
 the restart. Changing an App Registration takes effect after a restart, and the app says so when it
 does; until then, **+ Add account…** on that card stays disabled.
 
+If your organization manages the tenant list, Settings says "Tenants are managed by your
+organization." instead of offering **Add a tenant**, and the gear shows only the label and the ticket
+system: no switching between junis-hosted and self-hosted, no **Remove tenant**. Your accounts work
+as usual, and you can still add or remove them. When no tenant is configured yet, ask your IT
+department.
+
 ## Updates
 
 The app checks GitHub once a day and offers what it finds; you choose **Install** or **Later**, and
@@ -295,6 +305,22 @@ resource roles unavailable* — what follows it is the cause. A missing consent 
 admin grants it. A Conditional Access policy that wants a managed device is one for IT. And if you
 signed in with a device code, that is the cause: that sign-in cannot prove anything about the
 device, so remove the account and add it again with the normal sign-in.
+
+**A tenant says "This account needs a new sign-in".** Windows no longer holds the sign-in for that
+account. Press **⟳** next to ELIGIBILITIES and sign in when the Windows sign-in window appears; the
+panel closes while you sign in, so open it again afterwards. On a shared virtual desktop (pooled
+Azure Virtual Desktop with FSLogix) this happens after every logon when the admin account is not the
+one you sign in to Windows with — Windows forgets it by design. The app does not open the sign-in
+window on its own after a logon; it appears the first time you open the panel.
+
+**A tenant says "The saved sign-in for this account is missing".** Open **Settings**, choose
+**+ Add account** on that tenant's card and sign in with the same account. There is no need to
+remove it first. If it is the account you sign in to Windows with, on a Microsoft Entra joined
+device, the app finds the sign-in again by itself.
+
+**A tenant says "This account's device-code sign-in has expired".** A device-code sign-in cannot
+renew itself once it has lapsed. Open **Settings**, choose **+ Add account** on that tenant's card,
+open **Advanced** and sign in again with **Sign in with device code**.
 
 **Sign-in window opens and stays blank.** Usually a network that blocks a Microsoft endpoint. Run
 **Settings → Diagnostics → Network check**, hit **Copy report**, and send that to IT — it names the

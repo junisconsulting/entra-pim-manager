@@ -295,14 +295,45 @@ public sealed class PimErrorMapperTests
     }
 
     [Fact]
-    public void DescribeFetchFailure_NoMsalAccountForEnrollment_TellsTheUserToReAddTheAccount()
+    public void DescribeFetchFailure_NoMsalAccountForEnrollment_TellsTheUserToSignInAgainWithoutRemoving()
     {
-        // MsalAuthService throws this when the enrollment's registration changed
-        // underneath it — the only repair is a fresh sign-in.
+        // MsalAuthService throws this when the enrollment's registration changed underneath
+        // it, or when the cache came up empty after a logon (#13). The message cannot tell
+        // the two apart, so it must blame neither, and a fresh sign-in replaces the
+        // enrollment in place.
         var caption = PimErrorMapper.DescribeFetchFailure(
             new MsalUiRequiredException(MsalError.UserNullError, "No MSAL account for oid"));
 
-        Assert.Contains("add it again", caption, StringComparison.Ordinal);
+        Assert.Contains("Sign in again with + Add account", caption, StringComparison.Ordinal);
+        Assert.DoesNotContain("App Registration", caption, StringComparison.Ordinal);
+        Assert.DoesNotContain("Remove", caption, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void DescribeFetchFailure_BrokerNeedsTheUser_AsksForASignInInsteadOfTheLog()
+    {
+        // Field test 2026-11-12: on a pooled host the broker forgets the account at every
+        // logon, and the held-back startup sign-in fails like this until the panel opens.
+        var caption = PimErrorMapper.DescribeFetchFailure(
+            new MsalUiRequiredException("wam_no_account_for_id", "Could not find a WAM account for the selected user."),
+            AuthMethod.Broker);
+
+        Assert.Equal("This account needs a new sign-in. Refresh to sign in.", caption);
+    }
+
+    [Fact]
+    public void DescribeFetchFailure_DeviceCodeNeedsTheUser_DoesNotPromiseARefreshSignIn()
+    {
+        // A device-code account renews without any window, so a refresh can never sign it in.
+        var caption = PimErrorMapper.DescribeFetchFailure(
+            new MsalUiRequiredException("invalid_grant", "AADSTS700082: The refresh token has expired due to inactivity."),
+            AuthMethod.DeviceCode);
+
+        Assert.DoesNotContain("Refresh to sign in", caption, StringComparison.Ordinal);
+
+        // The red tray (#21) sends the user to this card, so it has to say how to get back in.
+        Assert.Contains("device-code sign-in has expired", caption, StringComparison.Ordinal);
+        Assert.Contains("+ Add account", caption, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -616,5 +647,32 @@ public sealed class PimErrorMapperTests
         var error = new ODataError { Error = new MainError { Code = "BadRequest", Message = "The group has not onboarded to PIM." } };
 
         Assert.DoesNotContain("license", PimErrorMapper.DescribeFetchFailure(error), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("user_null", "No MSAL account for oid", true)]
+    [InlineData("wam_no_account_for_id", "Could not find a WAM account for the selected user.", true)]
+    [InlineData("invalid_grant", "AADSTS700082: The refresh token has expired due to inactivity.", true)]
+    [InlineData("interaction_required", "Interaction is required.", true)]
+    [InlineData("invalid_grant", "AADSTS65001: The user or administrator has not consented", false)]
+    [InlineData("invalid_grant", "AADSTS50105: The signed in user is not assigned to a role for the application", false)]
+    [InlineData("invalid_grant", "AADSTS7000112: Application is disabled.", false)]
+    [InlineData("invalid_grant", "AADSTS53000: Device is not in required device state: compliant.", false)]
+    [InlineData("invalid_grant", "AADSTS53001: Device is not in required device state: domain_joined.", false)]
+    [InlineData("invalid_grant", "AADSTS530003: Your device is required to be managed to access this resource.", false)]
+    public void IsSignInNeeded_UiRequired_OnlyWhereASignInFixesIt(string code, string message, bool expected)
+    {
+        // #21: the tray turns red only for what the user can fix by signing in. Consent,
+        // assignment, a disabled app and a device policy need an admin or another device.
+        Assert.Equal(expected, PimErrorMapper.IsSignInNeeded(new MsalUiRequiredException(code, message)));
+    }
+
+    [Fact]
+    public void IsSignInNeeded_ConsentClassificationOrNoUiRequired_IsFalse()
+    {
+        Assert.False(PimErrorMapper.IsSignInNeeded(
+            new MsalUiRequiredException("invalid_grant", "no code in here", null, UiRequiredExceptionClassification.ConsentRequired)));
+        Assert.False(PimErrorMapper.IsSignInNeeded(new MsalServiceException("request_timeout", "The service did not answer.")));
+        Assert.False(PimErrorMapper.IsSignInNeeded(new InvalidOperationException("upstream blew up")));
     }
 }

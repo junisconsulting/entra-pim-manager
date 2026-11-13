@@ -47,16 +47,20 @@ public sealed class TrayPopupController
 
     private readonly TrayPopupWindow _window;
     private readonly ShellViewModel _viewModel;
-    private bool _initialized;
+    private readonly IAuthService _authService;
+    private Task? _initialization;
+    private Task? _firstOpen;
     private bool _allowClose;
 
     public TrayPopupController(
         TrayPopupWindow window,
         ShellViewModel viewModel,
-        IWindowTracker windowTracker)
+        IWindowTracker windowTracker,
+        IAuthService authService)
     {
         _window = window;
         _viewModel = viewModel;
+        _authService = authService;
         _window.DataContext = _viewModel;
 
         if (windowTracker is AvaloniaWindowTracker tracker)
@@ -96,6 +100,7 @@ public sealed class TrayPopupController
 
         _viewModel.ActiveCountChanged += (_, _) => UpdateTrayIcon();
         _viewModel.ExpiringChanged += (_, _) => UpdateTrayIcon();
+        _viewModel.SignInNeededChanged += (_, _) => UpdateTrayIcon();
         _viewModel.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName == nameof(ShellViewModel.IsSignedIn))
@@ -112,6 +117,17 @@ public sealed class TrayPopupController
 
     /// <summary>Allows the next window-close to actually close (called on app exit).</summary>
     public void PrepareForShutdown() => _allowClose = true;
+
+    /// <summary>
+    /// Loads the accounts and runs the first refresh at app startup, so after a logon the
+    /// tray shows the real state and the expiry warning works without a click. Silently:
+    /// the WAM window is held back until the panel is first opened (<see cref="Show"/>).
+    /// </summary>
+    public void StartInitialization()
+    {
+        _authService.DeferInteractiveSignIn();
+        _ = EnsureInitializedAsync();
+    }
 
     /// <summary>Show the popup if hidden, hide it if visible.</summary>
     public void Toggle()
@@ -141,12 +157,8 @@ public sealed class TrayPopupController
     {
         Dispatcher.UIThread.Post(async () =>
         {
-            if (!_initialized)
-            {
-                _initialized = true;
-                await _viewModel.InitializeAsync();
-                UpdateTrayIcon();
-            }
+            // Every open waits for the same first-open step, a double click during startup too.
+            await (_firstOpen ??= OpenFirstTimeAsync());
 
             PositionAtCursor();
             _window.Show();
@@ -211,6 +223,37 @@ public sealed class TrayPopupController
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetCursorPos(out POINT lpPoint);
 
+    // One shared initialization, whether the startup or the first Show gets there first.
+    private Task EnsureInitializedAsync() => _initialization ??= InitializeAsync();
+
+    private async Task InitializeAsync()
+    {
+        await _viewModel.InitializeAsync();
+        UpdateTrayIcon();
+    }
+
+    // The first open lets token requests open the WAM window again. If one needed the user
+    // meanwhile, refresh before the panel appears: the panel hides whenever it loses focus,
+    // so a WAM window on top of it would close it.
+    private async Task OpenFirstTimeAsync()
+    {
+        await EnsureInitializedAsync();
+
+        // A refresh still running (the 60-second timer) would see the hold-back lifted half-way
+        // and open WAM over the panel, and it would make the refresh below a no-op.
+        // shortcut: polls the shell's busy flag, as the timer's refresh task is not exposed;
+        // await that task instead if the shell ever exposes one.
+        while (_viewModel.IsBusy)
+        {
+            await Task.Delay(100);
+        }
+
+        if (_authService.AllowInteractiveSignIn())
+        {
+            await RefreshAsync();
+        }
+    }
+
     private void UpdateTrayIcon()
     {
         if (Application.Current is null)
@@ -226,13 +269,19 @@ public sealed class TrayPopupController
 
         WindowIcon nextIcon;
         string nextTooltip;
+        var signInNeeded = _viewModel.SignInNeededCount;
         if (!_viewModel.IsSignedIn)
         {
-            // "Not signed in" covers both the cold-start case (no accounts
-            // enrolled yet) and an expired session — both surface as
-            // IsSignedIn=false on the view model.
+            // No account enrolled: the cold start, or the last one was removed.
             nextIcon = Icon("red");
             nextTooltip = "Entra PIM Manager — not signed in";
+        }
+        else if (_viewModel.AllAccountsNeedSignIn)
+        {
+            // Every account needs the user to sign in, so no privilege works (#21). The sign-in
+            // itself waits for the panel: nothing opens by itself after a logon (#20).
+            nextIcon = Icon("red");
+            nextTooltip = "Entra PIM Manager — sign-in needed";
         }
         else if (_viewModel.ActiveCount == 0)
         {
@@ -258,6 +307,13 @@ public sealed class TrayPopupController
         {
             nextIcon = Icon("green");
             nextTooltip = $"Entra PIM Manager — {_viewModel.ActiveCount} active role(s)";
+        }
+
+        // Only some accounts need a sign-in: the others' state stays in front, since an
+        // active role must not hide behind red (#21). Windows cuts a tooltip at 127 characters.
+        if (signInNeeded > 0 && !_viewModel.AllAccountsNeedSignIn)
+        {
+            nextTooltip += signInNeeded == 1 ? " · 1 account needs a sign-in" : $" · {signInNeeded} accounts need a sign-in";
         }
 
         var icon = icons[0];

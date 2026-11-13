@@ -189,7 +189,7 @@ install. The tenant group shows the generic "Couldn't load eligibilities for thi
 cause nor that waiting for consent is the cure, so the honest reading of the UI is "it is
 broken". Broker accounts hide the same window behind an interactive prompt. The genuinely
 unrecoverable case is a refresh token that is gone — then only a fresh device-code enrollment
-helps, and the app equally never says so.
+helps; since #21 the tenant group says so ("This account's device-code sign-in has expired").
 
 **What makes the fix safe:** the recovery must not silently become a broker sign-in — that would
 defeat the reason the account uses device code (federated IdP, see the comment in
@@ -314,6 +314,25 @@ and no reason to consent.
 **What makes the fix safe:** a boolean on `TenantAppRegistration` (default on), read by the
 aggregator before it touches ARM, validated like the other fields — only if a tenant actually
 asks; until then the backoff is the answer.
+
+## A lost sign-in is repaired only from Settings
+
+**Evidence:** issue #13 (pooled AVD, 2026-11-11): after every Windows logon the MSAL cache holds no
+account for an enrollment that `accounts.json` still lists, so every read fails with `user_null`
+and the tenant group shows the "sign in again" message. The repair is a new sign-in through
+**+ Add account** on the tenant's card in Settings; `AccountStore.UpsertAsync` replaces the entry,
+so no remove is needed. The cause there: on Microsoft Entra joined hosts without
+`RemoteDesktop/LoadAadCredKeyFromProfile`, DPAPI cannot decrypt the previous logon's cache, even on the same host
+(#13 diagnostics, 2026-11-13; whether the policy fixes it is not yet confirmed). An enrollment that
+is the signed-in Windows user on an Entra joined device is recovered silently through the Windows
+account (`WindowsAccountSafetyNet`; tested on a notebook, not yet on the #13 host), so the repair
+from Settings remains for every other account. A
+"Sign in again" button in the message itself was considered and deferred: it would hide a host
+problem rather than fix it.
+
+**What makes the fix safe:** the button runs the same broker sign-in as **+ Add account** for that
+tenant and must keep refusing a sign-in that lands in another tenant (`ToEnrollment`). Check that
+the account keeps its position in the list, which `EnrollAccountItem` currently moves to the end.
 
 ## Tooltips inside the Settings account row never fire
 
@@ -486,3 +505,48 @@ first change there resets the other six.
 **What makes the fix safe:** make the panel write only the field that changed (one transform per
 `On…Changed` handler) instead of all seven, and re-apply the theme on `Changed`. Not observed in
 the field; a scanner holding a small JSON file for longer than the startup is unusual.
+
+---
+
+## The fresh-sign-in setup script knows only the Global cloud
+
+**Evidence:** `scripts/setup-cap-and-authcontext-for-pim.ps1` signs in to Graph and Azure without
+naming an environment, so it reaches only the Global cloud (decided 2026-10-27 while designing
+it). Microsoft Learn marks the APIs it calls as available in China (authentication-context update,
+Conditional Access policy create, PIM rule update), but says nothing about whether sign-in
+frequency "Every time", authentication contexts in PIM, and PIM for Groups work there as
+features, and no China tenant is available to try it.
+
+**Why it matters:** the app supports China tenants and shows them the fresh-sign-in hint; their
+admins have to follow the manual steps in `docs/fresh-sign-in.md`.
+
+**What makes the fix safe:** a `-Cloud China` parameter like `create-app-registration.ps1`'s
+(`Connect-MgGraph -Environment China`, `Connect-AzAccount -Environment AzureChinaCloud`), and one
+run against a China tenant before the docs offer it.
+
+---
+
+## Fresh-sign-in script: assumptions not yet verified against a tenant
+
+**Evidence:** `scripts/setup-cap-and-authcontext-for-pim.ps1` was written from Microsoft Learn and
+the repo skills on a Linux host, and exercised only against mocked Graph and ARM responses
+(2026-10-27). Four points need one run in a licensed test tenant:
+
+- Graph v1.0 accepts `conditions.applications.includeAuthenticationContextClassReferences` when
+  creating a Conditional Access policy; Learn documents the field only for beta. If not: the policy
+  calls go to `/beta`, with a comment saying why.
+- An unfiltered `roleEligibilitySchedules` listing at a subscription also returns resource groups,
+  resources and the management groups above. If not: also list at each visible management group.
+- Graph accepts the authentication-context rule while `MultiFactorAuthentication` is still in the
+  enablement rule (the script writes the context first, then drops MFA); ARM accepts both rules in
+  one PATCH. If not: drop MFA first, in the order the API demands.
+- `Microsoft.Graph.Authentication` and `Az.Accounts` work in one PowerShell 7 session, Graph signed
+  in first. If not: run the Azure part in its own `pwsh` process.
+
+**Why it matters:** each is a place where the docs and the API could disagree without the mock
+noticing. The symptom would be a policy that cannot be created, Azure scopes left out, or every
+role in the failure list.
+
+**What makes the fix safe:** run the script in the test tenant with `-WhatIf`, then for real with
+one Entra role, one PIM group and one Azure role at subscription and resource-group scope; then
+activate each in the app and confirm the fresh sign-in.

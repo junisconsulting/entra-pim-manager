@@ -118,6 +118,10 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     // difference between "PIM let go" and "the network blinked".
     private readonly HashSet<string> _activeReadFailures = new(StringComparer.OrdinalIgnoreCase);
 
+    // Enrollments whose last refresh failed in a way a new sign-in fixes (#21); UpdateSignInNeeded
+    // keeps it to the accounts that exist and derives what the tray shows from it.
+    private readonly HashSet<string> _signInNeeded = new(StringComparer.OrdinalIgnoreCase);
+
     // Subscription display names by subscription id, harvested from every row whose
     // scope IS a subscription. ARM does not return the subscription's name on a
     // resource-group-scoped assignment — only its id sits in the scope path — and
@@ -273,6 +277,12 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     public event EventHandler? ActiveCountChanged;
 
     /// <summary>
+    /// Raised once <see cref="SignInNeededCount"/> and <see cref="AllAccountsNeedSignIn"/> are
+    /// both settled — the tray icon listens, and never sees one updated without the other.
+    /// </summary>
+    public event EventHandler? SignInNeededChanged;
+
+    /// <summary>
     /// Raised when the "expiring soon" tray state changes — the soonest expiring
     /// assignment, its remaining-time label, or the count. The tray controller
     /// listens to refresh its icon + tooltip without polling every tick.
@@ -300,6 +310,12 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     /// mutable tenant label. Grouped by tenant in the Settings TENANTS section.
     /// </summary>
     public ObservableCollection<AccountListItemViewModel> Accounts { get; } = [];
+
+    /// <summary>Enrolled accounts whose last refresh failed in a way a new sign-in fixes (#21).</summary>
+    public int SignInNeededCount { get; private set; }
+
+    /// <summary>True when there are accounts and every one of them needs a new sign-in (#21).</summary>
+    public bool AllAccountsNeedSignIn { get; private set; }
 
     /// <summary>Eligibilities grouped per enrolled account / tenant.</summary>
     public ObservableCollection<TenantEligibilityGroup> EligibilityGroups { get; } = [];
@@ -566,6 +582,7 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
                 UpdateActiveCount();
                 UpdateEligibleCount();
                 IsSignedIn = ActiveAccount is not null;
+                UpdateSignInNeeded();
                 if (Accounts.Count == 0)
                 {
                     _refreshTimer.Stop();
@@ -618,6 +635,11 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
                     _activeReadFailures.Add(EnrollmentKey(account));
                 }
             }
+
+            _signInNeeded.Clear();
+            _signInNeeded.UnionWith(activeTask.Result.Where(r => r.Value.NeedsSignIn).Select(r => EnrollmentKey(r.Key)));
+            _signInNeeded.UnionWith(eligibilityTask.Result.Where(r => r.Value.NeedsSignIn).Select(r => EnrollmentKey(r.Key)));
+            UpdateSignInNeeded();
 
             UpdateActiveAssignments(activeTask.Result);
             BuildEligibilityGroups(eligibilityTask.Result);
@@ -1488,6 +1510,11 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
         ActiveAccount = added;
         IsSignedIn = true;
 
+        // A finished sign-in is the proof the account works again; a refresh still running from
+        // before it would otherwise keep the tray red until the next one (#21).
+        _signInNeeded.Remove(EnrollmentKey(added));
+        UpdateSignInNeeded();
+
         // A completed sign-in is the only real proof the App Registration is
         // set up correctly — it exercises the client id, public client flows,
         // the broker redirect URI and admin consent in one go. Record it against
@@ -1689,6 +1716,16 @@ public sealed partial class ShellViewModel : ObservableObject, IAccountsHost
     /// cached tenant name if we have one, and kicks off a background fetch when
     /// we don't.
     /// </summary>
+    // Recounts the accounts that wait for a sign-in against the accounts that exist now, then
+    // tells the tray once, with both values settled (#21).
+    private void UpdateSignInNeeded()
+    {
+        _signInNeeded.IntersectWith(Accounts.Select(a => EnrollmentKey(a.Account)));
+        SignInNeededCount = _signInNeeded.Count;
+        AllAccountsNeedSignIn = Accounts.Count > 0 && _signInNeeded.Count == Accounts.Count;
+        SignInNeededChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     private void EnrollAccountItem(SignedInAccount account, bool makeActive = false)
     {
         var existing = Accounts.FirstOrDefault(a => IsSameEnrollment(a.Account, account));

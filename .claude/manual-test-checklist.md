@@ -39,6 +39,12 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 - [ ] „Sign out" im Tray-Menü: Konten entfernt, `msal.cache` gelöscht,
       Status auf „Nicht angemeldet".
 - [ ] Nach Sign-out erneuter Sign-in: WAM-Prompt erscheint wieder.
+- [ ] Entra-joined Gerät, eingetragenes Konto = Windows-Konto: App beenden, `msal-<id>.cache`
+      löschen, App starten → Tray ohne WAM-Fenster grau oder grün, Log „Sign-in for oid …
+      recovered through the Windows sign-in". Danach **+ Add account** auf derselben Tenant-Karte:
+      der WAM-Picker verhält sich wie vorher und fällt nicht auf das Windows-Konto zusammen.
+- [ ] Dasselbe mit einem Admin-Konto ≠ Windows-Konto: Tray rot wie bisher; im Entra-Anmeldeprotokoll
+      keine Anmeldung des Windows-Kontos an der App.
 
 ## 1b. Sovereign Cloud (Entra China / 21Vianet) — ab 0.4.2
 
@@ -512,6 +518,18 @@ Azure-Rollen darf ein nur Berechtigter das meist nicht; dann zeigt sie bewusst g
 ## 4. Tray-App & UI — Phase 4
 
 - [ ] App startet ohne sichtbares Hauptfenster, nur Tray-Icon.
+- [ ] Nach Ab- und Anmelden an Windows (Konto eingetragen, Autostart an) wird das Tray-Icon
+      **ohne Klick** grau oder grün, und es erscheint kein WAM-Fenster von selbst. Eine aktive Rolle
+      im Warnfenster löst den Ablauf-Alarm ebenfalls ohne Klick aus. Windows startet den Autostart
+      bis zu ~2 min verzögert (#20).
+- [ ] Pool-Host mit FSLogix, Admin-Konto ≠ Windows-Konto, Anmeldung auf einem anderen Host: kein
+      WAM-Fenster von selbst, auch nicht nach mehreren Minuten. Erster Klick aufs Tray-Icon → genau
+      ein WAM-Fenster, danach das Fenster mit geladener Liste (#20).
+- [ ] Alle Konten brauchen eine Anmeldung (Pool-Host nach dem Login, oder `msal-<id>.cache` bei
+      beendeter App beschädigt): Tray **rot**, Tooltip „sign-in needed". Nach der Anmeldung grau
+      oder grün. Zwei Konten, eines davon kaputt: Farbe des anderen, Tooltip endet mit
+      „· 1 account needs a sign-in". Ein Tenant ohne Consent oder Lizenz macht das Tray nach dem
+      ersten Öffnen des Fensters nicht rot; vorher verbirgt WAM den Grund (#21).
 - [ ] Kontextmenü: Open, Refresh, Settings…, Start with Windows, Exit.
 - [ ] Tray-Icon-Variante bei ≥ 1 aktiver Rolle ist sichtbar anders.
 - [ ] „Refresh" aktualisiert beide Listen.

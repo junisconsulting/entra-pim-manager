@@ -160,6 +160,10 @@ public partial class App : Application
 
         SyncAutostartMenuCheck(this, Services);
 
+        // Load the accounts now, not on the first panel open: after a logon the tray shows the
+        // real state and the expiry warning works without a click (#20).
+        _popupController.StartInitialization();
+
         // Start the auto-updater after settings are loaded so its first check
         // reads the real AutomaticUpdatesEnabled value. No-ops when not running
         // from a Velopack install.
@@ -420,6 +424,7 @@ public partial class App : Application
         // UI + tray (App.Avalonia).
         builder.Services.AddSingleton<IToastService, ToastService>();
         builder.Services.AddSingleton<IAutostartService, AutostartService>();
+        builder.Services.AddSingleton<ITenantLockdownPolicy, TenantLockdownPolicy>();
         builder.Services.AddSingleton<ActivationPanelViewModel>();
         builder.Services.AddSingleton<AddTenantPanelViewModel>();
         builder.Services.AddSingleton<SettingsPanelViewModel>();

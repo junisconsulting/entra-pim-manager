@@ -9,6 +9,8 @@ namespace EntraPimManager.Core.Models;
 /// </summary>
 /// <param name="Items">The active assignments; empty when the fetch failed.</param>
 /// <param name="LoadError">User-facing reason the fetch failed, or <c>null</c> on success.</param>
+/// <param name="NeedsSignIn">The fetch failed in a way a new sign-in fixes (#21).</param>
 public sealed record ActiveAssignmentFetchResult(
     IReadOnlyList<ActiveAssignment> Items,
-    string? LoadError);
+    string? LoadError,
+    bool NeedsSignIn = false);

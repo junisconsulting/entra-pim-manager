@@ -96,10 +96,13 @@ die Details.
 
 | Symbol | Bedeutung |
 | --- | --- |
-| **Rot** | Nicht angemeldet — kein Konto verbunden, oder die Sitzung ist abgelaufen |
+| **Rot** | Kein Konto verbunden („not signed in"), oder keins deiner Konten kann sich ohne dich anmelden („sign-in needed") — Fenster öffnen, dort steht, wie du dich neu anmeldest |
 | **Grau** | Angemeldet, nichts aktiv. Der Normalzustand |
 | **Grün** | Mindestens eine Rolle ist aktiv. Der Tooltip zählt sie |
 | **Gelb** | Eine aktive Rolle läuft gleich ab. Der Tooltip nennt sie und zählt herunter |
+
+Braucht nur ein Teil deiner Konten eine neue Anmeldung, behält das Symbol die Farbe der anderen,
+und der Tooltip nennt am Ende, wie viele eine brauchen.
 
 Das Schild ist für helle wie dunkle Taskleisten gezeichnet und folgt ihr, wenn du das
 Windows-Design umstellst. Bedeutung trägt allein der kleine Punkt.
@@ -163,7 +166,9 @@ Aktivierung eine Bestätigung.
 Tenant verlangen keine erneute Anmeldung; nichts lässt dich beweisen, dass du es bist, bevor die
 Rolle aktiv wird. **How to set it up** öffnet die Anleitung für deinen PIM-Admin
 ([docs/fresh-sign-in.md](fresh-sign-in.md), auf Englisch). Der Hinweis bleibt, bis die Rolle einen
-Authentication Context verlangt. Bei den meisten Azure-Ressourcenrollen kann die App die
+Authentication Context verlangt. Die App sieht nur den Context, nicht die Conditional-Access-Policy
+dahinter: Die Aktivierung fragt nur dann erneut, wenn diese Policy die Anmeldehäufigkeit auf
+„Every time“ setzt. Bei den meisten Azure-Ressourcenrollen kann die App die
 Einstellungen der Rolle nicht lesen und zeigt keinen der beiden Hinweise.
 
 **⚠ This group can carry directory roles** — bei einem PIM-for-Groups-Eintrag. Eine
@@ -285,6 +290,12 @@ nach: Die Konten, die über die alte App Registration angemeldet sind, werden en
 sie nach dem Neustart neu hinzu. Eine geänderte App Registration greift erst nach einem Neustart —
 die App sagt es dann auch; bis dahin bleibt **+ Add account…** auf dieser Karte gesperrt.
 
+Verwaltet deine Organisation die Tenant-Liste, steht in den Einstellungen statt **Add a tenant** der
+Satz „Tenants are managed by your organization.", und das Zahnrad zeigt nur Label und Ticketsystem:
+kein Wechsel zwischen junis-hosted und self-hosted, kein **Remove tenant**. Deine Konten funktionieren
+wie gewohnt, und du kannst sie weiterhin hinzufügen und entfernen. Ist noch kein Tenant eingerichtet,
+wende dich an deine IT.
+
 ## Updates
 
 Die App prüft einmal täglich auf GitHub und bietet an, was sie findet; du wählst **Install** oder
@@ -313,6 +324,24 @@ erledigt sich von allein, sobald ein Admin ihn erteilt. Eine Conditional-Access-
 verwaltetes Gerät verlangt, gehört zur IT. Und wenn du dich per Device Code angemeldet hast, ist das
 die Ursache: diese Anmeldung kann nichts über das Gerät nachweisen — Konto entfernen und normal neu
 anmelden.
+
+**Ein Tenant meldet "This account needs a new sign-in".** Windows hat die Anmeldung für dieses Konto
+nicht mehr. **⟳** neben ELIGIBILITIES drücken und anmelden, wenn das Windows-Anmeldefenster
+erscheint; das Fenster der App schließt sich dabei, danach wieder öffnen. Auf einem geteilten
+virtuellen Desktop (Azure Virtual Desktop im Pool mit FSLogix) passiert das nach jeder Anmeldung,
+wenn das Admin-Konto nicht das ist, mit dem du dich an Windows anmeldest — Windows vergisst es dort
+absichtlich. Nach einer Anmeldung an Windows öffnet die App das Anmeldefenster nicht von selbst; es
+erscheint, wenn du das Fenster der App zum ersten Mal öffnest.
+
+**Ein Tenant meldet "The saved sign-in for this account is missing".** **Settings** öffnen, auf der
+Karte des Tenants **+ Add account** wählen und mit demselben Konto anmelden. Vorher entfernen ist
+nicht nötig. Ist es das Konto, mit dem du dich an Windows anmeldest, und ist das Gerät Microsoft
+Entra joined, findet die App die Anmeldung selbst wieder.
+
+**Ein Tenant meldet "This account's device-code sign-in has expired".** Eine Anmeldung per Device
+Code kann sich nicht selbst erneuern, wenn sie abgelaufen ist. **Settings** öffnen, auf der Karte
+des Tenants **+ Add account** wählen, **Advanced** aufklappen und mit **Sign in with device code**
+neu anmelden.
 
 **Das Anmeldefenster öffnet sich und bleibt leer.** Meist blockiert das Netzwerk einen
 Microsoft-Endpunkt. **Settings → Diagnostics → Network check** ausführen, **Copy report** drücken

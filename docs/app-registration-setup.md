@@ -92,8 +92,9 @@ GmbH, for self-hosted your own registration.
 - **Block device code flow** with a Conditional Access policy (Entra ID P1). A
   self-hosted tenant loses the app's device-code fallback with it
   ([§6](#6-verification), step 4).
-- **An authentication context on activation**, so every activation asks for a
-  fresh sign-in — see [fresh-sign-in.md](fresh-sign-in.md).
+- **An authentication context on activation**, with a Conditional Access policy
+  set to sign-in frequency Every time, so every activation asks for a fresh
+  sign-in — see [fresh-sign-in.md](fresh-sign-in.md).
 - **The admin consent workflow** (Enterprise applications → Consent and
   permissions → Admin consent settings), so users request approval from the
   Windows sign-in window instead of forwarding links.
@@ -422,10 +423,14 @@ field of the add-account panel is gone.
 - **"The sign-in ended up in a different tenant than the selected entry"**: the
   token Entra issued names another tenant than the entry. Check the entry's
   tenant id.
-- **"Sign-in for this account is no longer valid (its App Registration may have
-  changed)"** on a tenant group: the entry the account was enrolled through was
-  removed or its client id changed. Remove the account in Settings and add it
-  again through the current entry.
+- **"The saved sign-in for this account is missing"** on a tenant group: the app
+  holds no sign-in for the account under the client id its tenant entry names.
+  Either that client id changed, or the app's token cache came up empty after a
+  logon: on Microsoft Entra joined pooled AVD hosts without the policy
+  `RemoteDesktop/LoadAadCredKeyFromProfile`, DPAPI cannot decrypt the previous
+  logon's cache (issue #13; whether the policy fixes it is not yet confirmed). Sign in
+  again with **+ Add account** on the tenant's card; there is no need to remove
+  the account first.
 - **"Azure resource roles unavailable: This tenant has not consented…"** on a
   tenant group: the registration lacks the Azure Service Management →
   `user_impersonation` permission, or the tenant has not consented to it yet

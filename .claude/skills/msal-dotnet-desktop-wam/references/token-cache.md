@@ -18,19 +18,27 @@ using Microsoft.Identity.Client.Extensions.Msal;
 
 var cacheDir = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-    "Entra PIM Manager");
+    "junis",
+    "Entra-PIM-Manager");
 Directory.CreateDirectory(cacheDir);
 
 var storageProperties = new StorageCreationPropertiesBuilder(
-        cacheFileName: "msal.cache",
+        cacheFileName: $"msal-{clientId}.cache",
         cacheDirectory: cacheDir)
     .Build();
 
-var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);
+// The extension reports a file it cannot decrypt only to this TraceSource, then carries on
+// with an empty cache — pass one, or that failure never reaches a log.
+var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties, traceSource);
 cacheHelper.RegisterCache(pca.UserTokenCache);
 ```
 
-The cache file: `%LocalAppData%\Entra-PIM-Manager\msal.cache` — DPAPI-encrypted, user-scoped.
+In this repo: `TokenCacheFactory.RegisterAsync`, with `MsalCacheTraceListener` forwarding the
+`TraceSource` to the app log.
+
+Entra PIM Manager's cache files: `%LocalAppData%\junis\Entra-PIM-Manager\msal-{clientId}.cache`, one
+per App Registration (device-code accounts: `msal-devicecode-{clientId}.cache`) — DPAPI-encrypted,
+user-scoped.
 
 ## Cross-platform variant (future-proofing)
 
@@ -148,16 +156,38 @@ For a Per-User-installed tray app like Entra PIM Manager:
 
 | File | Path | Purpose |
 |---|---|---|
-| Cache | `%LocalAppData%\Entra-PIM-Manager\msal.cache` | Token cache |
-| Cache lock | `%LocalAppData%\Entra-PIM-Manager\msal.cache.lockfile` | Cross-process lock |
-| Config | `%LocalAppData%\Entra-PIM-Manager\appsettings.json` | User-editable config |
-| Logs | `%LocalAppData%\Entra-PIM-Manager\logs\Entra-PIM-Manager-YYYY-MM-DD.log` | Serilog rolling files |
+| Cache | `%LocalAppData%\junis\Entra-PIM-Manager\msal-{clientId}.cache` | Token cache, one per App Registration |
+| Cache lock | `%LocalAppData%\junis\Entra-PIM-Manager\msal-{clientId}.cache.lockfile` | Cross-process lock |
+| Config | `%LocalAppData%\junis\Entra-PIM-Manager\appsettings.local.json` | Per-user tenant registrations |
+| Logs | `%LocalAppData%\junis\Entra-PIM-Manager\logs\entra-pim-manager-YYYYMMDD.log` | Serilog rolling files |
 
 All under `%LocalAppData%` because:
 - Per-user (DPAPI works)
 - User-writable (no UAC)
-- Survives app uninstall (logs available for forensics)
-- Does NOT roam (we don't want token cache on `%AppData%` roaming, that would break DPAPI binding)
+- Does NOT roam with classic roaming profiles (we don't want the token cache on `%AppData%`
+  roaming, that would break DPAPI binding)
+
+The uninstall deletes the whole folder, logs included (`Program.cs`).
+
+## Pooled hosts with FSLogix (field test 2026-11-12)
+
+An FSLogix profile container carries `%LocalAppData%` along, so the cache file follows the user to
+the next host — but the broker's state does not: FSLogix leaves `Microsoft.AAD.BrokerPlugin_*`,
+`TokenBroker` and `IdentityCache` out of the container by design, and broker tokens are device-bound.
+On a hybrid-joined pooled host the cache still decrypted after a host change and held the account,
+yet the silent request failed with `wam_no_account_for_id` ("Could not find a WAM account for the
+selected user"); one interactive sign-in restored it. For an account that is not the Windows
+sign-in account that is one sign-in per logon, and `RoamIdentity` is no fix (Microsoft rules it out
+for Entra-joined and Intune-managed devices).
+
+FSLogix also redirects `AppData\Roaming\Microsoft\Protect` (the DPAPI master keys) out of the
+container. On Microsoft Entra joined hosts Microsoft requires the policy
+`RemoteDesktop/LoadAadCredKeyFromProfile` for DPAPI data in the profile. Without it the cache fails
+to decrypt after a logon, even on the same host (`Key not valid for use in specified state`), and
+comes up empty (`Found 0 cache accounts`, then `user_null`); DPAPI creates a new master key at
+almost every logon. Confirmed by the diagnostics in issue #13 (2026-11-13); whether the policy fixes
+it is not yet confirmed. For an account that is the Windows sign-in account, the safety net in
+SKILL.md may recover the sign-in; whether Windows issues the token on such a host is not yet known.
 
 ## What NOT to do
 

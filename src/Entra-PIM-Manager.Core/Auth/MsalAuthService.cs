@@ -1,6 +1,8 @@
 namespace EntraPimManager.Core.Auth;
 
 using System.Diagnostics.CodeAnalysis;
+using System.Security;
+using System.Security.Principal;
 using EntraPimManager.Core.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -49,6 +51,11 @@ public sealed class MsalAuthService : IAuthService, IDisposable
     // refresh tokens in their own cache files (the broker PCAs above store no RTs
     // — WAM owns those). Routing between the two sets is by SignedInAccount.AuthMethod.
     private readonly Dictionary<string, IPublicClientApplication> _deviceCodePcas = new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly SignInHoldBack _holdBack = new();
+
+    // Read once: the Windows session user cannot change within a process.
+    private readonly WindowsAccountSafetyNet _windowsAccount = new(ReadSessionSid());
 
     public MsalAuthService(
         IOptions<EntraPimManagerOptions> options,
@@ -194,20 +201,39 @@ public sealed class MsalAuthService : IAuthService, IDisposable
 
             if (account is null)
             {
-                throw new MsalUiRequiredException(
-                    MsalError.UserNullError,
-                    $"No MSAL account for oid '{objectId}' in cloud '{cloud}' under client id '{clientId}'. The account must be re-enrolled.");
+                return await RecoverThroughWindowsAccountAsync(pca, MsalError.UserNullError, enrollment?.AuthMethod, objectId, tenantId, scopes, claimsChallenge, ct).ConfigureAwait(false)
+                    ?? throw new MsalUiRequiredException(
+                        MsalError.UserNullError,
+                        $"No MSAL account for oid '{objectId}' in cloud '{cloud}' under client id '{clientId}'. The account must be re-enrolled.");
             }
 
-            return authMethod == AuthMethod.DeviceCode
-                ? await AcquireForDeviceCodeAccountAsync(pca, account, tenantId, scopes, ct).ConfigureAwait(false)
-                : await AcquireForAccountAsync(pca, account, tenantId, scopes, claimsChallenge, silentOnly, ct).ConfigureAwait(false);
+            if (authMethod == AuthMethod.DeviceCode)
+            {
+                return await AcquireForDeviceCodeAccountAsync(pca, account, tenantId, scopes, ct).ConfigureAwait(false);
+            }
+
+            var heldBack = _holdBack.AppliesTo(silentOnly);
+            try
+            {
+                return await AcquireForAccountAsync(pca, account, objectId, tenantId, scopes, claimsChallenge, silentOnly || heldBack, ct).ConfigureAwait(false);
+            }
+            catch (MsalUiRequiredException) when (heldBack)
+            {
+                _holdBack.RecordHeldBack();
+                throw;
+            }
         }
         finally
         {
             _authLock.Release();
         }
     }
+
+    /// <inheritdoc />
+    public void DeferInteractiveSignIn() => _holdBack.Defer();
+
+    /// <inheritdoc />
+    public bool AllowInteractiveSignIn() => _holdBack.Allow();
 
     /// <inheritdoc />
     public void Dispose()
@@ -230,6 +256,20 @@ public sealed class MsalAuthService : IAuthService, IDisposable
         => Guid.TryParse(tenantId, out var parsed)
             ? parsed.ToString()
             : throw new ArgumentException($"Tenant id '{tenantId}' is not a GUID.", nameof(tenantId));
+
+    private static string? ReadSessionSid()
+    {
+        try
+        {
+            using var identity = WindowsIdentity.GetCurrent();
+            return identity.User?.Value;
+        }
+        catch (SecurityException)
+        {
+            // Without the SID the safety net cannot prove who the Windows user is, so it stays off.
+            return null;
+        }
+    }
 
     /// <summary>
     /// Client id pinned to <paramref name="tenantId"/> in <paramref name="cloud"/>, or a
@@ -410,6 +450,7 @@ public sealed class MsalAuthService : IAuthService, IDisposable
     private async Task<AuthenticationResult> AcquireForAccountAsync(
         IPublicClientApplication pca,
         IAccount account,
+        string objectId,
         string tenantId,
         string[] scopes,
         string? claimsChallenge,
@@ -435,8 +476,20 @@ public sealed class MsalAuthService : IAuthService, IDisposable
                 result.AuthenticationResultMetadata.TokenSource);
             return result;
         }
-        catch (MsalUiRequiredException) when (!silentOnly)
+        catch (MsalUiRequiredException ex)
         {
+            // A broker that lost the account may still know it as the Windows account.
+            var recovered = await RecoverThroughWindowsAccountAsync(pca, ex.ErrorCode, AuthMethod.Broker, objectId, tenantId, scopes, claimsChallenge, ct).ConfigureAwait(false);
+            if (recovered is not null)
+            {
+                return recovered;
+            }
+
+            if (silentOnly)
+            {
+                throw;
+            }
+
             // Re-auth required. Stay pinned to the same account and the same target tenant.
             var interactive = pca.AcquireTokenInteractive(scopes)
                 .WithAccount(account)
@@ -454,6 +507,64 @@ public sealed class MsalAuthService : IAuthService, IDisposable
                 result.AuthenticationResultMetadata.TokenSource);
             return result;
         }
+    }
+
+    /// <summary>
+    /// The safety net for a lost sign-in (<see cref="WindowsAccountSafetyNet"/>): when the
+    /// enrolled account is the Windows session user, asks Windows silently for its account.
+    /// Never opens a window, whatever the caller allows.
+    /// </summary>
+    /// <returns>The token, or null when the net does not apply or fails; the caller then goes on with its original error.</returns>
+    private async Task<AuthenticationResult?> RecoverThroughWindowsAccountAsync(
+        IPublicClientApplication pca,
+        string errorCode,
+        AuthMethod? authMethod,
+        string objectId,
+        string tenantId,
+        string[] scopes,
+        string? claimsChallenge,
+        CancellationToken ct)
+    {
+        if (!_windowsAccount.ShouldTry(errorCode, authMethod, claimsChallenge, objectId, tenantId, scopes))
+        {
+            return null;
+        }
+
+        try
+        {
+            // MSAL checks neither which account Windows returns nor keeps it out of the cache,
+            // so the result is checked here. Another account's cache entry is left in place:
+            // RemoveAsync would also sign it out of the broker, and lookups go by object id.
+            var result = await pca.AcquireTokenSilent(scopes, PublicClientApplication.OperatingSystemAccount)
+                .WithTenantId(tenantId)
+                .ExecuteAsync(ct)
+                .ConfigureAwait(false);
+            if (WindowsAccountSafetyNet.IsSameAccount(result.Account?.HomeAccountId?.ObjectId, result.TenantId, objectId, tenantId))
+            {
+                _logger.LogInformation(
+                    "Sign-in for oid {ObjectId}, tenant {TenantId} recovered through the Windows sign-in",
+                    objectId,
+                    tenantId);
+                return result;
+            }
+
+            _logger.LogDebug(
+                "Windows sign-in returned another account for oid {ObjectId}, tenant {TenantId}",
+                objectId,
+                tenantId);
+            _windowsAccount.RecordFailure(objectId, tenantId, scopes);
+        }
+        catch (MsalException ex)
+        {
+            _logger.LogDebug(
+                "Windows sign-in did not recover oid {ObjectId}, tenant {TenantId}: {ErrorCode}",
+                objectId,
+                tenantId,
+                ex.ErrorCode);
+            _windowsAccount.RecordFailure(objectId, tenantId, scopes, ex);
+        }
+
+        return null;
     }
 
     private async Task<IPublicClientApplication> EnsurePcaAsync(string clientId, EntraCloud cloud, CancellationToken ct)
