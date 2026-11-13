@@ -108,6 +108,7 @@ public sealed record UserSettings(
     Dictionary<string, bool>? ExpandedTenants = null,
     bool SettingsAccountsExpanded = true,
     bool AutomaticUpdatesEnabled = true,
+    bool OpenPanelAtStartup = false,
 
     // ponytail: the pre-0.4.2 `VerifiedClientId` string is deliberately not migrated.
     // The badge falls back to "configured, not verified" once and heals itself on the

@@ -153,14 +153,16 @@ public sealed class TrayPopupController
     }
 
     /// <summary>Show the popup positioned near the mouse cursor, then activate it.</summary>
-    public void Show()
+    /// <param name="atCursor">False for an open no click caused (at startup): the cursor is
+    /// then unrelated to the tray, so the popup goes to the primary screen's bottom-right corner.</param>
+    public void Show(bool atCursor = true)
     {
         Dispatcher.UIThread.Post(async () =>
         {
             // Every open waits for the same first-open step, a double click during startup too.
             await (_firstOpen ??= OpenFirstTimeAsync());
 
-            PositionAtCursor();
+            PositionNearTray(atCursor);
             _window.Show();
             _window.Activate();
         });
@@ -321,26 +323,29 @@ public sealed class TrayPopupController
         icon.ToolTipText = nextTooltip;
     }
 
-    private void PositionAtCursor()
+    private void PositionNearTray(bool atCursor)
     {
-        if (!TryGetCursorPos(out var pt))
+        POINT pt = default;
+        if (atCursor && !TryGetCursorPos(out pt))
         {
             return;
         }
 
         // Place the popup so its bottom-right corner sits a few px above-left
         // of the cursor (the tray icon is usually in the lower-right corner).
+        // Without a click, the primary screen's working-area corner stands in for it.
         // If the popup would run off-screen the screen-bounds clamp keeps it visible.
-        var screen = _window.Screens.ScreenFromPoint(new PixelPoint(pt.X, pt.Y))
+        var screen = (atCursor ? _window.Screens.ScreenFromPoint(new PixelPoint(pt.X, pt.Y)) : null)
             ?? _window.Screens.Primary;
         var bounds = screen?.WorkingArea ?? new PixelRect(0, 0, 1920, 1080);
+        var anchor = atCursor ? new PixelPoint(pt.X, pt.Y) : bounds.BottomRight;
 
         var scale = _window.DesktopScaling;
         var width = (int)(_window.Width * scale);
         var height = (int)(_window.Height * scale);
 
-        var x = pt.X - width - PopupMargin;
-        var y = pt.Y - height - PopupMargin;
+        var x = anchor.X - width - PopupMargin;
+        var y = anchor.Y - height - PopupMargin;
 
         x = Math.Max(bounds.X, Math.Min(x, bounds.Right - width));
         y = Math.Max(bounds.Y, Math.Min(y, bounds.Bottom - height));

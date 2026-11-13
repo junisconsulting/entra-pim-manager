@@ -2378,6 +2378,30 @@
                                 OffContent="" />
                 </Grid>
 
+                <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                  <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <TextBlock Text="Open the panel at startup"
+                                 FontSize="{DynamicResource FontBody}"
+                                 Foreground="{DynamicResource TextPrimaryBrush}" />
+                      <TextBlock Text="&#x24D8;"
+                                 FontSize="{DynamicResource FontBody}"
+                                 Foreground="{DynamicResource TextTertiaryBrush}"
+                                 VerticalAlignment="Center"
+                                 Background="Transparent"
+                                 ToolTip.Tip="If a sign-in has expired, the Windows sign-in window opens first, then the panel." />
+                    </StackPanel>
+                    <TextBlock Text="Shows the panel once after launch instead of starting tray-only."
+                               FontSize="{DynamicResource FontSmall}"
+                               Foreground="{DynamicResource TextTertiaryBrush}"
+                               TextWrapping="Wrap" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="1"
+                                IsChecked="{Binding OpenPanelAtStartup}"
+                                OnContent=""
+                                OffContent="" />
+                </Grid>
+
                 <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center"
                       IsVisible="{Binding CanManageStartMenuShortcut}">
                   <StackPanel Grid.Column="0" VerticalAlignment="Center">

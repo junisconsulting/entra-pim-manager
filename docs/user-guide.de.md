@@ -264,8 +264,11 @@ Das Zahnrad unten rechts.
 **APPEARANCE** — Theme: System, hell oder dunkel. **Logo** setzt das Logo deiner Organisation oben
 rechts ins Fenster: **Choose…** nimmt ein PNG, **Remove** entfernt es wieder.
 
-**BEHAVIOR** — Mit Windows starten. Startmenü-Eintrag behalten. Standard-Aktivierungsdauer (der
-Startwert des Schiebereglers, keine Obergrenze — die kommt aus der Richtlinie deines Admins).
+**BEHAVIOR** — Mit Windows starten. Panel beim Start öffnen (standardmäßig aus): Das Panel
+öffnet sich einmal nach dem Start der App, etwa um direkt nach der Windows-Anmeldung deine Rollen zu
+prüfen; ist eine Anmeldung abgelaufen, erscheint zuerst das Windows-Anmeldefenster.
+Startmenü-Eintrag behalten. Standard-Aktivierungsdauer (der Startwert des Schiebereglers, keine
+Obergrenze — die kommt aus der Richtlinie deines Admins).
 
 **NOTIFICATIONS** — vor Ablauf benachrichtigen, und wie früh.
 

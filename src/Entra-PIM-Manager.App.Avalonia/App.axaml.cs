@@ -173,7 +173,7 @@ public partial class App : Application
         // Show the one-time first-run setup dialog if Velopack's OnFirstRun hook
         // left a marker this launch (autostart / Start menu opt-out). No-ops otherwise.
         _firstRunSetupController = Services.GetRequiredService<FirstRunSetupController>();
-        _firstRunSetupController.Start();
+        var firstRunSetupShown = _firstRunSetupController.Start();
 
         // Release notes, once per version change. Deliberately not tied to the
         // first-run marker above: Velopack raises OnFirstRun for a Setup.exe run over
@@ -182,6 +182,14 @@ public partial class App : Application
         // genuinely fresh install.
         _whatsNewController = Services.GetRequiredService<WhatsNewController>();
         _whatsNewController.Start();
+
+        // Opt-in (#15): open the panel once after launch, e.g. to check eligibilities at logon.
+        // Show() runs the first-open step, so a lapsed sign-in brings up WAM before the panel.
+        // Not over the setup dialog: the panel would take its focus on the first launch.
+        if (userSettings.Current.OpenPanelAtStartup && !firstRunSetupShown)
+        {
+            _popupController.Show(atCursor: false);
+        }
 
         desktop.ShutdownRequested += (_, _) =>
         {
