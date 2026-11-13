@@ -298,6 +298,16 @@ window in a privileged-access tool looks like phishing. Until the user opens the
 tray icon is red with "sign-in needed"; if other accounts still work, it keeps their state and its
 tooltip says how many accounts need a sign-in.
 
+**Microsoft Entra joined hosts need `LoadCredKeyFromProfile`.** Without it, DPAPI cannot decrypt
+data from an earlier logon in an FSLogix profile, even on the same host, so the app's token cache
+comes up empty and every account needs **+ Add account** after each logon. Set
+`LoadCredKeyFromProfile` = 1 (DWORD under `HKLM\Software\Policies\Microsoft\AzureADAccount`) or,
+through Intune, `RemoteDesktop/LoadAadCredKeyFromProfile` = 1
+([Policy CSP](https://learn.microsoft.com/windows/client-management/mdm/policy-csp-remotedesktop#loadaadcredkeyfromprofile),
+[FSLogix with Microsoft Entra ID](https://learn.microsoft.com/fslogix/how-to-configure-profile-container-entra-id-hybrid#configure-your-local-windows-device)).
+Data encrypted before the policy stays unreadable, so each user re-adds their account once.
+Confirmed on a Microsoft Entra joined pooled host on 2026-11-13 (issue #13).
+
 For an admin account that *is* the Windows sign-in account, on Microsoft Entra joined hosts, the
 app recovers a lost sign-in by itself. It asks Windows silently for the session's own account, but
 only after checking that the session user is that very account: on these hosts the user's SID

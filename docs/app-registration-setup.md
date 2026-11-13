@@ -428,7 +428,8 @@ field of the add-account panel is gone.
   Either that client id changed, or the app's token cache came up empty after a
   logon: on Microsoft Entra joined pooled AVD hosts without the policy
   `RemoteDesktop/LoadAadCredKeyFromProfile`, DPAPI cannot decrypt the previous
-  logon's cache (issue #13; whether the policy fixes it is not yet confirmed). Sign in
+  logon's cache (issue #13; setting the policy fixes it, see
+  [Pooled hosts with FSLogix](unattended-deployment.md#pooled-hosts-with-fslogix)). Sign in
   again with **+ Add account** on the tenant's card; there is no need to remove
   the account first.
 - **"Azure resource roles unavailable: This tenant has not consented…"** on a

@@ -322,8 +322,8 @@ account for an enrollment that `accounts.json` still lists, so every read fails 
 and the tenant group shows the "sign in again" message. The repair is a new sign-in through
 **+ Add account** on the tenant's card in Settings; `AccountStore.UpsertAsync` replaces the entry,
 so no remove is needed. The cause there: on Microsoft Entra joined hosts without
-`RemoteDesktop/LoadAadCredKeyFromProfile`, DPAPI cannot decrypt the previous logon's cache, even on the same host
-(#13 diagnostics, 2026-11-13; whether the policy fixes it is not yet confirmed). An enrollment that
+`RemoteDesktop/LoadAadCredKeyFromProfile`, DPAPI cannot decrypt the previous logon's cache, even
+on the same host; setting the policy fixes it (#13, confirmed 2026-11-13). An enrollment that
 is the signed-in Windows user on an Entra joined device is recovered silently through the Windows
 account (`WindowsAccountSafetyNet`; tested on a notebook, not yet on the #13 host), so the repair
 from Settings remains for every other account. A
