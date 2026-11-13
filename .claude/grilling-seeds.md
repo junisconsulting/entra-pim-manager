@@ -42,3 +42,7 @@ design tree when a change touches the area, not a questionnaire.
   an unprompted sign-in window, and a silent ARM failure an hour-long Azure back-off. Startup
   loading (#20) was first decided with the interactive fallback and reversed after the field test
   on 2026-11-12.
+- **Which token requests can be in flight when the state changes, and in which order?** Graph and
+  ARM requests race at load (`Task.WhenAll`), and the policy prefetch is fire-and-forget and still
+  queued on the auth lock after **Remove**. The Windows-account safety net first let the ARM request
+  use up Graph's attempt, and re-signed a just-removed account. Both found in review, 2026-11-13.

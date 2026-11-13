@@ -335,7 +335,8 @@ erscheint, wenn du das Fenster der App zum ersten Mal öffnest.
 
 **Ein Tenant meldet "The saved sign-in for this account is missing".** **Settings** öffnen, auf der
 Karte des Tenants **+ Add account** wählen und mit demselben Konto anmelden. Vorher entfernen ist
-nicht nötig.
+nicht nötig. Ist es das Konto, mit dem du dich an Windows anmeldest, und ist das Gerät Microsoft
+Entra joined, findet die App die Anmeldung selbst wieder.
 
 **Ein Tenant meldet "This account's device-code sign-in has expired".** Eine Anmeldung per Device
 Code kann sich nicht selbst erneuern, wenn sie abgelaufen ist. **Settings** öffnen, auf der Karte

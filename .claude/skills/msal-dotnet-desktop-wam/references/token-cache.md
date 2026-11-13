@@ -182,9 +182,12 @@ for Entra-joined and Intune-managed devices).
 
 FSLogix also redirects `AppData\Roaming\Microsoft\Protect` (the DPAPI master keys) out of the
 container. On Microsoft Entra joined hosts Microsoft requires the policy
-`RemoteDesktop/LoadAadCredKeyFromProfile` for DPAPI data in the profile; without it the cache likely
-fails to decrypt after a logon and comes up empty (`Found 0 cache accounts`, then `user_null`) — the
-pattern in issue #13, not yet confirmed there.
+`RemoteDesktop/LoadAadCredKeyFromProfile` for DPAPI data in the profile. Without it the cache fails
+to decrypt after a logon, even on the same host (`Key not valid for use in specified state`), and
+comes up empty (`Found 0 cache accounts`, then `user_null`); DPAPI creates a new master key at
+almost every logon. Confirmed by the diagnostics in issue #13 (2026-11-13); whether the policy fixes
+it is not yet confirmed. For an account that is the Windows sign-in account, the safety net in
+SKILL.md may recover the sign-in; whether Windows issues the token on such a host is not yet known.
 
 ## What NOT to do
 

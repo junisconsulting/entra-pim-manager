@@ -426,7 +426,9 @@ field of the add-account panel is gone.
 - **"The saved sign-in for this account is missing"** on a tenant group: the app
   holds no sign-in for the account under the client id its tenant entry names.
   Either that client id changed, or the app's token cache came up empty after a
-  logon (seen on pooled AVD hosts, issue #13; cause not yet confirmed). Sign in
+  logon: on Microsoft Entra joined pooled AVD hosts without the policy
+  `RemoteDesktop/LoadAadCredKeyFromProfile`, DPAPI cannot decrypt the previous
+  logon's cache (issue #13; whether the policy fixes it is not yet confirmed). Sign in
   again with **+ Add account** on the tenant's card; there is no need to remove
   the account first.
 - **"Azure resource roles unavailable: This tenant has not consented…"** on a

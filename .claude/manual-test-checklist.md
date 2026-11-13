@@ -39,6 +39,12 @@ vor einem Release vollständig durchgearbeitet und abgezeichnet.
 - [ ] „Sign out" im Tray-Menü: Konten entfernt, `msal.cache` gelöscht,
       Status auf „Nicht angemeldet".
 - [ ] Nach Sign-out erneuter Sign-in: WAM-Prompt erscheint wieder.
+- [ ] Entra-joined Gerät, eingetragenes Konto = Windows-Konto: App beenden, `msal-<id>.cache`
+      löschen, App starten → Tray ohne WAM-Fenster grau oder grün, Log „Sign-in for oid …
+      recovered through the Windows sign-in". Danach **+ Add account** auf derselben Tenant-Karte:
+      der WAM-Picker verhält sich wie vorher und fällt nicht auf das Windows-Konto zusammen.
+- [ ] Dasselbe mit einem Admin-Konto ≠ Windows-Konto: Tray rot wie bisher; im Entra-Anmeldeprotokoll
+      keine Anmeldung des Windows-Kontos an der App.
 
 ## 1b. Sovereign Cloud (Entra China / 21Vianet) — ab 0.4.2
 

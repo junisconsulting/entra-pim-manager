@@ -162,9 +162,10 @@ public static class PimErrorMapper
         // MsalAuthService found no cached MSAL account for this enrollment. One known
         // cause is an App Registration change, which moves the enrollment to a
         // different MSAL client whose cache has never seen it. #13 shows another: a
-        // cache that comes up empty after every logon on a pooled host, cause not yet
-        // confirmed. The message cannot tell them apart, so it names none. A fresh
-        // sign-in repairs both, and it replaces the enrollment in place — no remove needed.
+        // cache that comes up empty after every logon on a pooled host, because DPAPI
+        // cannot decrypt it (see the msal skill's token-cache reference). The message
+        // cannot tell them apart, so it names none. A fresh sign-in repairs both, and it
+        // replaces the enrollment in place — no remove needed.
         if (exception is MsalUiRequiredException { ErrorCode: MsalError.UserNullError })
         {
             return "The saved sign-in for this account is missing. Sign in again with + Add account on this tenant's card in Settings.";

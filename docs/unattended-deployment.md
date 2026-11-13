@@ -298,8 +298,14 @@ window in a privileged-access tool looks like phishing. Until the user opens the
 tray icon is red with "sign-in needed"; if other accounts still work, it keeps their state and its
 tooltip says how many accounts need a sign-in.
 
-An admin account that *is* the Windows sign-in account may stay silent, since the broker can use
-the session's own sign-in. That has not been tested.
+For an admin account that *is* the Windows sign-in account, on Microsoft Entra joined hosts, the
+app recovers a lost sign-in by itself. It asks Windows silently for the session's own account, but
+only after checking that the session user is that very account: on these hosts the user's SID
+carries the Entra object id. It never opens a window for it, and an attempt that fails is not
+repeated until the app restarts. On hybrid-joined hosts with an Active Directory sign-in the app
+cannot check this locally and does not try. Tested on a Microsoft Entra joined notebook; whether
+Windows still issues the token on a pooled host whose DPAPI keys are lost at every logon is not
+yet known.
 
 ## Before you roll this out
 

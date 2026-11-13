@@ -315,7 +315,8 @@ window on its own after a logon; it appears the first time you open the panel.
 
 **A tenant says "The saved sign-in for this account is missing".** Open **Settings**, choose
 **+ Add account** on that tenant's card and sign in with the same account. There is no need to
-remove it first.
+remove it first. If it is the account you sign in to Windows with, on a Microsoft Entra joined
+device, the app finds the sign-in again by itself.
 
 **A tenant says "This account's device-code sign-in has expired".** A device-code sign-in cannot
 renew itself once it has lapsed. Open **Settings**, choose **+ Add account** on that tenant's card,

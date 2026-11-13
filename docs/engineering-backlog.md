@@ -321,9 +321,14 @@ asks; until then the backoff is the answer.
 account for an enrollment that `accounts.json` still lists, so every read fails with `user_null`
 and the tenant group shows the "sign in again" message. The repair is a new sign-in through
 **+ Add account** on the tenant's card in Settings; `AccountStore.UpsertAsync` replaces the entry,
-so no remove is needed. A "Sign in again" button in the message itself was considered and
-deferred: while the cache loss on that host is unexplained, it would hide the symptom rather than
-fix it.
+so no remove is needed. The cause there: on Microsoft Entra joined hosts without
+`RemoteDesktop/LoadAadCredKeyFromProfile`, DPAPI cannot decrypt the previous logon's cache, even on the same host
+(#13 diagnostics, 2026-11-13; whether the policy fixes it is not yet confirmed). An enrollment that
+is the signed-in Windows user on an Entra joined device is recovered silently through the Windows
+account (`WindowsAccountSafetyNet`; tested on a notebook, not yet on the #13 host), so the repair
+from Settings remains for every other account. A
+"Sign in again" button in the message itself was considered and deferred: it would hide a host
+problem rather than fix it.
 
 **What makes the fix safe:** the button runs the same broker sign-in as **+ Add account** for that
 tenant and must keep refusing a sign-in that lands in another tenant (`ToEnrollment`). Check that

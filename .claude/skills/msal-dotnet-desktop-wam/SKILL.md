@@ -163,7 +163,7 @@ prompt is the whole point.
 Why each piece matters:
 
 - **No account on the explicit sign-in** — that is what makes WAM show the account picker. `Prompt.SelectAccount` is set as well, but the 4.66.0 WAM plugin never reads `Prompt` (the Broker DLL has no `get_Prompt` reference); do not rely on it to force a picker, and do not expect `Prompt.Consent` to reach WAM either.
-- **No `OperatingSystemAccount` fallback** — that sentinel tells WAM "use the Windows session account." For Entra PIM Manager that is by definition the *wrong* identity.
+- **No `OperatingSystemAccount` fallback** — that sentinel tells WAM "use the Windows session account." For Entra PIM Manager that is by definition the *wrong* identity. The one exception is the safety net below, which uses it only after proving locally that the session user *is* the enrolled account.
 - **`WithAccount(account)` on the silent-retry interactive call** — pins to the account the user originally chose. Without this, WAM might switch accounts mid-session on a claims challenge.
 - **`WithParentActivityOrWindow(...)`** — without this, the auth prompt can pop hidden behind your window or off-screen. For a tray app where no window is focused, see the section below.
 - **`WithClaims()`** — re-requests token with a Conditional Access claims challenge embedded. See `references/claims-challenge.md`.
@@ -181,6 +181,43 @@ Tray apps frequently have no foreground window. Strategies in order of preferenc
 3. **Last resort**: `GetForegroundWindow()` — may pick a random window the user has focused, but prompt will at least be visible.
 
 Never pass `IntPtr.Zero` — WAM will sometimes work, sometimes silently fail, sometimes show a prompt off-screen.
+
+### Safety net: a lost sign-in recovered through the Windows account
+
+Some hosts lose the MSAL cache at every logon (issue #13: Entra joined pooled AVD with FSLogix, where
+DPAPI cannot decrypt the previous logon's cache). When the enrolled account is the account the user
+signed in to Windows with, `WindowsAccountSafetyNet` recovers it silently instead of asking for a new
+sign-in. The rules, each for a reason:
+
+- **Only on `user_null` or `wam_no_account_for_id`, only broker accounts, never while a claims
+  challenge is answered**, and before the interactive fallback.
+- **Prove the identity locally first.** On an Entra joined device the session user's SID is
+  `S-1-12-1-a-b-c-d`, where a–d are the object id's 16 bytes (`Guid.ToByteArray()` order) read as
+  four little-endian uint32. Microsoft documents the mapping for groups; for users it was confirmed on
+  an Entra joined notebook (2026-11-13). Any other SID (hybrid/AD `S-1-5-21-…`, local) means no
+  attempt. A request for the wrong account is not harmless: it is a real non-interactive sign-in of
+  that account to the app, in its tenant's sign-in log, and a failure entry where consent is missing.
+- **Silent only, in a call of its own.** `AcquireTokenSilent(scopes, PublicClientApplication.OperatingSystemAccount).WithTenantId(t)`
+  works with `ListOperatingSystemAccounts = false`: in 4.66.0 that option is read only by
+  `RuntimeBroker.GetAccountsAsync`. It must never reach `AcquireTokenInteractive`, where the
+  sentinel can open WAM for whoever the Windows user is.
+- **Check the result yourself.** MSAL skips `ValidateAccountIdentifiers` for the sentinel and writes
+  the account to the cache before the app sees it; WAM even reports a `UserSwitch` as success. Use
+  the token only when `HomeAccountId.ObjectId` and `TenantId` match the enrollment. Leave a foreign
+  cache entry in place: `RemoveAsync` removes every token of that home account and also signs it out
+  of the broker (`SignOutSilently`).
+- **One failed attempt per enrollment, scope set and process; network errors (`IsRetryable`) do
+  not count.** MSAL's throttling only covers HTTP calls to the token endpoint, never broker calls.
+  The scope set is part of the key because Graph and ARM requests race at load: a tenant without
+  Azure consent would otherwise use up the attempt for Graph.
+- After a success the account is in the cache (`WamAccountIds` set), so `GetAccountsAsync` finds it
+  and later requests take the normal path.
+
+Rejected: a UPN comparison for hybrid sign-ins (the AD UPN can differ from Entra's and the lookup
+may need a domain controller), storing the Windows SID per enrollment via Graph (a persisted field
+and a backfill for a case where DPAPI survives anyway), and a second PCA with
+`ListOperatingSystemAccounts = true` to list accounts (the list does not mark the session account,
+and the MSALRuntime core is process-wide, so its effect on the picker is unknown).
 
 ## Token cache persistence
 
@@ -348,7 +385,7 @@ both from `EntraCloudInfo.ResourceManagerScopes`). Rules that follow from MSAL:
 ## Things that will trip you up
 
 1. **`Microsoft.Identity.Client.Broker` is a separate NuGet package** — listing only `Microsoft.Identity.Client` won't give you `.WithBroker(BrokerOptions)`. The compiler error is confusing ("BrokerOptions not found").
-2. **`OperatingSystemAccount` is not in `GetAccountsAsync()` results** — it's a static sentinel property on `PublicClientApplication`, not an account in the cache. For Entra PIM Manager, **never** use this sentinel — see the SSO note at the top of this skill.
+2. **`OperatingSystemAccount` is not in `GetAccountsAsync()` results** — it's a static sentinel property on `PublicClientApplication`, not an account in the cache. For Entra PIM Manager, use it only in the lost-sign-in safety net (see "Safety net: a lost sign-in recovered through the Windows account") — never to pick or renew an identity; see the SSO note at the top of this skill.
 3. **WAM "auto-picks" the wrong account when only one candidate is known** — symptom: the dialog opens directly on the auth-method screen (PIN / FIDO / password) for one specific account, and "Back" loops to the same screen instead of an account picker. Cause: `ListOperatingSystemAccounts = true` plus an empty MSAL cache leaves WAM with exactly one candidate (the Windows session account); `Prompt.SelectAccount` is a no-op in that case. Fix: set `ListOperatingSystemAccounts = false`.
 4. **WAM falls back to a browser silently on Windows < 10.0.17763** — log the auth flow used (`AuthenticationResult.AuthenticationResultMetadata.TokenSource`) to diagnose surprising prompts.
 5. **Embedded browser is dead** — `.WithUseEmbeddedWebView(true)` doesn't combine with broker. Pick one. For desktop apps with Entra, always pick broker.

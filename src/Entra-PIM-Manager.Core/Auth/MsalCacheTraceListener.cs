@@ -11,8 +11,9 @@ using Microsoft.Extensions.Logging;
 /// The extension reports a cache file it cannot read or decrypt only there ("Could not read
 /// the token cache. Ignoring.") and carries on with an empty cache. Without this the app
 /// only sees "no account" and the log never says why — issue #13, where the cache came up
-/// empty after every logon on a pooled host, cause not yet confirmed. The trace carries file
-/// paths, byte counts and exception texts, never cache content.
+/// empty after every logon on a pooled host because DPAPI could not decrypt it (see the msal
+/// skill's token-cache reference). The trace carries file paths, byte counts and exception
+/// texts, never cache content.
 /// </remarks>
 public sealed class MsalCacheTraceListener : TraceListener
 {
