@@ -90,10 +90,13 @@ detail.
 
 | Icon | Meaning |
 | --- | --- |
-| **Red** | Not signed in — no account connected, or the session expired and needs a new sign-in |
+| **Red** | No account connected ("not signed in"), or none of your accounts can sign in without you ("sign-in needed") — open the panel; it shows how to sign in again |
 | **Grey** | Signed in, nothing active. The normal resting state |
 | **Green** | At least one role is active. The tooltip counts them |
 | **Amber** | An active role is about to expire. The tooltip names it and counts down |
+
+When only some of your accounts need a new sign-in, the icon keeps the colour of the others and
+the tooltip ends with how many need one.
 
 The shield is drawn to suit your taskbar, light or dark, and follows it if you change the Windows
 theme. Only the small dot carries a meaning.
@@ -313,6 +316,10 @@ window on its own after a logon; it appears the first time you open the panel.
 **A tenant says "The saved sign-in for this account is missing".** Open **Settings**, choose
 **+ Add account** on that tenant's card and sign in with the same account. There is no need to
 remove it first.
+
+**A tenant says "This account's device-code sign-in has expired".** A device-code sign-in cannot
+renew itself once it has lapsed. Open **Settings**, choose **+ Add account** on that tenant's card,
+open **Advanced** and sign in again with **Sign in with device code**.
 
 **Sign-in window opens and stays blank.** Usually a network that blocks a Microsoft endpoint. Run
 **Settings → Diagnostics → Network check**, hit **Copy report**, and send that to IT — it names the

@@ -189,7 +189,7 @@ install. The tenant group shows the generic "Couldn't load eligibilities for thi
 cause nor that waiting for consent is the cure, so the honest reading of the UI is "it is
 broken". Broker accounts hide the same window behind an interactive prompt. The genuinely
 unrecoverable case is a refresh token that is gone — then only a fresh device-code enrollment
-helps, and the app equally never says so.
+helps; since #21 the tenant group says so ("This account's device-code sign-in has expired").
 
 **What makes the fix safe:** the recovery must not silently become a broker sign-in — that would
 defeat the reason the account uses device code (federated IdP, see the comment in

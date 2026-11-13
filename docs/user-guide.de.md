@@ -96,10 +96,13 @@ die Details.
 
 | Symbol | Bedeutung |
 | --- | --- |
-| **Rot** | Nicht angemeldet — kein Konto verbunden, oder die Sitzung ist abgelaufen |
+| **Rot** | Kein Konto verbunden („not signed in"), oder keins deiner Konten kann sich ohne dich anmelden („sign-in needed") — Fenster öffnen, dort steht, wie du dich neu anmeldest |
 | **Grau** | Angemeldet, nichts aktiv. Der Normalzustand |
 | **Grün** | Mindestens eine Rolle ist aktiv. Der Tooltip zählt sie |
 | **Gelb** | Eine aktive Rolle läuft gleich ab. Der Tooltip nennt sie und zählt herunter |
+
+Braucht nur ein Teil deiner Konten eine neue Anmeldung, behält das Symbol die Farbe der anderen,
+und der Tooltip nennt am Ende, wie viele eine brauchen.
 
 Das Schild ist für helle wie dunkle Taskleisten gezeichnet und folgt ihr, wenn du das
 Windows-Design umstellst. Bedeutung trägt allein der kleine Punkt.
@@ -333,6 +336,11 @@ erscheint, wenn du das Fenster der App zum ersten Mal öffnest.
 **Ein Tenant meldet "The saved sign-in for this account is missing".** **Settings** öffnen, auf der
 Karte des Tenants **+ Add account** wählen und mit demselben Konto anmelden. Vorher entfernen ist
 nicht nötig.
+
+**Ein Tenant meldet "This account's device-code sign-in has expired".** Eine Anmeldung per Device
+Code kann sich nicht selbst erneuern, wenn sie abgelaufen ist. **Settings** öffnen, auf der Karte
+des Tenants **+ Add account** wählen, **Advanced** aufklappen und mit **Sign in with device code**
+neu anmelden.
 
 **Das Anmeldefenster öffnet sich und bleibt leer.** Meist blockiert das Netzwerk einen
 Microsoft-Endpunkt. **Settings → Diagnostics → Network check** ausführen, **Copy report** drücken

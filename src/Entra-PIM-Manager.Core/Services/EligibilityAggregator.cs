@@ -116,7 +116,7 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
         var dict = new Dictionary<SignedInAccount, ActiveAssignmentFetchResult>();
         for (var i = 0; i < snapshot.Count; i++)
         {
-            dict[snapshot[i]] = new ActiveAssignmentFetchResult(results[i].Items, results[i].LoadError);
+            dict[snapshot[i]] = new ActiveAssignmentFetchResult(results[i].Items, results[i].LoadError, results[i].NeedsSignIn);
         }
 
         return dict;
@@ -143,7 +143,7 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
         var dict = new Dictionary<SignedInAccount, EligibilityFetchResult>();
         for (var i = 0; i < snapshot.Count; i++)
         {
-            dict[snapshot[i]] = new EligibilityFetchResult(results[i].Items, results[i].LoadError);
+            dict[snapshot[i]] = new EligibilityFetchResult(results[i].Items, results[i].LoadError, results[i].NeedsSignIn);
         }
 
         return dict;
@@ -211,10 +211,11 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
     /// <summary>
     /// Runs <paramref name="fetch"/> for a single account with a per-account
     /// timeout, logging any failure and returning it as an empty list plus a
-    /// user-facing reason. Used by the cross-tenant fan-out so a slow or
-    /// broken tenant cannot poison the aggregate result.
+    /// user-facing reason, and whether a new sign-in fixes it. Used by the
+    /// cross-tenant fan-out so a slow or broken tenant cannot poison the
+    /// aggregate result.
     /// </summary>
-    private async Task<(IReadOnlyList<T> Items, string? LoadError)> FetchSafeAsync<T>(
+    private async Task<(IReadOnlyList<T> Items, string? LoadError, bool NeedsSignIn)> FetchSafeAsync<T>(
         SignedInAccount account,
         Func<SignedInAccount, CancellationToken, Task<(IReadOnlyList<T> Items, string? LoadError)>> fetch,
         string fetchLabel,
@@ -224,7 +225,8 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(PerAccountTimeout);
-            return await fetch(account, cts.Token).ConfigureAwait(false);
+            var (items, loadError) = await fetch(account, cts.Token).ConfigureAwait(false);
+            return (items, loadError, false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
@@ -234,7 +236,10 @@ public sealed class EligibilityAggregator : IEligibilityAggregator
                 fetchLabel,
                 account.ObjectId,
                 account.TenantId);
-            return (Array.Empty<T>(), PimErrorMapper.DescribeFetchFailure(ex, account.AuthMethod, _options.HostingFor(account.Cloud, account.TenantId)));
+            return (
+                Array.Empty<T>(),
+                PimErrorMapper.DescribeFetchFailure(ex, account.AuthMethod, _options.HostingFor(account.Cloud, account.TenantId)),
+                PimErrorMapper.IsSignInNeeded(ex));
         }
     }
 

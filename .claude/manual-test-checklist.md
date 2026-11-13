@@ -519,6 +519,11 @@ Azure-Rollen darf ein nur Berechtigter das meist nicht; dann zeigt sie bewusst g
 - [ ] Pool-Host mit FSLogix, Admin-Konto ≠ Windows-Konto, Anmeldung auf einem anderen Host: kein
       WAM-Fenster von selbst, auch nicht nach mehreren Minuten. Erster Klick aufs Tray-Icon → genau
       ein WAM-Fenster, danach das Fenster mit geladener Liste (#20).
+- [ ] Alle Konten brauchen eine Anmeldung (Pool-Host nach dem Login, oder `msal-<id>.cache` bei
+      beendeter App beschädigt): Tray **rot**, Tooltip „sign-in needed". Nach der Anmeldung grau
+      oder grün. Zwei Konten, eines davon kaputt: Farbe des anderen, Tooltip endet mit
+      „· 1 account needs a sign-in". Ein Tenant ohne Consent oder Lizenz macht das Tray nach dem
+      ersten Öffnen des Fensters nicht rot; vorher verbirgt WAM den Grund (#21).
 - [ ] Kontextmenü: Open, Refresh, Settings…, Start with Windows, Exit.
 - [ ] Tray-Icon-Variante bei ≥ 1 aktiver Rolle ist sichtbar anders.
 - [ ] „Refresh" aktualisiert beide Listen.

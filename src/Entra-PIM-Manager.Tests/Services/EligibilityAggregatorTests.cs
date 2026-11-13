@@ -401,6 +401,57 @@ public sealed class EligibilityAggregatorTests
         azure.Verify(s => s.GetEligibleAzureRolesAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
     }
 
+    [Theory]
+    [InlineData("user_null", true)]
+    [InlineData("consent", false)]
+    [InlineData("other", false)]
+    public async Task GetAggregated_GraphReadFails_MarksTheAccountOnlyWhenASignInFixesIt(string failure, bool needsSignIn)
+    {
+        // #21: the tray turns red when every account needs a sign-in, so the flag must come
+        // from the Graph reads that failed, and only where a sign-in helps.
+        Exception error = failure switch
+        {
+            "user_null" => new MsalUiRequiredException(MsalError.UserNullError, "No MSAL account for oid"),
+            "consent" => new MsalUiRequiredException("invalid_grant", "AADSTS65001: not consented"),
+            _ => new InvalidOperationException("upstream blew up"),
+        };
+        var account = MakeAccount("oid-a", "tenant-a");
+        var role = new Mock<IPimRoleService>();
+        role.Setup(s => s.GetEligibleRolesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(error);
+        role.Setup(s => s.GetActiveRolesAsync(It.IsAny<CancellationToken>())).ThrowsAsync(error);
+        var bundle = new AccountScopedServiceBundle(
+            role.Object, Mock.Of<IPimGroupService>(), Mock.Of<IPimAzureResourceService>(), Mock.Of<IPolicyService>());
+        var scoped = new Mock<IAccountScopedServices>();
+        scoped.Setup(s => s.GetServicesFor(account)).Returns(bundle);
+        var aggregator = new EligibilityAggregator(scoped.Object, NoOptions, NullLogger<EligibilityAggregator>.Instance);
+
+        var eligible = await aggregator.GetAggregatedEligibilitiesAsync(new[] { account });
+        var active = await aggregator.GetAggregatedActiveAssignmentsAsync(new[] { account });
+
+        Assert.Equal(needsSignIn, eligible[account].NeedsSignIn);
+        Assert.Equal(needsSignIn, active[account].NeedsSignIn);
+    }
+
+    [Fact]
+    public async Task GetAggregated_WorkingAccount_IsNotMarkedForASignIn()
+    {
+        var account = MakeAccount("oid-a", "tenant-a");
+        var azure = new Mock<IPimAzureResourceService>();
+        azure
+            .Setup(s => s.GetEligibleAzureRolesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<PimEligibility>());
+        azure
+            .Setup(s => s.GetActiveAzureRolesAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<ActiveAssignment>());
+        var aggregator = BuildAggregator(account, azure.Object);
+
+        var eligible = await aggregator.GetAggregatedEligibilitiesAsync(new[] { account });
+        var active = await aggregator.GetAggregatedActiveAssignmentsAsync(new[] { account });
+
+        Assert.False(eligible[account].NeedsSignIn);
+        Assert.False(active[account].NeedsSignIn);
+    }
+
     [Fact]
     public void ForgetAzureBackoff_AnAccountThatNeverFailed_IsHarmless()
     {

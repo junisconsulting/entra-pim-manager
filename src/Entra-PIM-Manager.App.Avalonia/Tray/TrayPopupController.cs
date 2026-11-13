@@ -100,6 +100,7 @@ public sealed class TrayPopupController
 
         _viewModel.ActiveCountChanged += (_, _) => UpdateTrayIcon();
         _viewModel.ExpiringChanged += (_, _) => UpdateTrayIcon();
+        _viewModel.SignInNeededChanged += (_, _) => UpdateTrayIcon();
         _viewModel.PropertyChanged += (_, args) =>
         {
             if (args.PropertyName == nameof(ShellViewModel.IsSignedIn))
@@ -268,13 +269,19 @@ public sealed class TrayPopupController
 
         WindowIcon nextIcon;
         string nextTooltip;
+        var signInNeeded = _viewModel.SignInNeededCount;
         if (!_viewModel.IsSignedIn)
         {
-            // "Not signed in" covers both the cold-start case (no accounts
-            // enrolled yet) and an expired session — both surface as
-            // IsSignedIn=false on the view model.
+            // No account enrolled: the cold start, or the last one was removed.
             nextIcon = Icon("red");
             nextTooltip = "Entra PIM Manager — not signed in";
+        }
+        else if (_viewModel.AllAccountsNeedSignIn)
+        {
+            // Every account needs the user to sign in, so no privilege works (#21). The sign-in
+            // itself waits for the panel: nothing opens by itself after a logon (#20).
+            nextIcon = Icon("red");
+            nextTooltip = "Entra PIM Manager — sign-in needed";
         }
         else if (_viewModel.ActiveCount == 0)
         {
@@ -300,6 +307,13 @@ public sealed class TrayPopupController
         {
             nextIcon = Icon("green");
             nextTooltip = $"Entra PIM Manager — {_viewModel.ActiveCount} active role(s)";
+        }
+
+        // Only some accounts need a sign-in: the others' state stays in front, since an
+        // active role must not hide behind red (#21). Windows cuts a tooltip at 127 characters.
+        if (signInNeeded > 0 && !_viewModel.AllAccountsNeedSignIn)
+        {
+            nextTooltip += signInNeeded == 1 ? " · 1 account needs a sign-in" : $" · {signInNeeded} accounts need a sign-in";
         }
 
         var icon = icons[0];

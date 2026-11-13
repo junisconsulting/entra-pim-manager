@@ -295,7 +295,8 @@ leaving it off and rules it out for Microsoft Entra joined and Intune-managed de
 ([RoamIdentity](https://learn.microsoft.com/fslogix/reference-configuration-settings#roamidentity)).
 The app does not open the sign-in window on its own after a logon, because an unprompted sign-in
 window in a privileged-access tool looks like phishing. Until the user opens the panel once, the
-tray therefore shows no roles for that account.
+tray icon is red with "sign-in needed"; if other accounts still work, it keeps their state and its
+tooltip says how many accounts need a sign-in.
 
 An admin account that *is* the Windows sign-in account may stay silent, since the broker can use
 the session's own sign-in. That has not been tested.
