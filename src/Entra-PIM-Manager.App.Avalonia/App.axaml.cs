@@ -393,8 +393,12 @@ public partial class App : Application
 
         // The junis client id comes from the shipped file alone, never from a local layer
         // the binder merged in. PostConfigure runs after every bind and before validation.
-        builder.Services.PostConfigure<EntraPimManagerOptions>(o => o.UseJunisHostedClientId(
-            EntraPimManagerOptions.ReadShippedJunisHostedClientId(Path.Combine(AppContext.BaseDirectory, "appsettings.json"))));
+        // The organization's DisableJunisHosted policy is applied in this same step, so the
+        // app starts as if the build shipped no junis id (docs/adr/0006); a separate step
+        // registered earlier would be overwritten by the shipped id.
+        builder.Services.AddOptions<EntraPimManagerOptions>().PostConfigure<JunisHostedPolicy>((o, policy) => o.UseJunisHostedClientId(policy.IsDisabled
+            ? null
+            : EntraPimManagerOptions.ReadShippedJunisHostedClientId(Path.Combine(AppContext.BaseDirectory, "appsettings.json"))));
         builder.Services.AddSingleton<IValidateOptions<EntraPimManagerOptions>, EntraPimManagerOptionsValidator>();
 
         // Auth + Graph layer (Core).
@@ -425,6 +429,7 @@ public partial class App : Application
         builder.Services.AddSingleton<IToastService, ToastService>();
         builder.Services.AddSingleton<IAutostartService, AutostartService>();
         builder.Services.AddSingleton<ITenantLockdownPolicy, TenantLockdownPolicy>();
+        builder.Services.AddSingleton<JunisHostedPolicy>();
         builder.Services.AddSingleton<ActivationPanelViewModel>();
         builder.Services.AddSingleton<AddTenantPanelViewModel>();
         builder.Services.AddSingleton<SettingsPanelViewModel>();

@@ -281,6 +281,10 @@ system: no switching between junis-hosted and self-hosted, no **Remove tenant**.
 as usual, and you can still add or remove them. When no tenant is configured yet, ask your IT
 department.
 
+Your organization can also turn off junis-hosted on its own. Then **Add a tenant** and the gear ask
+only for the client id, with no choice between junis-hosted and self-hosted, and the cards no
+longer say junis-hosted or self-hosted.
+
 ## Updates
 
 The app checks GitHub once a day and offers what it finds; you choose **Install** or **Later**, and

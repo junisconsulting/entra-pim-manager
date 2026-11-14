@@ -28,6 +28,10 @@
     requires -ClientId. An installed version that does not offer junis-hosted yet stops
     the script.
 
+    Where the organization sets the DisableJunisHosted machine policy, pass -ClientId:
+    without it, the entry carries the junis client id, but the app treats it as
+    self-hosted.
+
     Re-running the script switches the tenant: without -ClientId to junis-hosted, with
     -ClientId back to self-hosted. Remove the tenant's accounts in the app first - the
     script cannot, and they would otherwise show as no longer valid while the old

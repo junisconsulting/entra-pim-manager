@@ -52,6 +52,8 @@ installed `current\appsettings.json` and passes it on as the client id. `-Cloud 
 `-ClientId` is refused before anything is installed. An installed version that ships no junis
 client id stops the script with "This installation does not offer junis-hosted yet; pass -ClientId
 or install a newer version."
+Where the organization turns off junis-hosted, always pass `-ClientId`
+([Turn off junis-hosted](#turn-off-junis-hosted)).
 
 `scripts/install-entra-pim-manager.ps1` wraps both steps, validates the ids before touching
 anything, maps the exit code to a readable error, and — the part worth having — verifies that the
@@ -91,7 +93,7 @@ The user lands on "Add account" instead of the configuration prompt.
 | Argument | Script parameter | Required | Notes |
 | --- | --- | --- | --- |
 | `--tenant-id <guid>` | `-TenantId` | yes | Directory (tenant) id |
-| `--client-id <guid>` | `-ClientId` | app: yes · script: no | Application (client) id. The script without `-ClientId` passes the junis client id (junis-hosted, Global cloud only) |
+| `--client-id <guid>` | `-ClientId` | app: yes · script: no | Application (client) id. The script without `-ClientId` passes the junis client id (junis-hosted, Global cloud only; [unless turned off](#turn-off-junis-hosted)) |
 | `--cloud <Global\|China>` | `-Cloud` | no | Defaults to `Global` |
 | `--label <text>` | `-Label` | no | Tenant alias in the sign-in picker and tenant list |
 | `--ticket-system <text>` | `-TicketSystem` | no | e.g. `ServiceNow`, prefilled into the activation form |
@@ -101,11 +103,12 @@ Run it once per tenant to configure several. An entry for a tenant that is alrea
 replaced, not duplicated.
 
 That is also how a rollout switches a tenant: re-running the script without `-ClientId` makes it
-junis-hosted, re-running it with `-ClientId` makes it self-hosted again. The script cannot remove
-accounts, so have users remove the tenant's accounts in the app first. Otherwise those accounts
-show "The saved sign-in for this account is missing", and the old registration's tokens stay with
-Windows. Users who already see the message sign in again with **+ Add account** on the tenant's
-card, through the new registration; they do not have to remove the account first.
+junis-hosted (unless [junis-hosted is turned off](#turn-off-junis-hosted)), re-running it with
+`-ClientId` makes it self-hosted again. The script cannot remove accounts, so have users remove the
+tenant's accounts in the app first. Otherwise those accounts show "The saved sign-in for this
+account is missing", and the old registration's tokens stay with Windows. Users who already see the
+message sign in again with **+ Add account** on the tenant's card, through the new registration;
+they do not have to remove the account first.
 
 The first four go into `appsettings.local.json` and take effect at the next app start. The ticket
 system goes into `settings.json` instead — it is workflow rather than auth configuration — and also
@@ -183,6 +186,41 @@ value.
 > managed devices out of foreign tenants, use
 > [tenant restrictions v2](https://learn.microsoft.com/entra/external-id/tenant-restrictions-v2)
 > in your cross-tenant access settings.
+
+### Turn off junis-hosted
+
+If your organization requires its own App Registration but users may still add tenants
+themselves, turn off junis-hosted instead of locking the tenant list. Set this machine policy
+value, and the add form and the gear on a tenant's card ask only for a client id, with no choice
+between junis-hosted and self-hosted, and the cards show no hosting chip
+([ADR 0006](adr/0006-disable-junis-hosted-machine-policy.md)).
+
+| Key | Value | Type | Data |
+| --- | --- | --- | --- |
+| `HKLM\SOFTWARE\Policies\junis\Entra-PIM-Manager` | `DisableJunisHosted` | `REG_DWORD` | `1` turns it off, `0` or absent does not |
+
+It follows the same rules as `TenantLockdown`: any other type is ignored and logged as a warning,
+the app reads the value at startup, and both values can be set together. Deploy it the same way,
+as an Intune platform script in system context:
+
+```powershell
+$key = 'HKLM:\SOFTWARE\Policies\junis\Entra-PIM-Manager'
+if (-not (Test-Path $key)) { New-Item -Path $key -Force | Out-Null }
+New-ItemProperty -Path $key -Name DisableJunisHosted -PropertyType DWord -Value 1 -Force | Out-Null
+```
+
+With Group Policy, a registry preference item sets the same value.
+
+Pass `-ClientId` in every install command: without it, the script still writes the junis client
+id. The app then treats such an entry as self-hosted: it keeps signing in if your tenant has
+consented to the junis app, but its errors and its "Verified" status describe a self-hosted
+registration. The same goes for entries that were junis-hosted before you set the policy; switch
+them to your own client id under the gear.
+
+> **Turning off junis-hosted is not a security boundary either.** It only stops the app from
+> offering it. Whether the junis registration can sign in to your tenant is decided by your
+> tenant's consent; see
+> [Leaving junis-hosted](app-registration-setup.md#leaving-junis-hosted).
 
 ## 3. Intune: the ready-made Win32 app
 

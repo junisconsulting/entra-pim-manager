@@ -122,8 +122,8 @@ from `CONTRIBUTING.md` work as documented; the flags above are the Linux-host ad
 This is a privileged-access tool; these are not style preferences.
 
 - **Per-user install only.** No `HKLM`, no `Program Files`, no Windows service, no SYSTEM scheduled
-  task. Autostart goes through `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` only. The one
-  `HKLM` read is the organization's tenant-lock policy (ADR 0005); the app never writes `HKLM`.
+  task. Autostart goes through `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` only. The only
+  `HKLM` reads are the organization's policy values (ADR 0005, 0006); the app never writes `HKLM`.
 - **Never log access, ID, or refresh tokens — and never log justification text**, which may contain
   incident detail. User identifiers in logs are limited to the OID; never UPN or mail. Ticket numbers
   are fine.

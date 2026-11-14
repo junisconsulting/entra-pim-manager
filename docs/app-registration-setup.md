@@ -115,6 +115,9 @@ stays active. Leaving for good takes two steps:
 2. Switch the junis app off in your tenant, as described in
    [SECURITY.md](../SECURITY.md#switch-it-off-in-your-tenant).
 
+The machine policy that [turns off junis-hosted](unattended-deployment.md#turn-off-junis-hosted)
+replaces neither step: it only stops the app from offering junis-hosted.
+
 ## 1. Create the App Registration
 
 > **In a hurry?** `scripts/create-app-registration.ps1` automates §1–§4 of this guide

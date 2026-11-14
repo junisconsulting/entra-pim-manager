@@ -33,6 +33,11 @@ design tree when a change touches the area, not a questionnaire.
   tenant lock hid the add form, but the welcome card and the add-account panel still pointed at
   it, and the gear's Save could still write a new registration for a card that had only
   accounts. Found 2026-11-11 in review and while building, after the grilling had settled scope.
+- **Which persisted state and wording are keyed by what the change reclassifies?** Turning off
+  junis-hosted makes entries carrying the junis client id count as self-hosted, and self-hosted
+  verification is stored per client id, not per tenant: one sign-in marks every such entry
+  verified, and every error on them switches to the self-hosted wording. Found 2026-11-14 by a
+  verification pass over the spec, after the grilling had settled "treat them as self-hosted".
 
 ## Sign-in and token timing
 

@@ -299,6 +299,10 @@ kein Wechsel zwischen junis-hosted und self-hosted, kein **Remove tenant**. Dein
 wie gewohnt, und du kannst sie weiterhin hinzufügen und entfernen. Ist noch kein Tenant eingerichtet,
 wende dich an deine IT.
 
+Deine Organisation kann auch nur junis-hosted abschalten. Dann fragen **Add a tenant** und das
+Zahnrad nur nach der Client-ID, ohne Wahl zwischen junis-hosted und self-hosted, und die Karten
+zeigen keine der beiden Angaben.
+
 ## Updates
 
 Die App prüft einmal täglich auf GitHub und bietet an, was sie findet; du wählst **Install** oder

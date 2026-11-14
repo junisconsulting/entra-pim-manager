@@ -3,11 +3,11 @@ namespace EntraPimManager.Tests.Configuration;
 using EntraPimManager.Core.Configuration;
 
 /// <summary>
-/// Admins type this value by hand into an Intune script or a Group Policy preference.
-/// Only a DWORD other than 0 locks; every other shape leaves the tenant list editable,
-/// and a set-but-wrong type is reported so the admin finds the typo in the log.
+/// Admins type these values by hand into an Intune script or a Group Policy preference.
+/// Only a DWORD other than 0 turns a policy on; every other shape leaves the app as it is
+/// without it, and a set-but-wrong type is reported so the admin finds the typo in the log.
 /// </summary>
-public sealed class TenantLockdownValueTests
+public sealed class MachinePolicyValueTests
 {
     public static TheoryData<object?, bool, bool> Values => new()
     {
@@ -24,9 +24,9 @@ public sealed class TenantLockdownValueTests
 
     [Theory]
     [MemberData(nameof(Values))]
-    public void Interprets_TheRawRegistryValue(object? value, bool locked, bool malformed)
+    public void Interprets_TheRawRegistryValue(object? value, bool on, bool malformed)
     {
-        Assert.Equal(locked, TenantLockdownValue.IsLocked(value));
-        Assert.Equal(malformed, TenantLockdownValue.IsMalformed(value));
+        Assert.Equal(on, MachinePolicyValue.IsOn(value));
+        Assert.Equal(malformed, MachinePolicyValue.IsMalformed(value));
     }
 }
