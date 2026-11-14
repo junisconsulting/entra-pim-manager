@@ -846,6 +846,24 @@ gesetzt, mindestens ein Konto enrolled), dann die neue Version darüber installi
       aus der Doku als Install-Kommando → Ergebnis wie bei „Installieren". Bis das
       einmal grün war, steht in der Doku „not yet tested in Intune".
 
+## 5f. Maschinen-Policies — `TenantLockdown` ab 1.2.0, `DisableJunisHosted` ab 1.3.0
+
+> Werte unter `HKLM\SOFTWARE\Policies\junis\Entra-PIM-Manager` in einer Admin-Konsole setzen, die
+> App in einer Konsole des normalen Benutzers neu starten: Die App liest die Werte nur beim Start.
+> Log: `%LocalAppData%\junis\Entra-PIM-Manager\logs`.
+
+- [ ] **Ohne Werte:** „Add a tenant" bietet junis-hosted an (für Global vorausgewählt), die Karten
+      zeigen den Chip junis-hosted bzw. self-hosted.
+- [ ] **`DisableJunisHosted` = DWORD 1:** Formular und Zahnrad fragen nur nach der Client-ID, ohne
+      Wahl junis-hosted/self-hosted, kein Chip. Im Log **genau eine** Zeile „junis-hosted turned off
+      by machine policy" pro Start.
+- [ ] **`DisableJunisHosted` als REG_SZ „1":** junis-hosted wird angeboten, im Log die Warnung
+      „…is not a DWORD and is ignored, as if it were not set".
+- [ ] **`TenantLockdown` = DWORD 1:** statt „Add a tenant" steht „Tenants are managed by your
+      organization.", das Zahnrad zeigt nur Label und Ticketsystem, kein **Remove tenant**. Konten
+      lassen sich weiter hinzufügen und entfernen.
+- [ ] **Beide Werte = 1:** schreibgeschützte Liste wie beim Lock, kein Chip.
+
 ## 6. Fehlerpfade & Hardening — Phase 6
 
 - [ ] **Offline:** Netzwerk trennen, „Refresh" auslösen → Statuszeile meldet
